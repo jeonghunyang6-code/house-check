@@ -30,6 +30,14 @@ RAW_DIR = ROOT / "data" / "raw" / "youtube"
 OUT_DIR = ROOT / "data" / "raw" / "transcripts"
 
 
+def _list_ids(ydl, url: str, limit: int | None) -> list[str]:
+    info = ydl.extract_info(url, download=False, process=False)
+    if info.get("_type") != "playlist":
+        return [info["id"]]
+    ids = [e["id"] for e in info.get("entries") or [] if e]
+    return ids[:limit] if limit else ids
+
+
 def download(urls: list[str], limit: int | None) -> None:
     import yt_dlp
 
@@ -41,17 +49,24 @@ def download(urls: list[str], limit: int | None) -> None:
         "subtitlesformat": "vtt",
         "writeinfojson": True,
         "outtmpl": str(RAW_DIR / "%(id)s.%(ext)s"),
-        "download_archive": str(RAW_DIR / "archive.txt"),  # 재실행 시 신규 영상만
-        "ignoreerrors": True,            # 실패한 영상은 archive에 안 남으므로 재실행 시 다시 시도
+        "ignoreerrors": True,            # 실패한 영상은 다음 실행 때 다시 시도
         "extractor_retries": 3,
         "sleep_interval_requests": 1,
         "sleep_interval_subtitles": 2,
+        "sleep_interval": 3,             # 연속 요청 시 봇 확인(Sign in) 차단 완화
+        "max_sleep_interval": 8,
+        "ignore_no_formats_error": True, # 자막만 필요하므로 영상 포맷 오류는 무시
+        "js_runtimes": {"node": {}},
     }
-    if limit:
-        opts["playlistend"] = limit
     RAW_DIR.mkdir(parents=True, exist_ok=True)
+    # skip_download 모드에서는 download_archive가 기록되지 않으므로 받아둔 메타데이터로 직접 건너뛴다
+    done = {p.name.removesuffix(".info.json") for p in RAW_DIR.glob("*.info.json")}
+    with yt_dlp.YoutubeDL({**opts, "extract_flat": "in_playlist", "quiet": True}) as lister:
+        ids = [i for url in urls for i in _list_ids(lister, url, limit)]
+    todo = [i for i in dict.fromkeys(ids) if i not in done]
+    print(f"listed {len(ids)}, already have {len(ids) - len(todo)}, fetching {len(todo)}")
     with yt_dlp.YoutubeDL(opts) as ydl:
-        ydl.download(urls)
+        ydl.download([f"https://www.youtube.com/watch?v={i}" for i in todo])
 
 
 def build_transcripts() -> int:
