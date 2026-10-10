@@ -23,7 +23,8 @@ from pathlib import Path
 
 from .vtt import parse_vtt
 
-DEFAULT_CHANNEL = "https://www.youtube.com/@thewriter-song/videos"
+CHANNEL = "https://www.youtube.com/@thewriter-song"
+DEFAULT_URLS = [f"{CHANNEL}/videos", f"{CHANNEL}/streams"]  # 쇼츠는 본편 발췌가 많아 기본 제외
 ROOT = Path(__file__).resolve().parents[2]
 RAW_DIR = ROOT / "data" / "raw" / "youtube"
 OUT_DIR = ROOT / "data" / "raw" / "transcripts"
@@ -41,8 +42,10 @@ def download(urls: list[str], limit: int | None) -> None:
         "writeinfojson": True,
         "outtmpl": str(RAW_DIR / "%(id)s.%(ext)s"),
         "download_archive": str(RAW_DIR / "archive.txt"),  # 재실행 시 신규 영상만
-        "ignoreerrors": True,
+        "ignoreerrors": True,            # 실패한 영상은 archive에 안 남으므로 재실행 시 다시 시도
+        "extractor_retries": 3,
         "sleep_interval_requests": 1,
+        "sleep_interval_subtitles": 2,
     }
     if limit:
         opts["playlistend"] = limit
@@ -56,6 +59,8 @@ def build_transcripts() -> int:
     rows = []
     for info_path in sorted(RAW_DIR.glob("*.info.json")):
         info = json.loads(info_path.read_text(encoding="utf-8"))
+        if info.get("_type") == "playlist":
+            continue
         vid = info["id"]
         vtt_path = RAW_DIR / f"{vid}.ko.vtt"
         segments = parse_vtt(vtt_path.read_text(encoding="utf-8")) if vtt_path.exists() else []
@@ -85,12 +90,14 @@ def build_transcripts() -> int:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--url", action="append", help="채널 또는 영상 URL (여러 번 지정 가능)")
-    ap.add_argument("--limit", type=int, help="채널에서 최신 N개만")
+    ap.add_argument("--limit", type=int, help="탭별 최신 N개만")
+    ap.add_argument("--shorts", action="store_true", help="쇼츠 탭도 포함")
     ap.add_argument("--skip-download", action="store_true", help="이미 받은 파일로 정제만 다시 실행")
     args = ap.parse_args()
 
     if not args.skip_download:
-        download(args.url or [DEFAULT_CHANNEL], args.limit)
+        urls = args.url or DEFAULT_URLS + ([f"{CHANNEL}/shorts"] if args.shorts else [])
+        download(urls, args.limit)
     n = build_transcripts()
     print(f"transcripts: {n} videos -> {OUT_DIR}")
 
