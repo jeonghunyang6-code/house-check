@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+# 원문 자막·메타데이터는 개인 분석용으로만 로컬 보관
+data/raw/
