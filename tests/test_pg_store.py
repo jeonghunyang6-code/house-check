@@ -20,8 +20,8 @@ URL = os.environ.get("HC_TEST_PG_URL")
 
 def _db():
     db = PsqlDb(URL)
-    db.query("DROP TABLE IF EXISTS deal_events, deals, rent_events, rents, snapshot_runs CASCADE;")
-    for m in ("0001_deals.sql", "0005_snapshot_runs.sql", "0006_rents.sql"):
+    db.query("DROP TABLE IF EXISTS deal_events, deals, rent_events, rents, snapshot_runs, rent_monthly, archive_cells CASCADE;")
+    for m in ("0001_deals.sql", "0005_snapshot_runs.sql", "0006_rents.sql", "0007_rent_archive.sql"):
         db.query((ROOT / "db" / "migrations" / m).read_text(encoding="utf-8"))
     return db
 
