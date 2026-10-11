@@ -32,7 +32,8 @@
 
 - 네트워크 허용 후 수집 완료: 채널 일반 영상·라이브 672개 메타데이터, 한국어 자막 626개 (나머지 46개는 자막 없음)
 - 봇 확인으로 실패한 영상은 `crawl.py`를 다시 실행하면 빠진 것만 받는다 (2차 실행에서 모두 회수)
-- 1차 정리 결과: [insights/viewpoints.md](insights/viewpoints.md)
+- 저서 『나의 첫 번째 부동산 교과서』(2026-06) 전권을 읽고 유튜브 관점과 통합 (원문은 로컬 `data/raw/book/`, git 제외)
+- 최종 결과: [insights/viewpoints.md](insights/viewpoints.md), 지표 명세 [insights/indicators.md](insights/indicators.md)
 
 ## 3. 사전 조사 결과 (C등급) — 본인 채널 대조 결과
 
