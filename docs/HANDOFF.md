@@ -1,6 +1,47 @@
 # 진행 현황과 인수인계 (2026-10-11 기준)
 
-새 세션은 이 문서부터 읽고, **그다음 `docs/PRODUCT_PLAN.md`(사용자 상황·합의 결정·Supabase 설정·진행 트랙)를 읽는다.** 작업 브랜치: 이 세션에서는 시스템이 지정한 `claude/vigilant-fermi-w01mo1`이었고 CLAUDE.md의 `claude/inspiring-bell-73ixlm`과 다르다 — 새 세션은 시스템 지정 브랜치를 따르되 사용자에게 한 번 확인한다.
+새 세션은 이 문서부터 읽고, **그다음 `docs/PRODUCT_PLAN.md`(사용자 상황·합의 결정·Supabase 설정·진행 트랙)를 읽는다.**
+작업 브랜치는 세션 시스템이 지정한 것을 따른다. **세션마다 브랜치가 달라 작업이 흩어진 적이 있다** (`inspiring-bell`, `vigilant-fermi`, `festive-heisenberg`, `brave-lamport`).
+새 세션은 시작할 때 `git fetch origin` 후 `git branch -r`로 다른 `claude/*` 브랜치에 더 새 커밋이 있는지 먼저 확인하고, 있으면 합친다.
+2026-10-11 `brave-lamport` 세션에서 앞의 세 브랜치를 모두 합쳤다.
+
+## 0. DB 연결: 해결됨 (2026-10-11)
+
+사용자는 비개발자이므로 **설명은 쉽게, 짧게**. SQL을 직접 붙여넣게 하는 방식은 사용자가 거부함.
+
+### 접속 방법 (이것만 쓴다)
+
+이 환경은 웹(443)만 나가고 Postgres 포트(5432·6543)는 막혀 있다 → `psql`/`DATABASE_URL` 직접 접속은 **불가**.
+대신 **Supabase 관리 API**로 SQL을 실행한다:
+
+```
+REF=<DATABASE_URL 사용자명 postgres.<ref> 에서 추출, 20자>
+curl -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
+  -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H "Content-Type: application/json" \
+  --data '{"query": "select 1"}'
+```
+
+- 성공 시 HTTP 201 + JSON 배열. SQL 오류는 HTTP 400 + `message`.
+- 토큰 권한은 Database Read-write만. 그래서 `GET /v1/projects`(목록)는 **403 projects_read가 정상**이다. 이걸 보고 토큰이 안 된다고 판단하지 말 것 (2026-10-11에 한 번 그렇게 오판함).
+- 토큰·`DATABASE_URL` 값은 출력 금지. ref는 비밀이 아니지만 로그에 남길 필요 없다.
+- SQL 본문은 `python3 -c 'json.dumps(...)'`로 만들어 `--data @파일`로 보낸다 (따옴표 깨짐 방지). 마이그레이션은 `begin; … commit;`으로 감싼다.
+
+### 실제 DB 상태 (PostgreSQL 17.11, Supabase 서울)
+
+| 마이그레이션 | 상태 |
+|---|---|
+| `0001_deals.sql` | **미적용** (로컬 Postgres 16에서만 검증) |
+| `0002_auction.sql` | **적용·검증 완료** — `court_jurisdiction`, `auction_stats` 생성, 인덱스 3개, `period_month` CHECK 동작 확인(잘못된 값 거부). 시험 행은 롤백, 표는 비어 있음 |
+| `0003_rls.sql` | **적용 완료** — 위 두 표 RLS 켬, 정책 없음(anon 접근 불가, 수집기는 postgres 권한으로 우회) |
+
+마이그레이션 적용 기록 표(`schema_migrations` 등)는 아직 없다. 새 마이그레이션을 추가하면 이 표를 갱신할 것.
+**새 표를 만들면 RLS도 같이 켠다.**
+
+### 다음 할 일
+
+1. `0001_deals.sql` 적용 + `deals`, `deal_events` RLS 켜기 (같은 API)
+2. PRODUCT_PLAN 트랙 B (시군구 코드 → 전월세 파서 → 적재 → `jobs/daily.py` → Actions cron). 적재 경로는 psql 대신 이 API 또는 Actions에서 psycopg — 결정 필요
+3. 3절 경매 낙찰가율 (NAVER 키 검증 등)
 
 ## 1. 프로젝트 한 줄 요약
 
@@ -20,8 +61,8 @@
 | 자막 수집기 | `tools/insight_crawler/` | 완료. `crawl.py`(자막·메타), `triage.py`(주제별 발췌), `vtt.py` |
 | 경매 계산 | `analytics/auction.py` + `tests/test_auction.py` | 완료, 테스트 통과 |
 | 경매 기사 추출 | `collector/sources/auction_news.py` + `tests/test_auction_news.py` | 완료, **실제 기사로는 미검증** |
-| 실거래 수집기(매매) | `collector/sources/molit.py`, `collector/snapshot.py`, `db/migrations/0001_deals.sql`, `tests/test_molit_snapshot.py` | **실제 API로 검증** (강남·송파 2026-09 전량 수집). 일일 실행(cron)·DB 적재·전월세 파서는 미작성. `0001`·`0002`는 로컬 Postgres 16에서 적용 검증 완료(2026-10-11), Supabase에는 미적용 |
-| 경매 스키마 | `db/migrations/0002_auction.sql` | 작성, **문법만 검증** (실제 DB 미적용) |
+| 실거래 수집기(매매) | `collector/sources/molit.py`, `collector/snapshot.py`, `db/migrations/0001_deals.sql`, `tests/test_molit_snapshot.py` | **실제 API로 검증** (강남·송파 2026-09 전량 수집). 일일 실행(cron)·DB 적재·전월세 파서는 미작성. `0001`·`0002`는 로컬 Postgres 16에서 적용 검증 완료(2026-10-11), Supabase에는 `0002`만 적용(0절) |
+| 경매 스키마 | `db/migrations/0002_auction.sql` | **Supabase에 적용·검증 완료** (2026-10-11, 0절). RLS는 `0003_rls.sql` |
 | 영상 메타데이터 | `data/sources/youtube/video_metadata_2026-10-11.jsonl` | 영상 672개 요약 (제목·조회수·태그·설명 등) |
 
 테스트: `.venv/bin/pytest -q tests` → 12개 통과 (새 세션에서는 `python -m venv .venv && .venv/bin/pip install -r tools/insight_crawler/requirements.txt pytest`).
@@ -101,7 +142,7 @@
 ## 8. 알려진 한계 (정직하게 기억할 것)
 
 - `auction_news.py`는 기사 전문이 아니라 **검색 요약문(약 100자)** 으로만 검증했다(9월분 약 275건 중 10월 기사 21건에서 후보 추출). 2건 이상 일치 기준 때문에 지역 커버리지가 낮다. 수도권 4개(서울·경기·인천·전국) 9월분은 확정했으나 다른 달은 미검증. 다른 달 기사로는 미검증.
-- `0001`·`0002` 마이그레이션은 로컬 Postgres 16(`/usr/lib/postgresql/16/bin`, `su postgres`로 initdb/pg_ctl)에서 적용돼 오류 없음. 이 환경에는 `psql`이 있으나 **PyPI에 접속할 수 없어 psycopg를 설치할 수 없다** → DB 접근은 `psql` 명령으로 한다(Actions에서는 pip 가능).
+- `0001`·`0002` 마이그레이션은 로컬 Postgres 16(`/usr/lib/postgresql/16/bin`, `su postgres`로 initdb/pg_ctl)에서 적용돼 오류 없음. 이 환경에는 `psql`이 있으나 **PyPI에 접속할 수 없어 psycopg를 설치할 수 없다** 클라우드 세션에서는 Postgres 포트가 막혀 `psql`도 Supabase에 못 붙는다 → **0절의 관리 API**로 접근한다(Actions에서는 pip·직접 접속 가능, 미검증).
 - 지표 명세의 🔧 기준선(국면 ±3%·8개월, 하락 지역 70%, 격차 하위 20% 등)은 **초기 추정값**이다.
 - 유튜브 자막은 **자동 자막**이라 오인식이 있다. 규칙에 쓰는 핵심 문장은 영상 해당 시점을 확인할 것.
 - 관점 카드는 키워드 상위 영상 위주로 읽은 결과다 (영상 약 70개와 입지·재건축 일부 주제는 미정독).
@@ -114,18 +155,16 @@
 
 경매 낙찰가율(3절)은 **보도 추출로 충분하다고 사용자와 합의하고 보류**했다(감평협회 파일은 `bigdata-finance.kr` 인증서 오류로 못 받음, 우회 금지). 우선순위는 4절 A와 `docs/PRODUCT_PLAN.md`의 트랙 B·C다.
 
-1. `DATABASE_URL` 접속 테스트 (PRODUCT_PLAN 4절 "현재 상태")
-2. 접속되면: 마이그레이션 적용(+RLS) → 시군구 코드 목록(API로 검증) → 전월세 파서 → psql 기반 적재 → `jobs/daily.py` → `.github/workflows/daily.yml` → 서울 2020~ 적재·용량 측정
+1. ~~DB 접속~~ 해결됨 (0절). `0001` 적용 + RLS
+2. 시군구 코드 목록(API로 검증) → 전월세 파서 → 적재(경로 결정 필요, 0절) → `jobs/daily.py` → `.github/workflows/daily.yml` → 서울 2020~ 적재·용량 측정
 3. 트랙 C(비주얼 프로토타입)는 DB와 무관해 바로 가능. 사용자 승인 대기 중
 4. `main`으로 합쳐야 cron이 돈다 → 사용자가 PR을 요청하면 만든다
 
 ## 9. 새 세션 시작 문장
 
-> docs/HANDOFF.md와 docs/PRODUCT_PLAN.md를 읽고 이어서 진행해줘. DATABASE_URL 접속 테스트부터 해줘.
-
-(예전 문장) docs/HANDOFF.md를 읽고 이어서 진행해줘. 먼저 NAVER 환경변수 설정 여부(값 출력 없이)와 공공데이터포털 키 신청 여부를 확인하고, 3절 "다음에 할 일" 순서대로 경매 낙찰가율을 진행해줘.
+> docs/HANDOFF.md와 docs/PRODUCT_PLAN.md를 읽고 이어서 진행해줘. 0절의 "다음 할 일"부터 해줘 (DB는 Supabase 관리 API로 접속).
 > (감평협회 샘플 파일을 받았으면 함께 첨부)
 
 ※ `DATA_GO_KR_SERVICE_KEY`는 환경변수로 설정돼 동작 확인됨(2026-10-11). 매매·전월세 API 승인됨. K-apt·청약홈은 미확인. 등록일은 소급 불가이므로 **매일 스냅샷 실행 환경(cron + DB) 결정이 가장 급하다.**
 
-※ 2026-10-11 세션: Supabase용 `DATABASE_URL` 환경변수가 `postgresql://postgres.<프로젝트ID>:` 에서 **끊긴 상태**(43자, 비밀번호·호스트·포트·DB명 없음)로 들어와 있어 접속 불가. 사용자가 다시 등록해야 함. 원인은 확인 못 함(비밀번호의 특수문자가 환경 설정 입력에서 잘렸을 가능성).
+※ (해결됨 — 재등록 후 정상, 길이 112자) 2026-10-11 세션: Supabase용 `DATABASE_URL` 환경변수가 `postgresql://postgres.<프로젝트ID>:` 에서 **끊긴 상태**(43자, 비밀번호·호스트·포트·DB명 없음)로 들어와 있어 접속 불가. 사용자가 다시 등록해야 함. 원인은 확인 못 함(비밀번호의 특수문자가 환경 설정 입력에서 잘렸을 가능성).
