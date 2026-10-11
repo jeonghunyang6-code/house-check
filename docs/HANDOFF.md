@@ -20,7 +20,7 @@
 | 자막 수집기 | `tools/insight_crawler/` | 완료. `crawl.py`(자막·메타), `triage.py`(주제별 발췌), `vtt.py` |
 | 경매 계산 | `analytics/auction.py` + `tests/test_auction.py` | 완료, 테스트 통과 |
 | 경매 기사 추출 | `collector/sources/auction_news.py` + `tests/test_auction_news.py` | 완료, **실제 기사로는 미검증** |
-| 실거래 수집기(매매) | `collector/sources/molit.py`, `collector/snapshot.py`, `db/migrations/0001_deals.sql`, `tests/test_molit_snapshot.py` | **실제 API로 검증** (강남·송파 2026-09 전량 수집). 일일 실행(cron)·DB 적재·전월세 파서는 미작성. 0001은 Postgres 미적용 |
+| 실거래 수집기(매매) | `collector/sources/molit.py`, `collector/snapshot.py`, `db/migrations/0001_deals.sql`, `tests/test_molit_snapshot.py` | **실제 API로 검증** (강남·송파 2026-09 전량 수집). 일일 실행(cron)·DB 적재·전월세 파서는 미작성. `0001`·`0002`는 로컬 Postgres 16에서 적용 검증 완료(2026-10-11), Supabase에는 미적용 |
 | 경매 스키마 | `db/migrations/0002_auction.sql` | 작성, **문법만 검증** (실제 DB 미적용) |
 | 영상 메타데이터 | `data/sources/youtube/video_metadata_2026-10-11.jsonl` | 영상 672개 요약 (제목·조회수·태그·설명 등) |
 
@@ -101,7 +101,7 @@
 ## 8. 알려진 한계 (정직하게 기억할 것)
 
 - `auction_news.py`는 기사 전문이 아니라 **검색 요약문(약 100자)** 으로만 검증했다(9월분 약 275건 중 10월 기사 21건에서 후보 추출). 2건 이상 일치 기준 때문에 지역 커버리지가 낮다. 수도권 4개(서울·경기·인천·전국) 9월분은 확정했으나 다른 달은 미검증. 다른 달 기사로는 미검증.
-- `0002_auction.sql`은 **Postgres에 적용해보지 않았다.** sqlglot 문법 검사만 통과.
+- `0001`·`0002` 마이그레이션은 로컬 Postgres 16(`/usr/lib/postgresql/16/bin`, `su postgres`로 initdb/pg_ctl)에서 적용돼 오류 없음. 이 환경에는 `psql`이 있으나 **PyPI에 접속할 수 없어 psycopg를 설치할 수 없다** → DB 접근은 `psql` 명령으로 한다(Actions에서는 pip 가능).
 - 지표 명세의 🔧 기준선(국면 ±3%·8개월, 하락 지역 70%, 격차 하위 20% 등)은 **초기 추정값**이다.
 - 유튜브 자막은 **자동 자막**이라 오인식이 있다. 규칙에 쓰는 핵심 문장은 영상 해당 시점을 확인할 것.
 - 관점 카드는 키워드 상위 영상 위주로 읽은 결과다 (영상 약 70개와 입지·재건축 일부 주제는 미정독).
@@ -116,3 +116,5 @@
 > (감평협회 샘플 파일을 받았으면 함께 첨부)
 
 ※ `DATA_GO_KR_SERVICE_KEY`는 환경변수로 설정돼 동작 확인됨(2026-10-11). 매매·전월세 API 승인됨. K-apt·청약홈은 미확인. 등록일은 소급 불가이므로 **매일 스냅샷 실행 환경(cron + DB) 결정이 가장 급하다.**
+
+※ 2026-10-11 세션: Supabase용 `DATABASE_URL` 환경변수가 `postgresql://postgres.<프로젝트ID>:` 에서 **끊긴 상태**(43자, 비밀번호·호스트·포트·DB명 없음)로 들어와 있어 접속 불가. 사용자가 다시 등록해야 함. 원인은 확인 못 함(비밀번호의 특수문자가 환경 설정 입력에서 잘렸을 가능성).
