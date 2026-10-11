@@ -10,3 +10,9 @@
 - 규칙 기반 시장 국면 해석
 
 설계 문서: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+
+## 문서
+
+- 진행 현황·다음 작업: [docs/HANDOFF.md](docs/HANDOFF.md)
+- 설계: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- 송희구 관점 카드: [docs/insights/viewpoints.md](docs/insights/viewpoints.md), 지표 구현 명세: [docs/insights/indicators.md](docs/insights/indicators.md)
