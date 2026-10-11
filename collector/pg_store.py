@@ -79,13 +79,13 @@ def build_sql(
         seen = [f"({lit(key)}, {lit(x.rgst_date)})" for key, x in d.seen_again.items()]
         for part in _chunks(seen):
             stmts.append(
-                f"UPDATE {k.table} AS t SET last_seen_date = {lit(today)}, disappeared = FALSE, rgst_date = v.rgst "
+                f"UPDATE {k.table} AS t SET last_seen_date = {lit(today)}, disappeared = FALSE, rgst_date = v.rgst::date "
                 "FROM (VALUES " + ", ".join(part) + f") AS v(k, rgst) WHERE t.{k.key} = v.k;"
             )
         canc = [f"({lit(key)}, {lit(x.cancel_date)})" for key, x in d.newly_cancelled.items()]
         for part in _chunks(canc):
             stmts.append(
-                f"UPDATE {k.table} AS t SET is_cancelled = TRUE, cancel_date = v.cd "
+                f"UPDATE {k.table} AS t SET is_cancelled = TRUE, cancel_date = v.cd::date "
                 "FROM (VALUES " + ", ".join(part) + f") AS v(k, cd) WHERE t.{k.key} = v.k;"
             )
     else:
