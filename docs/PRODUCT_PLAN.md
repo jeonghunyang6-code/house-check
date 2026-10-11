@@ -28,7 +28,7 @@
 | 트랙 | 내용 | 상태 |
 |---|---|---|
 | A. 인프라 (사용자) | Supabase 프로젝트, GitHub 시크릿, 클라우드 세션 환경변수 | **완료** — 클라우드 세션에서는 관리 API로 접속 (HANDOFF 0절) |
-| B. 수집·DB (Claude) | 수도권 시군구 코드 목록(API 응답 `estateAgentSggNm`으로 검증), 전월세 파서, DB 적재(클라우드 세션은 관리 API, Actions는 직접 접속)(스냅샷 비교를 SQL로), `jobs/daily.py`, `.github/workflows/daily.yml`, 서울 2020~ 이력 적재, 용량 측정 | 미착수. 매매 수집기·스키마는 완료 (HANDOFF 2절) |
+| B. 수집·DB (Claude) | 수도권 시군구 코드 목록(API 응답 `estateAgentSggNm`으로 검증), 전월세 파서, DB 적재(클라우드 세션은 관리 API, Actions는 직접 접속)(스냅샷 비교를 SQL로), `jobs/daily.py`, `.github/workflows/daily.yml`, 서울 2020~ 이력 적재, 용량 측정 | 매매 일일 수집기·적재·워크플로 완료, 수도권 첫 적재(2026-10-11). **남음: main 병합 후 Actions 첫 실행 확인, 전월세, 2020~ 이력** (HANDOFF 0절) |
 | C. 비주얼 프로토타입 (Claude) | 실제 강남·송파 데이터로 핵심 화면 3~4장(오늘의 신고가, 단지 상세, 후보 비교표, 시장 홈)을 먼저 보여주고 방향 확정 | **미착수. 사용자 승인 대기** (DB와 무관, 바로 가능) |
 | D. 웹 MVP (Claude) | Next.js + ECharts + Vercel, 프로토타입 확정 후 | 미착수 |
 

@@ -56,6 +56,48 @@ def open_store(path: str = ":memory:") -> sqlite3.Connection:
     return con
 
 
+@dataclass
+class Diff:
+    """스냅샷 1건을 저장된 상태와 비교한 결과. 저장소(SQLite·Postgres)와 무관한 순수 계산."""
+    inserts: dict[str, Deal]          # 처음 본 키
+    seen_again: dict[str, Deal]       # 이미 있던 키 (last_seen·등기일 갱신, 사라짐 표시 해제)
+    newly_cancelled: dict[str, Deal]  # 이미 있던 키 중 이번에 해제로 바뀐 것
+    disappeared: list[str]            # 이번 응답에 없는 키 (처음 사라졌을 때만)
+    events: list[Event]
+
+
+def diff_snapshot(
+    known: dict[str, tuple[bool, bool]],
+    deals: list[Deal],
+    today: date,
+    bootstrap: bool = False,
+) -> Diff:
+    """known: deal_key → (is_cancelled, disappeared). 이벤트 순서는 SQLite 구현과 같다."""
+    seen = keyed(deals)
+    d = Diff({}, {}, {}, [], [])
+    for key, deal in seen.items():
+        if key not in known:
+            d.inserts[key] = deal
+            if not bootstrap:
+                d.events.append(Event(key, "registered", today))
+                if deal.is_cancelled:
+                    d.events.append(Event(key, "cancelled", today))
+        else:
+            d.seen_again[key] = deal
+            if deal.is_cancelled and not known[key][0]:
+                d.newly_cancelled[key] = deal
+                d.events.append(Event(key, "cancelled", today))
+    for key in sorted(known.keys() - seen.keys()):
+        if not known[key][1]:
+            d.disappeared.append(key)
+            d.events.append(Event(key, "disappeared", today))
+    return d
+
+
+def _iso(x: date | None) -> str | None:
+    return x.isoformat() if x else None
+
+
 def apply_snapshot(
     con: sqlite3.Connection,
     region_code: str,
@@ -64,42 +106,30 @@ def apply_snapshot(
     today: date,
     bootstrap: bool = False,
 ) -> list[Event]:
-    """(시군구, 계약월) 스냅샷 1건을 저장소와 비교해 반영하고 이벤트를 돌려준다."""
-    events: list[Event] = []
-    seen = keyed(deals)
+    """(시군구, 계약월) 스냅샷 1건을 SQLite 저장소와 비교해 반영하고 이벤트를 돌려준다 (테스트·로컬용)."""
     known = {
-        r[0]: bool(r[1])
+        r[0]: (bool(r[1]), bool(r[2]))
         for r in con.execute(
-            "SELECT deal_key, is_cancelled FROM deals WHERE region_code=? AND contract_month=?",
+            "SELECT deal_key, is_cancelled, disappeared FROM deals WHERE region_code=? AND contract_month=?",
             (region_code, contract_month),
         )
     }
-    for key, d in seen.items():
-        if key not in known:
-            con.execute(
-                "INSERT INTO deals VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0)",
-                (key, d.apt_seq, d.apt_name, region_code, contract_month, d.contract_date.isoformat(),
-                 d.area_m2, d.floor, d.price_10k, d.deal_type, int(d.is_cancelled),
-                 d.cancel_date.isoformat() if d.cancel_date else None,
-                 d.rgst_date.isoformat() if d.rgst_date else None,
-                 None if bootstrap else today.isoformat(), today.isoformat()),
-            )
-            if not bootstrap:
-                events.append(Event(key, "registered", today))
-            if d.is_cancelled and not bootstrap:
-                events.append(Event(key, "cancelled", today))
-        else:
-            con.execute("UPDATE deals SET last_seen_date=?, disappeared=0, rgst_date=? WHERE deal_key=?",
-                        (today.isoformat(), d.rgst_date.isoformat() if d.rgst_date else None, key))
-            if d.is_cancelled and not known[key]:
-                con.execute("UPDATE deals SET is_cancelled=1, cancel_date=? WHERE deal_key=?",
-                            (d.cancel_date.isoformat() if d.cancel_date else None, key))
-                events.append(Event(key, "cancelled", today))
-    for key in known.keys() - seen.keys():
-        if con.execute("SELECT disappeared FROM deals WHERE deal_key=?", (key,)).fetchone()[0] == 0:
-            con.execute("UPDATE deals SET disappeared=1 WHERE deal_key=?", (key,))
-            events.append(Event(key, "disappeared", today))
+    d = diff_snapshot(known, deals, today, bootstrap)
+    for key, x in d.inserts.items():
+        con.execute(
+            "INSERT INTO deals VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0)",
+            (key, x.apt_seq, x.apt_name, region_code, contract_month, x.contract_date.isoformat(),
+             x.area_m2, x.floor, x.price_10k, x.deal_type, int(x.is_cancelled),
+             _iso(x.cancel_date), _iso(x.rgst_date), None if bootstrap else today.isoformat(), today.isoformat()),
+        )
+    for key, x in d.seen_again.items():
+        con.execute("UPDATE deals SET last_seen_date=?, disappeared=0, rgst_date=? WHERE deal_key=?",
+                    (today.isoformat(), _iso(x.rgst_date), key))
+    for key, x in d.newly_cancelled.items():
+        con.execute("UPDATE deals SET is_cancelled=1, cancel_date=? WHERE deal_key=?", (_iso(x.cancel_date), key))
+    for key in d.disappeared:
+        con.execute("UPDATE deals SET disappeared=1 WHERE deal_key=?", (key,))
     con.executemany("INSERT INTO deal_events VALUES (?,?,?)",
-                    [(e.deal_key, e.event, e.event_date.isoformat()) for e in events])
+                    [(e.deal_key, e.event, e.event_date.isoformat()) for e in d.events])
     con.commit()
-    return events
+    return d.events

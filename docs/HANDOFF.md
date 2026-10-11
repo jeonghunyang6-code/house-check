@@ -34,6 +34,7 @@ curl -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
 | `0002_auction.sql` | **적용·검증 완료** — `court_jurisdiction`, `auction_stats` 생성, 인덱스 3개, `period_month` CHECK 동작 확인(잘못된 값 거부). 시험 행은 롤백, 표는 비어 있음 |
 | `0003_rls.sql` | **적용 완료** — 경매 표 2개 RLS 켬, 정책 없음(anon 접근 불가, 수집기는 postgres 권한으로 우회) |
 | `0004_rls_deals.sql` | **적용 완료** — `deals`, `deal_events` RLS 켬 |
+| `0005_snapshot_runs.sql` | **적용 완료** — 일일 수집 기록 표(+RLS). bootstrap 판단에 쓴다 |
 
 마이그레이션 적용 기록 표(`schema_migrations` 등)는 아직 없다. 새 마이그레이션을 추가하면 이 표를 갱신할 것.
 **새 표를 만들면 RLS도 같이 켠다.**
@@ -41,8 +42,27 @@ curl -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
 ### 다음 할 일
 
 1. ~~`0001` 적용 + RLS~~ 완료 (2026-10-11)
-2. PRODUCT_PLAN 트랙 B (시군구 코드 → 전월세 파서 → 적재 → `jobs/daily.py` → Actions cron). 적재 경로는 psql 대신 이 API 또는 Actions에서 psycopg — 결정 필요
-3. 3절 경매 낙찰가율 (NAVER 키 검증 등)
+2. ~~매매 일일 수집기~~ 작성·첫 실행 완료 (아래 "일일 수집기")
+3. **매일 돌리기**: `main`에 합쳐야 Actions cron이 돈다(PR은 사용자가 요청할 때만). 합친 뒤 Actions 탭에서 `daily-snapshot`을 **수동 실행**(dry_run 먼저)해 러너→공공데이터포털, 러너→Supabase(psql) 접속을 확인
+4. 전월세 파서·적재 (필드는 8절에 확인돼 있음), 서울 2020~ 이력 적재(`--months 202001-202508 --bootstrap`)와 용량 측정
+5. 3절 경매 낙찰가율 (NAVER 키 검증 등)
+
+### 일일 수집기 (2026-10-11 작성)
+
+| 파일 | 역할 |
+|---|---|
+| `collector/regions.py` | 수도권 83개 시군구 코드. **전부 실제 API로 확인**(응답 `sggCd`와 중개사 소재지 이름). 인천 2026-07 개편으로 옛 중구·동구·서구 코드는 0건 → 새 코드(제물포·영종·서해·검단구). 개편 전 계약월도 새 코드로만 조회됨 |
+| `collector/snapshot.py` | `diff_snapshot()` 순수 비교 + SQLite 판(테스트용) |
+| `collector/db.py` | DB 접근 두 경로: `api`(관리 API, 클라우드 세션) / `psql`(Actions). 값은 `lit()`로만 SQL에 넣는다 |
+| `collector/pg_store.py` | Postgres 판 반영(칸마다 트랜잭션 1개), `should_bootstrap()` |
+| `jobs/daily.py` | `python -m jobs.daily [--regions seoul] [--months 202001-202512] [--bootstrap] [--db api\|psql] [--dry-run]` |
+| `.github/workflows/daily.yml` | 매일 20:47 UTC(05:47 KST), 시크릿 `DATA_GO_KR_SERVICE_KEY`·`DATABASE_URL`, psql 경로. **러너에서 미검증** |
+| `tests/test_pg_store.py` | `HC_TEST_PG_URL`(로컬 빈 Postgres)이 있을 때 SQLite 판과 6단계 시나리오 결과가 같은지 검증 |
+
+- bootstrap 규칙: 처음 받는 (시군구, 계약월) 칸이면서 그 시군구를 최근 3일(오늘 제외) 안에 받은 적이 없으면 `first_seen_date=NULL`. 새 달 칸은 전날 수집이 있었으므로 정상 등록으로 잡힌다.
+- 수집이 끊겼다 재개되면 그 사이 등록분의 `first_seen_date`는 재개일로 늦게 찍힌다(`snapshot_runs`의 공백으로 알 수 있음). 4일 이상 끊기면 새 칸은 bootstrap.
+- 당월·전월만 본다(설계 4.1). 그보다 늦게 들어오는 해제는 놓친다 → 나중에 주 1회 12개월 재확인을 검토.
+- 이 클라우드 환경에서 공공데이터포털 호출은 **자주 끊긴다**(서버가 ~11초 응답이 없으면 프록시 터널 종료). 재시도 5회로 버티며 수도권 전체 1회에 1시간 이상 걸린다. 테스트는 PyPI 차단으로 pytest 대신 최소 실행기(`pytest.raises`만 흉내)로 돌렸다.
 
 ## 1. 프로젝트 한 줄 요약
 
@@ -62,7 +82,7 @@ curl -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
 | 자막 수집기 | `tools/insight_crawler/` | 완료. `crawl.py`(자막·메타), `triage.py`(주제별 발췌), `vtt.py` |
 | 경매 계산 | `analytics/auction.py` + `tests/test_auction.py` | 완료, 테스트 통과 |
 | 경매 기사 추출 | `collector/sources/auction_news.py` + `tests/test_auction_news.py` | 완료, **실제 기사로는 미검증** |
-| 실거래 수집기(매매) | `collector/sources/molit.py`, `collector/snapshot.py`, `db/migrations/0001_deals.sql`, `tests/test_molit_snapshot.py` | **실제 API로 검증** (강남·송파 2026-09 전량 수집). 일일 실행(cron)·DB 적재·전월세 파서는 미작성. `0001`·`0002`는 로컬 Postgres 16에서 적용 검증 완료(2026-10-11), Supabase에 `0001`도 적용 완료(0절) |
+| 실거래 수집기(매매) | `collector/sources/molit.py`, `collector/snapshot.py`, `db/migrations/0001_deals.sql`, `tests/test_molit_snapshot.py` | **실제 API로 검증** (강남·송파 2026-09 전량 수집). 일일 수집기·DB 적재는 0절, 전월세 파서는 미작성. `0001`·`0002`는 로컬 Postgres 16에서 적용 검증 완료(2026-10-11), Supabase에 `0001`도 적용 완료(0절) |
 | 경매 스키마 | `db/migrations/0002_auction.sql` | **Supabase에 적용·검증 완료** (2026-10-11, 0절). RLS는 `0003_rls.sql` |
 | 영상 메타데이터 | `data/sources/youtube/video_metadata_2026-10-11.jsonl` | 영상 672개 요약 (제목·조회수·태그·설명 등) |
 
@@ -156,8 +176,8 @@ curl -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
 
 경매 낙찰가율(3절)은 **보도 추출로 충분하다고 사용자와 합의하고 보류**했다(감평협회 파일은 `bigdata-finance.kr` 인증서 오류로 못 받음, 우회 금지). 우선순위는 4절 A와 `docs/PRODUCT_PLAN.md`의 트랙 B·C다.
 
-1. ~~DB 접속, 마이그레이션 0001~0004~~ 완료 (0절)
-2. 시군구 코드 목록(API로 검증) → 전월세 파서 → 적재(경로 결정 필요, 0절) → `jobs/daily.py` → `.github/workflows/daily.yml` → 서울 2020~ 적재·용량 측정
+1. ~~DB 접속, 마이그레이션 0001~0005~~ 완료 (0절)
+2. ~~시군구 코드·매매 적재·`jobs/daily.py`·워크플로~~ 작성 완료 (0절 "일일 수집기"). **남은 것: main 병합 후 Actions 첫 실행 확인**, 전월세 파서, 서울 2020~ 이력 적재·용량 측정
 3. 트랙 C(비주얼 프로토타입)는 DB와 무관해 바로 가능. 사용자 승인 대기 중
 4. `main`으로 합쳐야 cron이 돈다 → 사용자가 PR을 요청하면 만든다
 

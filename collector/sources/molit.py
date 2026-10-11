@@ -101,7 +101,7 @@ def parse_trade_page(xml_text: str) -> tuple[list[Deal], int]:
     return [_item_to_deal(i) for i in body.findall("items/item")], total
 
 
-def _get(url: str, params: dict[str, str | int], retries: int = 3) -> str:
+def _get(url: str, params: dict[str, str | int], retries: int = 5) -> str:
     """429·403 은 재시도하지 않고 멈춘다. 터널 끊김 같은 연결 오류만 짧게 재시도한다."""
     full = url + "?" + urllib.parse.urlencode(params)
     for attempt in range(retries):
