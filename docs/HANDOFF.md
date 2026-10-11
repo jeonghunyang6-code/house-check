@@ -1,6 +1,46 @@
 # 진행 현황과 인수인계 (2026-10-11 기준)
 
-새 세션은 이 문서부터 읽는다. 작업 브랜치는 `claude/inspiring-bell-73ixlm`이다.
+새 세션은 이 문서부터 읽는다. 작업 브랜치는 세션 지시에 따른다 (이번 세션은 `claude/festive-heisenberg-t8yeg0`, 이전에는 `claude/inspiring-bell-73ixlm`).
+
+## 0. 지금 막혀 있는 것: DB 연결 (가장 먼저 읽을 것)
+
+사용자 요청: "DB 문제부터 해결". 사용자는 비개발자이므로 **설명은 쉽게, 비유로, 짧게**. SQL을 직접 붙여넣게 하는 방식은 사용자가 거부함.
+
+### 확인된 사실 (2026-10-11 세션에서 직접 실행)
+
+| 확인 | 결과 |
+|---|---|
+| `DATABASE_URL` 환경 변수 | 설정됨. Supabase 풀러 `aws-0-ap-northeast-2.pooler.supabase.com:5432` (값 출력 금지) |
+| `psql`로 `select 1` | **30초 타임아웃** (허용 도메인 추가 후에도, 새 세션에서도 동일) |
+| DNS 조회 | 정상 (AWS 서울 IP 3개) |
+| TCP 5432 | **타임아웃** |
+| TCP 6543 | **타임아웃** |
+| TCP 443 | 정상 |
+| `api.supabase.com` HTTPS | 접속됨 (허용 도메인 등록 확인) |
+
+결론: 이 환경은 **웹(443)만 나갈 수 있고 Postgres 전용 포트(5432·6543)는 막혀 있다.** `DATABASE_URL`로 직접 접속하는 방식은 쓸 수 없다. 허용 도메인 설정으로는 해결되지 않는다.
+
+### 선택한 해결 방법: Supabase 관리 API로 SQL 실행 (HTTPS)
+
+`POST https://api.supabase.com/v1/projects/{ref}/database/query`, 헤더 `Authorization: Bearer $SUPABASE_ACCESS_TOKEN`, 본문 `{"query": "..."}`.
+- `{ref}`는 `DATABASE_URL`의 사용자명 `postgres.<ref>`에서 뽑는다 (길이 20, 이미 파싱 성공 확인).
+- 사용자가 만든 토큰의 권한은 **Database 항목만 Read-write**, 나머지 전부 None으로 안내함. 이 권한으로 충분한지는 **미검증** (문서 기억에 의존). 403이 나면 Migrations Read-write 추가 후 토큰 재발급을 안내할 것.
+- 이 API 경로는 **아직 한 번도 성공하지 못했다.** 첫 호출이 401이었고 원인은 토큰 변수가 비어 있었던 것.
+
+### 현재 상태와 다음 할 일 (순서대로)
+
+1. **`SUPABASE_ACCESS_TOKEN` 설정 여부 확인** (값 출력 금지): `[ -n "$SUPABASE_ACCESS_TOKEN" ] && echo set || echo NOT set`
+   - 직전 세션에서는 **NOT set**이었고 비슷한 이름의 변수도 없었다. 사용자가 환경 설정에 저장 후 **새 세션**을 연 것이므로 이번에는 설정돼 있어야 한다.
+   - 여전히 없으면: 저장 버튼 누름 여부, 같은 환경(NAVER·DATABASE_URL이 있는 환경)인지, 이름 철자를 사용자에게 확인 요청. 토큰을 채팅에 붙여넣게 하지 말 것.
+2. 설정돼 있으면 `select current_database(), current_user, public 테이블 수`를 위 API로 호출해 **접속 검증**. 응답 코드와 본문 앞부분만 확인.
+3. 성공하면 `db/migrations/0002_auction.sql`을 같은 API로 적용 → `information_schema`로 `court_jurisdiction`, `auction_stats` 생성 확인. 이 파일은 **지금까지 문법 검사만 했고 실제 Postgres에 적용한 적 없다.** 오류가 나면 수정하고 결과를 정직하게 보고.
+4. DB 해결 후 3절 "다음에 할 일"(NAVER 뉴스 검색 API 키 검증 등)로 복귀. DB 없이도 가능한 작업이라 DB가 계속 막히면 결과를 파일로 저장하고 진행해도 된다 (사용자는 DB를 먼저 해결하길 원함).
+
+### 환경에서 겪은 제약 (같은 시도를 반복하지 말 것)
+
+- 자동 권한 검사가 `/dev/tcp`·`getent`·프록시 상태 조회를 **한 명령에 묶으면 거부**한다. 하나씩 따로 실행하면 통과했다. 거부되면 우회하지 말고 범위를 좁힐 것.
+- 환경 변수와 네트워크 설정은 **세션 시작 시에만** 읽힌다. 설정을 바꾸면 새 세션이 필요하다.
+- 사용자가 DB 직접 접속용 허용 도메인(`aws-0-ap-northeast-2.pooler.supabase.com`)과 `api.supabase.com`을 허용 목록에 추가했다.
 
 ## 1. 프로젝트 한 줄 요약
 
@@ -107,5 +147,6 @@
 
 ## 9. 새 세션 시작 문장
 
-> docs/HANDOFF.md를 읽고 이어서 진행해줘. 먼저 NAVER 환경변수 설정 여부(값 출력 없이)와 공공데이터포털 키 신청 여부를 확인하고, 3절 "다음에 할 일" 순서대로 경매 낙찰가율을 진행해줘.
+> docs/HANDOFF.md를 읽고 이어서 진행해줘. 0절(DB 연결)부터: SUPABASE_ACCESS_TOKEN 설정 여부(값 출력 없이)를 확인하고, Supabase 관리 API로 접속 테스트 → 0002_auction.sql 적용까지 진행해줘.
+> DB가 끝나면 NAVER 환경변수와 공공데이터포털 키 신청 여부를 확인하고, 3절 "다음에 할 일" 순서대로 경매 낙찰가율을 진행해줘.
 > (감평협회 샘플 파일을 받았으면 함께 첨부)
