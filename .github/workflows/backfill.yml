@@ -1,0 +1,65 @@
+# 과거 이력 적재 (수동 실행). 이미 받은 칸은 건너뛰므로(--skip-done) 끊기거나 호출 한도에 걸리면 다음 날 다시 실행하면 된다.
+# 한도 초과 시 jobs.daily 는 종료 코드 2 로 멈춘다. 러너에서의 접속·1000건 페이지는 미검증.
+# 매매는 DB(deals)에, 전월세는 GitHub Releases(raw-data)의 월별 CSV.gz + DB 요약(rent_monthly)에 넣는다
+# (무료 500MB 한도, docs/HANDOFF.md 0절 "저장 방식"). 이미 받은 칸은 건너뛴다.
+# months 에 최근 2개월(일일 수집 범위)을 넣지 말 것: --bootstrap 이라 first_seen_date 가 NULL 로 들어간다(이미 받은 칸은 건너뜀).
+name: backfill
+
+on:
+  workflow_dispatch:
+    inputs:
+      regions:
+        description: "seoul | gyeonggi | incheon | sudogwon | 코드 목록"
+        default: "seoul"
+      months:
+        description: "예: 202001-202508"
+        required: true
+      kinds:
+        description: "trade | rent | trade,rent"
+        default: "trade"
+      page_size:
+        description: "한 번에 받을 건수 (100 또는 1000)"
+        default: "1000"
+
+permissions:
+  contents: write  # 전월세 원본 파일 업로드
+
+concurrency:
+  group: daily-snapshot  # 일일 작업과 동시에 쓰지 않는다
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: psql 확인
+        run: |
+          command -v psql || (sudo apt-get update -q && sudo apt-get install -y -q postgresql-client)
+          psql --version
+      - name: 적재
+        env:
+          DATA_GO_KR_SERVICE_KEY: ${{ secrets.DATA_GO_KR_SERVICE_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          HC_DB_BACKEND: psql
+          PYTHONUNBUFFERED: "1"
+          REGIONS: ${{ inputs.regions }}
+          MONTHS: ${{ inputs.months }}
+          KINDS: ${{ inputs.kinds }}
+          HC_PAGE_SIZE: ${{ inputs.page_size }}
+          HC_ARCHIVE: gh
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          rc=0
+          if [[ ",$KINDS," == *",trade,"* ]]; then
+            python -m jobs.daily --regions "$REGIONS" --months "$MONTHS" --kinds trade --bootstrap --skip-done || rc=$?
+          fi
+          if [[ ",$KINDS," == *",rent,"* ]] && [ "$rc" -ne 2 ]; then
+            python -m jobs.rent_archive backfill --regions "$REGIONS" --months "$MONTHS" || rc=$?
+          fi
+          exit $rc

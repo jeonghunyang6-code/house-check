@@ -16,12 +16,17 @@ from collections import defaultdict
 from dataclasses import dataclass
 
 REGIONS = ("전국|서울|경기|인천|부산|대구|광주|대전|울산|세종|강원|충북|충남|전북|전남|경북|경남|제주")
-_NUM = r"(\d{2,3}(?:\.\d{1,2})?)\s*%"
+# 지지옥션은 소수 첫째 자리까지 쓴다. "80% 아래로" 같은 임계값 표현(정수, 뒤에 아래·밑·미만·선·대)은 제외한다
+_NUM = r"(\d{2,3}\.\d{1,2})\s*%(?!\s*(?:아래|밑|미만|선|대))"
 
 # ① 지역 + 아파트 낙찰가율 + 값
-_P1 = re.compile(rf"({REGIONS})\s*(?:지역\s*)?아파트\s*낙찰가율(?:은|이|도|는)?\s*{_NUM}")
+_P1 = re.compile(rf"({REGIONS})(?:의|\s*지역)?\s*아파트\s*(?:경매\s*)?낙찰가율\s*(?:\([^)]*\))?\s*(?:은|이|도|는)?\s*{_NUM}")
 # ② 지역 + 은/는 + 값 + (전월 값)
 _P2 = re.compile(rf"({REGIONS})(?:은|는)\s*{_NUM}\s*(?:로|으로)?\s*전월\(\s*{_NUM}\s*\)")
+# ③ "인천 아파트 낙찰률은 31.7%로 ... 낙찰가율은 81.1%로 전달(79.1%)보다" — 지역명은 앞쪽에만 있다.
+#    '낙찰가율은 값로 전월(값)' 꼴(전월값 필수)이고, 같은 문장 또는 직전 문장에 '지역 아파트'가 있을 때만 그 지역으로 본다
+_P3 = re.compile(rf"낙찰가율(?:은|이|는)\s*{_NUM}\s*(?:로|으로)?\s*(?:전월|전달)\(\s*{_NUM}\s*\)")
+_REGION_APT = re.compile(rf"({REGIONS})(?:의|\s*지역)?\s*아파트")
 
 
 @dataclass(frozen=True)
@@ -53,6 +58,11 @@ def extract(text: str) -> list[Candidate]:
             for m in _P2.finditer(s):
                 region = m.group(1)
                 found.setdefault(region, Candidate(region, float(m.group(2)), float(m.group(3)), s))
+        # ③: 같은 문장에서 낙찰가율 앞에 나온 마지막 '지역 아파트', 없으면 직전 문장의 마지막 '지역 아파트'
+        for m in _P3.finditer(s):
+            before = _REGION_APT.findall(s[: m.start()]) or (_REGION_APT.findall(sentences[i - 1]) if i else [])
+            if before and "낙찰가율" not in s[: m.start()].rsplit(before[-1], 1)[-1]:
+                found.setdefault(before[-1], Candidate(before[-1], float(m.group(1)), float(m.group(2)), s))
     return list(found.values())
 
 
