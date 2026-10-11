@@ -30,16 +30,17 @@ curl -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
 
 | 마이그레이션 | 상태 |
 |---|---|
-| `0001_deals.sql` | **미적용** (로컬 Postgres 16에서만 검증) |
+| `0001_deals.sql` | **적용·검증 완료** — `deals`(17열), `deal_events` 생성, 인덱스 6개. 면적 자동 계산(84.97→84), 거래유형 CHECK, `deal_events`→`deals` 외래키 동작 확인. 시험 행은 롤백, 표는 비어 있음 |
 | `0002_auction.sql` | **적용·검증 완료** — `court_jurisdiction`, `auction_stats` 생성, 인덱스 3개, `period_month` CHECK 동작 확인(잘못된 값 거부). 시험 행은 롤백, 표는 비어 있음 |
-| `0003_rls.sql` | **적용 완료** — 위 두 표 RLS 켬, 정책 없음(anon 접근 불가, 수집기는 postgres 권한으로 우회) |
+| `0003_rls.sql` | **적용 완료** — 경매 표 2개 RLS 켬, 정책 없음(anon 접근 불가, 수집기는 postgres 권한으로 우회) |
+| `0004_rls_deals.sql` | **적용 완료** — `deals`, `deal_events` RLS 켬 |
 
 마이그레이션 적용 기록 표(`schema_migrations` 등)는 아직 없다. 새 마이그레이션을 추가하면 이 표를 갱신할 것.
 **새 표를 만들면 RLS도 같이 켠다.**
 
 ### 다음 할 일
 
-1. `0001_deals.sql` 적용 + `deals`, `deal_events` RLS 켜기 (같은 API)
+1. ~~`0001` 적용 + RLS~~ 완료 (2026-10-11)
 2. PRODUCT_PLAN 트랙 B (시군구 코드 → 전월세 파서 → 적재 → `jobs/daily.py` → Actions cron). 적재 경로는 psql 대신 이 API 또는 Actions에서 psycopg — 결정 필요
 3. 3절 경매 낙찰가율 (NAVER 키 검증 등)
 
@@ -61,7 +62,7 @@ curl -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
 | 자막 수집기 | `tools/insight_crawler/` | 완료. `crawl.py`(자막·메타), `triage.py`(주제별 발췌), `vtt.py` |
 | 경매 계산 | `analytics/auction.py` + `tests/test_auction.py` | 완료, 테스트 통과 |
 | 경매 기사 추출 | `collector/sources/auction_news.py` + `tests/test_auction_news.py` | 완료, **실제 기사로는 미검증** |
-| 실거래 수집기(매매) | `collector/sources/molit.py`, `collector/snapshot.py`, `db/migrations/0001_deals.sql`, `tests/test_molit_snapshot.py` | **실제 API로 검증** (강남·송파 2026-09 전량 수집). 일일 실행(cron)·DB 적재·전월세 파서는 미작성. `0001`·`0002`는 로컬 Postgres 16에서 적용 검증 완료(2026-10-11), Supabase에는 `0002`만 적용(0절) |
+| 실거래 수집기(매매) | `collector/sources/molit.py`, `collector/snapshot.py`, `db/migrations/0001_deals.sql`, `tests/test_molit_snapshot.py` | **실제 API로 검증** (강남·송파 2026-09 전량 수집). 일일 실행(cron)·DB 적재·전월세 파서는 미작성. `0001`·`0002`는 로컬 Postgres 16에서 적용 검증 완료(2026-10-11), Supabase에 `0001`도 적용 완료(0절) |
 | 경매 스키마 | `db/migrations/0002_auction.sql` | **Supabase에 적용·검증 완료** (2026-10-11, 0절). RLS는 `0003_rls.sql` |
 | 영상 메타데이터 | `data/sources/youtube/video_metadata_2026-10-11.jsonl` | 영상 672개 요약 (제목·조회수·태그·설명 등) |
 
@@ -155,7 +156,7 @@ curl -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
 
 경매 낙찰가율(3절)은 **보도 추출로 충분하다고 사용자와 합의하고 보류**했다(감평협회 파일은 `bigdata-finance.kr` 인증서 오류로 못 받음, 우회 금지). 우선순위는 4절 A와 `docs/PRODUCT_PLAN.md`의 트랙 B·C다.
 
-1. ~~DB 접속~~ 해결됨 (0절). `0001` 적용 + RLS
+1. ~~DB 접속, 마이그레이션 0001~0004~~ 완료 (0절)
 2. 시군구 코드 목록(API로 검증) → 전월세 파서 → 적재(경로 결정 필요, 0절) → `jobs/daily.py` → `.github/workflows/daily.yml` → 서울 2020~ 적재·용량 측정
 3. 트랙 C(비주얼 프로토타입)는 DB와 무관해 바로 가능. 사용자 승인 대기 중
 4. `main`으로 합쳐야 cron이 돈다 → 사용자가 PR을 요청하면 만든다
