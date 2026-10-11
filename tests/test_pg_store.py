@@ -8,19 +8,20 @@ from datetime import date
 from pathlib import Path
 
 from collector.db import PsqlDb, lit, select
-from collector.pg_store import apply_snapshot_pg, should_bootstrap
+from collector.pg_store import RENT, apply_snapshot_pg, done_cells, should_bootstrap
 from collector.snapshot import apply_snapshot, open_store
-from collector.sources.molit import parse_trade_page
+from collector.sources.molit import parse_rent_page, parse_trade_page
 
 ROOT = Path(__file__).parent.parent
 XML = (Path(__file__).parent / "fixtures" / "molit_trade_sample.xml").read_text(encoding="utf-8")
+RENT_XML = (Path(__file__).parent / "fixtures" / "molit_rent_sample.xml").read_text(encoding="utf-8")
 URL = os.environ.get("HC_TEST_PG_URL")
 
 
 def _db():
     db = PsqlDb(URL)
-    db.query("DROP TABLE IF EXISTS deal_events, deals, snapshot_runs CASCADE;")
-    for m in ("0001_deals.sql", "0005_snapshot_runs.sql"):
+    db.query("DROP TABLE IF EXISTS deal_events, deals, rent_events, rents, snapshot_runs CASCADE;")
+    for m in ("0001_deals.sql", "0005_snapshot_runs.sql", "0006_rents.sql"):
         db.query((ROOT / "db" / "migrations" / m).read_text(encoding="utf-8"))
     return db
 
@@ -73,3 +74,20 @@ def test_bootstrap_rule():
     assert not should_bootstrap(db, "11680", "202610", date(2026, 10, 12))      # 새 칸이지만 어제 받음 → 정상
     assert should_bootstrap(db, "11680", "202610", date(2026, 10, 20))          # 오래 끊겼다 재개 → bootstrap
     assert should_bootstrap(db, "11710", "202609", date(2026, 10, 12))          # 다른 시군구 처음
+
+
+def test_rent_snapshot_and_kind_separation():
+    if not URL:
+        return
+    db = _db()
+    rents, _ = parse_rent_page(RENT_XML)
+    assert apply_snapshot_pg(db, "11680", "202609", rents[:3], date(2026, 10, 11), True, kind=RENT) == []
+    ev = apply_snapshot_pg(db, "11680", "202609", rents[1:], date(2026, 10, 12), False, kind=RENT)
+    assert sorted(e.event for e in ev) == ["disappeared", "registered", "registered"]
+    row = select(db, "SELECT contract_type, used_renewal_right, term_start::text AS ts, pre_deposit_10k "
+                     "FROM rents WHERE used_renewal_right")[0]
+    assert row["contract_type"] == "갱신" and row["ts"] and row["pre_deposit_10k"]
+    assert select(db, "SELECT count(*) AS n FROM rents WHERE contract_type IS NULL")[0]["n"] == 1
+    # 매매와 전월세의 수집 기록은 서로 섞이지 않는다
+    assert should_bootstrap(db, "11680", "202609", date(2026, 10, 12))
+    assert done_cells(db, RENT, ["11680", "11710"], ["202609", "202608"]) == {("11680", "202609")}

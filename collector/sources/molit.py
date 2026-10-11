@@ -26,7 +26,9 @@ from dataclasses import dataclass
 from datetime import date
 
 TRADE_URL = "https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev"
-PAGE_SIZE = 100
+RENT_URL = "https://apis.data.go.kr/1613000/RTMSDataSvcAptRent/getRTMSDataSvcAptRent"
+# 이 환경(클라우드 세션)에서는 1000건 요청 시 터널이 끊겨 100 이 기본. Actions 에서는 HC_PAGE_SIZE=1000 을 시도한다(미검증).
+PAGE_SIZE = int(os.environ.get("HC_PAGE_SIZE", "100"))
 
 
 @dataclass(frozen=True)
@@ -54,8 +56,47 @@ class Deal:
         return f"{self.apt_seq}|{self.contract_date.isoformat()}|{self.area_m2:g}|{self.floor}|{self.price_10k}"
 
 
+@dataclass(frozen=True)
+class Rent:
+    """전월세 1건. 2026-10-11 실제 응답(강남 2026-09, 1,119건 중 100건)으로 필드 확인.
+
+    - deposit / monthlyRent : 만원, 쉼표 포함. monthlyRent '0' 이면 전세
+    - contractType          : '신규' | '갱신' | '' (공백 14%)
+    - useRRRight            : '사용' 이면 갱신요구권 사용, 아니면 공백
+    - contractTerm          : '26.10~28.10' (계약기간, 공백 가능)
+    - preDeposit / preMonthlyRent : 종전 계약 (갱신일 때)
+    해제 필드는 없다.
+    """
+
+    apt_seq: str
+    apt_name: str
+    region_code: str
+    contract_date: date
+    area_m2: float
+    floor: int | None
+    deposit_10k: int
+    monthly_rent_10k: int
+    contract_type: str | None  # '신규' | '갱신' | None
+    used_renewal_right: bool
+    contract_term: str | None  # 원문
+    term_start: date | None  # 계약기간 시작 월 1일
+    term_end: date | None
+    pre_deposit_10k: int | None
+    pre_monthly_rent_10k: int | None
+    is_cancelled: bool = False  # 스냅샷 비교 공용 (전월세는 해제 개념 없음)
+
+    @property
+    def deal_key(self) -> str:
+        return (f"{self.apt_seq}|{self.contract_date.isoformat()}|{self.area_m2:g}|{self.floor}|"
+                f"{self.deposit_10k}|{self.monthly_rent_10k}")
+
+
 class ApiError(RuntimeError):
     pass
+
+
+class QuotaExceeded(ApiError):
+    """일일 호출 한도 초과(또는 HTTP 429). 재시도하지 않고 작업 전체를 멈춘다."""
 
 
 def _t(item: ET.Element, tag: str) -> str:
@@ -67,6 +108,44 @@ def _yy_mm_dd(s: str) -> date | None:
         return None
     yy, mm, dd = s.split(".")
     return date(2000 + int(yy), int(mm), int(dd))
+
+
+def _money(s: str) -> int | None:
+    s = s.replace(",", "").strip()
+    return int(s) if s else None
+
+
+def _term(s: str) -> tuple[date | None, date | None]:
+    """'26.10~28.10' → (2026-10-01, 2028-10-01). 형식이 다르면 (None, None)."""
+    try:
+        a, b = s.split("~")
+        (ya, ma), (yb, mb) = a.split("."), b.split(".")
+        return date(2000 + int(ya), int(ma), 1), date(2000 + int(yb), int(mb), 1)
+    except ValueError:
+        return None, None
+
+
+def _item_to_rent(item: ET.Element) -> Rent:
+    term = _t(item, "contractTerm")
+    start, end = _term(term) if term else (None, None)
+    ctype = _t(item, "contractType")
+    return Rent(
+        apt_seq=_t(item, "aptSeq"),
+        apt_name=_t(item, "aptNm"),
+        region_code=_t(item, "sggCd"),
+        contract_date=date(int(_t(item, "dealYear")), int(_t(item, "dealMonth")), int(_t(item, "dealDay"))),
+        area_m2=float(_t(item, "excluUseAr")),
+        floor=int(_t(item, "floor")) if _t(item, "floor") else None,
+        deposit_10k=_money(_t(item, "deposit")) or 0,
+        monthly_rent_10k=_money(_t(item, "monthlyRent")) or 0,
+        contract_type=ctype if ctype in ("신규", "갱신") else None,
+        used_renewal_right=_t(item, "useRRRight") == "사용",
+        contract_term=term or None,
+        term_start=start,
+        term_end=end,
+        pre_deposit_10k=_money(_t(item, "preDeposit")),
+        pre_monthly_rent_10k=_money(_t(item, "preMonthlyRent")),
+    )
 
 
 def _item_to_deal(item: ET.Element) -> Deal:
@@ -88,17 +167,35 @@ def _item_to_deal(item: ET.Element) -> Deal:
     )
 
 
-def parse_trade_page(xml_text: str) -> tuple[list[Deal], int]:
-    """한 페이지 XML → (거래 목록, totalCount). 오류 응답이면 ApiError."""
+_QUOTA_MARKERS = ("LIMITED_NUMBER_OF_SERVICE_REQUESTS", "EXCEEDS")
+
+
+def _parse_page(xml_text: str, conv):
+    """한 페이지 XML → (목록, totalCount). 오류 응답이면 ApiError, 한도 초과면 QuotaExceeded."""
     root = ET.fromstring(xml_text)
     code = root.findtext("header/resultCode")
-    if code is not None and code != "000":
-        raise ApiError(f"resultCode={code} {root.findtext('header/resultMsg')}")
     if root.tag == "OpenAPI_ServiceResponse":  # 게이트웨이 오류 형식
-        raise ApiError(root.findtext(".//returnAuthMsg") or "gateway error")
+        msg = root.findtext(".//returnAuthMsg") or "gateway error"
+        reason = root.findtext(".//returnReasonCode") or ""
+        if reason == "22" or any(m in msg for m in _QUOTA_MARKERS):
+            raise QuotaExceeded(msg)
+        raise ApiError(msg)
+    if code is not None and code != "000":
+        msg = f"resultCode={code} {root.findtext('header/resultMsg')}"
+        if code == "22" or any(m in msg for m in _QUOTA_MARKERS):
+            raise QuotaExceeded(msg)
+        raise ApiError(msg)
     body = root.find("body")
     total = int(body.findtext("totalCount") or 0)
-    return [_item_to_deal(i) for i in body.findall("items/item")], total
+    return [conv(i) for i in body.findall("items/item")], total
+
+
+def parse_trade_page(xml_text: str) -> tuple[list[Deal], int]:
+    return _parse_page(xml_text, _item_to_deal)
+
+
+def parse_rent_page(xml_text: str) -> tuple[list[Rent], int]:
+    return _parse_page(xml_text, _item_to_rent)
 
 
 def _get(url: str, params: dict[str, str | int], retries: int = 5) -> str:
@@ -109,6 +206,8 @@ def _get(url: str, params: dict[str, str | int], retries: int = 5) -> str:
             with urllib.request.urlopen(full, timeout=30) as r:
                 return r.read().decode("utf-8")
         except urllib.error.HTTPError as e:
+            if e.code == 429:
+                raise QuotaExceeded("HTTP 429") from None
             raise ApiError(f"HTTP {e.code}") from None  # URL(키 포함)을 예외에 싣지 않는다
         except (urllib.error.URLError, ConnectionError, TimeoutError):
             if attempt == retries - 1:
@@ -117,18 +216,26 @@ def _get(url: str, params: dict[str, str | int], retries: int = 5) -> str:
     raise AssertionError("unreachable")
 
 
-def fetch_trades(lawd_cd: str, deal_ymd: str, service_key: str | None = None) -> list[Deal]:
-    """시군구 1곳·계약월 1개의 거래 전체 (해제 포함)."""
+def _fetch_all(url: str, parse, lawd_cd: str, deal_ymd: str, service_key: str | None) -> list:
     key = service_key or os.environ["DATA_GO_KR_SERVICE_KEY"]
-    out: list[Deal] = []
+    out: list = []
     page = 1
     while True:
         xml_text = _get(
-            TRADE_URL,
-            {"serviceKey": key, "LAWD_CD": lawd_cd, "DEAL_YMD": deal_ymd, "numOfRows": PAGE_SIZE, "pageNo": page},
+            url, {"serviceKey": key, "LAWD_CD": lawd_cd, "DEAL_YMD": deal_ymd, "numOfRows": PAGE_SIZE, "pageNo": page}
         )
-        deals, total = parse_trade_page(xml_text)
-        out.extend(deals)
-        if len(out) >= total or not deals:
+        rows, total = parse(xml_text)
+        out.extend(rows)
+        if len(out) >= total or not rows:
             return out
         page += 1
+
+
+def fetch_trades(lawd_cd: str, deal_ymd: str, service_key: str | None = None) -> list[Deal]:
+    """시군구 1곳·계약월 1개의 매매 전체 (해제 포함)."""
+    return _fetch_all(TRADE_URL, parse_trade_page, lawd_cd, deal_ymd, service_key)
+
+
+def fetch_rents(lawd_cd: str, deal_ymd: str, service_key: str | None = None) -> list[Rent]:
+    """시군구 1곳·계약월 1개의 전월세 전체."""
+    return _fetch_all(RENT_URL, parse_rent_page, lawd_cd, deal_ymd, service_key)
