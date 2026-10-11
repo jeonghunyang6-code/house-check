@@ -59,3 +59,14 @@ def test_real_phrasings_from_search_results():
     assert [(c.region, c.ratio_pct) for c in extract("9월 울산의 아파트 낙찰가율은 88.5%로 한 달 전보다 4.1%p 상승")] == [("울산", 88.5)]
     assert [(c.region, c.ratio_pct) for c in extract("대구의 아파트 경매 낙찰가율이 82.9%로 전월(79.5%) 대비 상승")] == [("대구", 82.9)]
     assert [(c.region, c.ratio_pct) for c in extract("전국 아파트 경매 낙찰가율(감정가 대비 낙찰가 비율)은 85.9%를 기록했다")] == [("전국", 85.9)]
+
+
+def test_pattern3_region_only_in_previous_clause():
+    # 실제 요약문(2026-10-07 보도)의 모양: 지역명은 '낙찰률' 문장에만 있다
+    txt = "인천 아파트 낙찰률은 31.7%로 전월(32.7%)보다 1.0%p 하락했다. 낙찰가율은 81.1%로 전달(79.1%)보다 2.0%p 상승했다."
+    out = {c.region: c for c in extract(txt)}
+    assert out["인천"].ratio_pct == 81.1 and out["인천"].prev_pct == 79.1
+
+
+def test_pattern3_needs_previous_value_and_region():
+    assert extract("낙찰가율은 81.1%로 전달(79.1%)보다 상승했다.") == []
