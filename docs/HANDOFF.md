@@ -35,6 +35,7 @@ curl -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
 | `0003_rls.sql` | **적용 완료** — 경매 표 2개 RLS 켬, 정책 없음(anon 접근 불가, 수집기는 postgres 권한으로 우회) |
 | `0004_rls_deals.sql` | **적용 완료** — `deals`, `deal_events` RLS 켬 |
 | `0005_snapshot_runs.sql` | **적용 완료** — 일일 수집 기록 표(+RLS). bootstrap 판단에 쓴다 |
+| `0006_rents.sql` | **적용 완료** — `rents`·`rent_events`(+RLS), `snapshot_runs.kind`(trade/rent) |
 
 마이그레이션 적용 기록 표(`schema_migrations` 등)는 아직 없다. 새 마이그레이션을 추가하면 이 표를 갱신할 것.
 **새 표를 만들면 RLS도 같이 켠다.**
@@ -43,9 +44,25 @@ curl -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
 
 1. ~~`0001` 적용 + RLS~~ 완료 (2026-10-11)
 2. ~~매매 일일 수집기~~ 작성·첫 실행 완료 (아래 "일일 수집기")
-3. **매일 돌리기**: `main`에 합쳐야 Actions cron이 돈다(PR은 사용자가 요청할 때만). 합친 뒤 Actions 탭에서 `daily-snapshot`을 **수동 실행**(dry_run 먼저)해 러너→공공데이터포털, 러너→Supabase(psql) 접속을 확인
-4. 전월세 파서·적재 (필드는 8절에 확인돼 있음), 서울 2020~ 이력 적재(`--months 202001-202508 --bootstrap`)와 용량 측정
-5. 3절 경매 낙찰가율 (NAVER 키 검증 등)
+3. **매일 돌리기**: 기본 브랜치는 `main`이 아니라 **`claude/inspiring-bell-73ixlm`** 이다. 2026-10-11 PR(brave-lamport → inspiring-bell)을 만들었다. 병합되면 Actions 탭에서 `daily-snapshot`을 **수동 실행**(dry_run 먼저)해 러너→공공데이터포털, 러너→Supabase(psql) 접속을 확인. GitHub 시크릿 `DATABASE_URL`이 잘리지 않은 값인지도 이때 확인됨
+4. 서울 매매 과거 이력: Actions `backfill` 수동 실행(regions=seoul, months=202001-202508, kinds=trade). 한도 초과로 멈추면 다음 날 재실행
+5. **전월세 원본 압축 보관 + 지표 표** (아래 "저장 방식") — 다음 작업
+6. 3절 경매 낙찰가율 (NAVER 키 검증 등)
+
+### 저장 방식 (2026-10-11 사용자와 합의)
+
+Supabase 무료(500MB, 제3자 자료 기준·공식 미확인)를 유지한다. 실측: 매매 행당 약 300B, 전월세 약 370B. 서울 월 건수(실측): 매매 1천~1만 6천, 전월세 1만 7천~2만 → 서울 2020~ 전월세 원본만 약 560MB로 한도 초과.
+
+| 데이터 | 저장 위치 |
+|---|---|
+| 매매 원본 | DB `deals` (서울 2020~ 이력 + 수도권 매일) |
+| 전월세 원본 | DB `rents`에는 **당월·전월만**(등록일 추적용). 지난 달은 **압축 파일(CSV.gz)로 보관 후 DB에서 삭제** — 미구현 |
+| 전월세 과거 이력 | 압축 파일만 (DB에 넣지 않음) — 미구현 |
+| 전세가율·갱신 비율 등 지표 | DB 요약 표 (배치가 파일/DB로 계산) — 미구현 |
+
+- 파일 보관 후보: GitHub Releases(Actions에서 `gh release upload`) 또는 Supabase Storage. **무료 용량·제한 미확인** → 구현 전 확인. 월별 1파일(`rents_YYYYMM.csv.gz`, 수도권 전체)로 자산 수를 줄인다.
+- 사용자 PC는 주 저장소로 쓰지 않는다(매일 켜져 있어야 함, 웹 대시보드가 못 읽음, 고장 시 등록일 기록 소실). 백업용으로만.
+- 원본 압축률은 미측정.
 
 ### 일일 수집기 (2026-10-11 작성)
 
@@ -56,7 +73,8 @@ curl -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
 | `collector/db.py` | DB 접근 두 경로: `api`(관리 API, 클라우드 세션) / `psql`(Actions). 값은 `lit()`로만 SQL에 넣는다 |
 | `collector/pg_store.py` | Postgres 판 반영(칸마다 트랜잭션 1개), `should_bootstrap()` |
 | `jobs/daily.py` | `python -m jobs.daily [--regions seoul] [--months 202001-202512] [--bootstrap] [--db api\|psql] [--dry-run]` |
-| `.github/workflows/daily.yml` | 매일 20:47 UTC(05:47 KST), 시크릿 `DATA_GO_KR_SERVICE_KEY`·`DATABASE_URL`, psql 경로. **러너에서 미검증** |
+| `.github/workflows/daily.yml` | 매일 20:47 UTC(05:47 KST), 매매+전월세, 시크릿 `DATA_GO_KR_SERVICE_KEY`·`DATABASE_URL`, psql 경로. **러너에서 미검증** |
+| `.github/workflows/backfill.yml` | 과거 이력 수동 적재(`--bootstrap --skip-done`, 기본 매매만, 페이지 1000건 시도) |
 | `tests/test_pg_store.py` | `HC_TEST_PG_URL`(로컬 빈 Postgres)이 있을 때 SQLite 판과 6단계 시나리오 결과가 같은지 검증 |
 
 - bootstrap 규칙: 처음 받는 (시군구, 계약월) 칸이면서 그 시군구를 최근 3일(오늘 제외) 안에 받은 적이 없으면 `first_seen_date=NULL`. 새 달 칸은 전날 수집이 있었으므로 정상 등록으로 잡힌다.
@@ -176,10 +194,9 @@ curl -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
 
 경매 낙찰가율(3절)은 **보도 추출로 충분하다고 사용자와 합의하고 보류**했다(감평협회 파일은 `bigdata-finance.kr` 인증서 오류로 못 받음, 우회 금지). 우선순위는 4절 A와 `docs/PRODUCT_PLAN.md`의 트랙 B·C다.
 
-1. ~~DB 접속, 마이그레이션 0001~0005~~ 완료 (0절)
-2. ~~시군구 코드·매매 적재·`jobs/daily.py`·워크플로~~ 작성 완료 (0절 "일일 수집기"). **남은 것: main 병합 후 Actions 첫 실행 확인**, 전월세 파서, 서울 2020~ 이력 적재·용량 측정
+1. ~~DB 접속, 마이그레이션 0001~0006~~ 완료 (0절)
+2. ~~시군구 코드·매매/전월세 파서·적재·`jobs/daily.py`·워크플로~~ 작성 완료 (0절 "일일 수집기"). **남은 것: PR 병합 후 Actions 첫 실행 확인 → 서울 매매 과거 이력(backfill) → 전월세 압축 보관·지표 표** (0절 "다음 할 일", "저장 방식")
 3. 트랙 C(비주얼 프로토타입)는 DB와 무관해 바로 가능. 사용자 승인 대기 중
-4. `main`으로 합쳐야 cron이 돈다 → 사용자가 PR을 요청하면 만든다
 
 ## 9. 새 세션 시작 문장
 

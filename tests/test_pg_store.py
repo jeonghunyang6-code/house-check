@@ -74,6 +74,10 @@ def test_bootstrap_rule():
     assert not should_bootstrap(db, "11680", "202610", date(2026, 10, 12))      # 새 칸이지만 어제 받음 → 정상
     assert should_bootstrap(db, "11680", "202610", date(2026, 10, 20))          # 오래 끊겼다 재개 → bootstrap
     assert should_bootstrap(db, "11710", "202609", date(2026, 10, 12))          # 다른 시군구 처음
+    # 같은 시군구의 한 달만 실패해 빠진 경우: 다음 날 그 칸은 놓친 칸이므로 bootstrap (신규 등록으로 몰아 찍지 않는다)
+    apply_snapshot_pg(db, "11680", "202610", [], date(2026, 10, 12), False)
+    assert should_bootstrap(db, "11680", "202608", date(2026, 10, 13))
+    assert not should_bootstrap(db, "11680", "202611", date(2026, 10, 13))      # 마지막 달보다 새 달 + 어제 수집 → 정상
 
 
 def test_rent_snapshot_and_kind_separation():

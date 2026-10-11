@@ -1,4 +1,6 @@
 # 일일 실거래 스냅샷 (jobs/daily.py). 스케줄은 기본 브랜치(main)에 있어야 실행된다.
+# 이 저장소의 기본 브랜치는 claude/inspiring-bell-73ixlm 이다 (main 없음).
+# 매매·전월세 모두 당월·전월만 DB 에 넣는다. 전월세는 지난 달 원본 정리(압축 보관 후 삭제)가 아직 없어 DB 에 계속 쌓인다(월 약 17MB 추정).
 # 06:00 KST = 21:00 UTC 전날. 정각 혼잡을 피해 20:47 UTC 로 둔다. GitHub cron 은 수십 분 늦을 수 있다.
 # 필요한 저장소 시크릿: DATA_GO_KR_SERVICE_KEY, DATABASE_URL (Supabase Session pooler, 5432)
 # 러너에서 Supabase 직접 접속(psql)은 아직 실제로 검증하지 못했다. 첫 실행은 수동(workflow_dispatch)으로 확인할 것.
@@ -16,6 +18,9 @@ on:
         description: "DB 에 쓰지 않고 API 만 확인"
         type: boolean
         default: false
+
+permissions:
+  contents: read
 
 concurrency:
   group: daily-snapshot

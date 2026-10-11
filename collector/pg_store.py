@@ -124,16 +124,23 @@ def apply_snapshot_pg(
 
 
 def should_bootstrap(db: Db, region_code: str, contract_month: str, today: date, kind: Kind = TRADE) -> bool:
-    """처음 받는 칸이고, 그 시군구를 최근 3일(오늘 제외) 안에 받은 적이 없으면 bootstrap."""
+    """처음 받는 칸일 때만 bootstrap 후보다. 그중
+    - 그 시군구를 최근 3일(오늘 제외) 안에 받은 적이 없으면 bootstrap (첫 수집, 오래 끊긴 뒤 재개)
+    - 그 시군구에서 이미 받은 가장 최근 달 이하이면 bootstrap (수집이 실패해 빠졌던 지난 칸)
+    - 그 밖(새 달이 시작돼 처음 받는 칸)은 정상: 오늘 보이는 거래를 신규 등록으로 기록한다."""
+    k, rc = lit(kind.name), lit(region_code)
     r = select(
         db,
         "SELECT "
-        f"EXISTS (SELECT 1 FROM snapshot_runs WHERE kind = {lit(kind.name)} AND region_code = {lit(region_code)} "
+        f"EXISTS (SELECT 1 FROM snapshot_runs WHERE kind = {k} AND region_code = {rc} "
         f"AND contract_month = {lit(contract_month)}) AS cell_seen, "
-        f"EXISTS (SELECT 1 FROM snapshot_runs WHERE kind = {lit(kind.name)} AND region_code = {lit(region_code)} "
-        f"AND run_date BETWEEN {lit(today)} - 3 AND {lit(today)} - 1) AS recent",
+        f"EXISTS (SELECT 1 FROM snapshot_runs WHERE kind = {k} AND region_code = {rc} "
+        f"AND run_date BETWEEN {lit(today)} - 3 AND {lit(today)} - 1) AS recent, "
+        f"(SELECT max(contract_month) FROM snapshot_runs WHERE kind = {k} AND region_code = {rc}) AS max_month",
     )[0]
-    return not r["cell_seen"] and not r["recent"]
+    if r["cell_seen"]:
+        return False
+    return not r["recent"] or (r["max_month"] is not None and contract_month <= r["max_month"])
 
 
 def done_cells(db: Db, kind: Kind, regions: list[str], months: list[str]) -> set[tuple[str, str]]:
