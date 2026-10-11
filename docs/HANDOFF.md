@@ -20,6 +20,7 @@
 | 자막 수집기 | `tools/insight_crawler/` | 완료. `crawl.py`(자막·메타), `triage.py`(주제별 발췌), `vtt.py` |
 | 경매 계산 | `analytics/auction.py` + `tests/test_auction.py` | 완료, 테스트 통과 |
 | 경매 기사 추출 | `collector/sources/auction_news.py` + `tests/test_auction_news.py` | 완료, **실제 기사로는 미검증** |
+| 실거래 수집기(매매) | `collector/sources/molit.py`, `collector/snapshot.py`, `db/migrations/0001_deals.sql`, `tests/test_molit_snapshot.py` | **실제 API로 검증** (강남·송파 2026-09 전량 수집). 일일 실행(cron)·DB 적재·전월세 파서는 미작성. 0001은 Postgres 미적용 |
 | 경매 스키마 | `db/migrations/0002_auction.sql` | 작성, **문법만 검증** (실제 DB 미적용) |
 | 영상 메타데이터 | `data/sources/youtube/video_metadata_2026-10-11.jsonl` | 영상 672개 요약 (제목·조회수·태그·설명 등) |
 
@@ -104,7 +105,9 @@
 - 지표 명세의 🔧 기준선(국면 ±3%·8개월, 하락 지역 70%, 격차 하위 20% 등)은 **초기 추정값**이다.
 - 유튜브 자막은 **자동 자막**이라 오인식이 있다. 규칙에 쓰는 핵심 문장은 영상 해당 시점을 확인할 것.
 - 관점 카드는 키워드 상위 영상 위주로 읽은 결과다 (영상 약 70개와 입지·재건축 일부 주제는 미정독).
-- 전월세 API의 계약구분·갱신요구권 필드명, 감평협회 파일 구조, 네이버 부동산 응답 필드는 **모두 미확인**이다.
+- 전월세 API(`RTMSDataSvcAptRent/getRTMSDataSvcAptRent`) 필드는 2026-10-11 실제 응답으로 확인: `contractType`(신규/갱신), `useRRRight`('사용'=갱신요구권 사용), `preDeposit`·`preMonthlyRent`(종전 보증금·월세), `contractTerm`('26.10~28.10'), `deposit`·`monthlyRent`. 강남 2026-08 200건 중 갱신 89건. **아직 파서는 없다.** 감평협회 파일 구조, 네이버 부동산 응답 필드는 **미확인**이다.
+- 매매 API(`RTMSDataSvcAptTradeDev`): `cdealType='O'`=해제, `dealingGbn`=중개거래/직거래, `rgstDate`=등기일(신고일 아님, 소급 불가 문제를 못 푼다). **같은 단지·날짜·면적·층·가격의 별개 거래가 중복**으로 온다(송파 2026-09: 276건 중 키 123개, 직거래 172건) → `keyed()`가 `#순번`을 붙인다. 송파 직거래 172건의 원인은 확인 못 함. `numOfRows=1000`은 이 환경 프록시에서 터널이 끊겨 100건씩 받는다.
+- `AptBasisInfoServiceV4` 등 K-apt 서비스 URL은 추측했다가 '서비스 없음' 응답을 받았다. 정확한 서비스명은 포털 활용신청 페이지에서 확인해야 한다. 청약홈(`api.odcloud.kr`)은 허용 도메인에 없어 막힘.
 - 이 환경은 다수 외부 사이트에 접속할 수 없어 많은 조사가 웹 검색 결과에 기댔다. 법적 판단은 변호사 자문이 아니다.
 
 ## 9. 새 세션 시작 문장
@@ -112,4 +115,4 @@
 > docs/HANDOFF.md를 읽고 이어서 진행해줘. 먼저 NAVER 환경변수 설정 여부(값 출력 없이)와 공공데이터포털 키 신청 여부를 확인하고, 3절 "다음에 할 일" 순서대로 경매 낙찰가율을 진행해줘.
 > (감평협회 샘플 파일을 받았으면 함께 첨부)
 
-※ 공공데이터포털 키(`DATA_GO_KR_SERVICE_KEY` 제안)는 2026-10-11 세션 기준 환경변수에 없음. 신청 4건은 사용자가 완료함. 키 등록 후 새 세션에서 1단계 수집기(4절 A) 시작.
+※ `DATA_GO_KR_SERVICE_KEY`는 환경변수로 설정돼 동작 확인됨(2026-10-11). 매매·전월세 API 승인됨. K-apt·청약홈은 미확인. 등록일은 소급 불가이므로 **매일 스냅샷 실행 환경(cron + DB) 결정이 가장 급하다.**
