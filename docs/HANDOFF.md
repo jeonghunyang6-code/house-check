@@ -50,6 +50,14 @@ curl -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
 5. ~~전월세 원본 압축 보관 + 요약 표~~ 작성 완료(0007 적용). **Actions 첫 실행에서 릴리스 업로드 확인 필요.** 서울 전월세 과거 이력은 `backfill`을 kinds=rent로 실행
 6. 3절 경매 낙찰가율 (NAVER 키 검증 등)
 
+### Actions 실행 확인 (2026-10-12)
+
+- PR jeonghunyang6-code/house-check#1 병합. 기본 브랜치 `claude/inspiring-bell-73ixlm`.
+- `daily-snapshot` dry_run: 러너 → 공공데이터포털 정상. 수도권 매매+전월세 64,192건, 실패 0, 13분.
+- `daily-snapshot` 실제 실행: 러너 → Supabase(psql) 정상, 전월세 초기 적재·요약(7,130+40,606행) 정상.
+  **매매 당월 칸 44개 실패**: 등기일이 전부 NULL 인 칸에서 `UPDATE … FROM (VALUES …)`의 NULL 열이 text 로 추론됨 → `::date` 캐스트로 수정(후속 PR), 재현 테스트 추가. 실패 칸은 트랜잭션이 통째로 취소돼 데이터 손상 없음.
+- 아직 미확인: 릴리스 업로드(지난 달 이관이 처음 일어나는 11월 1일 전후, 또는 전월세 backfill 때 확인), 페이지 1000건.
+
 ### 저장 방식 (2026-10-11 사용자와 합의)
 
 Supabase 무료(500MB, 제3자 자료 기준·공식 미확인)를 유지한다. 실측: 매매 행당 약 300B, 전월세 약 370B. 서울 월 건수(실측): 매매 1천~1만 6천, 전월세 1만 7천~2만 → 서울 2020~ 전월세 원본만 약 560MB로 한도 초과.

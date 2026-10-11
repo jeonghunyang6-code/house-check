@@ -95,3 +95,17 @@ def test_rent_snapshot_and_kind_separation():
     # 매매와 전월세의 수집 기록은 서로 섞이지 않는다
     assert should_bootstrap(db, "11680", "202609", date(2026, 10, 12))
     assert done_cells(db, RENT, ["11680", "11710"], ["202609", "202608"]) == {("11680", "202609")}
+
+
+def test_all_null_dates_in_update_batch():
+    """2026-10-12 Actions 실패 재현: 당월 거래는 등기일이 전부 비어 있어 VALUES 의 NULL 열이 text 로 추론됐다."""
+    if not URL:
+        return
+    db = _db()
+    deals, _ = parse_trade_page(XML)
+    fresh = [replace(d, rgst_date=None, is_cancelled=False, cancel_date=None) for d in deals]
+    apply_snapshot_pg(db, "11680", "202610", fresh, date(2026, 10, 11), True)
+    apply_snapshot_pg(db, "11680", "202610", fresh, date(2026, 10, 12), False)       # 전부 seen_again, 등기일 전부 NULL
+    gone = [replace(fresh[0], is_cancelled=True, cancel_date=None)] + fresh[1:]      # 해제일 없는 해제
+    ev = apply_snapshot_pg(db, "11680", "202610", gone, date(2026, 10, 13), False)
+    assert [e.event for e in ev] == ["cancelled"]
