@@ -5,6 +5,7 @@
 - B4 하락 분류: ① 전국 하락 지역 비율 4주 평균 ≥ 70% ② 수도권 전세 8주 연속 하락 ③ 실업률 (📖 p.435~436 / 🔧 70%, 8주)
 - B5 ① 상승 지역 비율
 - 반등 신호: 매매수급지수 상승 전환 (3절). 🔧 4주 연속 상승을 "전환"으로 본다
+- D5 신규 전세 감소 + 전세가 상승 = 전세 부족 → 매매 상승 압력 (▶ J5 / 🔧 최근 신고 완료 3개월 신규 전세 건수 전년 같은 달 대비 감소, 전세지수 13주 상승)
 - G1 유동성·소득·집값: 2005 = 100 재기준화 (📖 p.50)
 - G3 주담대 금리 구간 (▶ 3~5% 심리적 한계, 7%면 체감이 완전히 다르다)
 - G4 가계대출 증가율: 잔액 전년비와 3개월 전 대비 변화 (▶ 증가율 둔화 → 거래 감소 / 🔧 3개월 변화 < 0 이면 둔화)
@@ -180,3 +181,38 @@ def rebase(points: list[tuple[str, float]], base: str = G1_BASE) -> list[tuple[s
         return []
     m = sum(b) / len(b)
     return [(p, round(v / m * 100, 1)) for p, v in points if p[:4] >= base]
+
+
+@dataclass(frozen=True)
+class NewJeonse:
+    months: tuple[str, ...]   # 비교한 최근 3개월 (신고 기한이 지난 달)
+    n_new: int                # 그 3개월 신규 전세 건수
+    n_new_prev: int           # 1년 전 같은 3개월
+    yoy: float | None         # %
+    renew_share: float | None  # 갱신 / (신규 + 갱신) %
+    jeonse_chg: float | None  # 전세지수 13주 변화 %
+    state: str                # 충족 | 미충족 | 데이터 없음
+
+
+def _shift(ym: str, k: int) -> str:
+    y, m = divmod(int(ym[:4]) * 12 + int(ym[4:]) - 1 + k, 12)
+    return f"{y}{m + 1:02d}"
+
+
+def new_jeonse(counts: dict[str, tuple[int, int]], last_complete: str, jeonse_chg: float | None) -> NewJeonse:
+    """counts: 계약월 → (신규 전세, 갱신 전세). last_complete: 신고 기한(30일)이 지나 다 모인 마지막 달.
+    계약구분 필드는 2021-06부터 채워진다(그 전은 대부분 공백)."""
+    ms = tuple(_shift(last_complete, -k) for k in (2, 1, 0))
+    prev = [_shift(m, -12) for m in ms]
+    if not all(m in counts for m in ms + tuple(prev)) or min(ms + tuple(prev)) < "202106":
+        return NewJeonse(ms, 0, 0, None, None, jeonse_chg, "데이터 없음")
+    n = sum(counts[m][0] for m in ms)
+    n0 = sum(counts[m][0] for m in prev)
+    r = sum(counts[m][1] for m in ms)
+    yoy = round((n / n0 - 1) * 100, 1) if n0 else None
+    share = round(r / (n + r) * 100, 1) if n + r else None
+    if yoy is None or jeonse_chg is None:
+        state = "데이터 없음"
+    else:
+        state = "충족" if yoy < 0 and jeonse_chg > 0 else "미충족"
+    return NewJeonse(ms, n, n0, yoy, share, jeonse_chg, state)

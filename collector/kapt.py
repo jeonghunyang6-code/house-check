@@ -24,7 +24,7 @@ import urllib.request
 from dataclasses import dataclass
 from datetime import date
 
-from collector.sources.molit import ApiError, QuotaExceeded
+from collector.sources.molit import ApiError, QuotaExceeded, conn_failed, note_ok
 
 LIST_URL = "https://apis.data.go.kr/1613000/AptListService4/getSigunguAptList4"
 INFO_URL = "https://apis.data.go.kr/1613000/AptBasisInfoServiceV5/getAphusBassInfoV5"
@@ -43,9 +43,10 @@ def _get_json(url: str, params: dict, retries: int = 5) -> dict:
             raise ApiError(f"HTTP {e.code}") from None
         except (urllib.error.URLError, ConnectionError, TimeoutError):
             if attempt == retries - 1:
-                raise ApiError("connection failed") from None
+                raise conn_failed() from None
             time.sleep(2 * 2**attempt)
             continue
+        note_ok()
         if body.lstrip().startswith("<"):  # 게이트웨이 오류는 XML 로 온다
             if "LIMITED_NUMBER_OF_SERVICE_REQUESTS" in body:
                 raise QuotaExceeded("daily quota")

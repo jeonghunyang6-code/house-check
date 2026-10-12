@@ -72,3 +72,27 @@ def test_identical_keys_are_kept_as_separate_deals():
     con = open_store()
     apply_snapshot(con, "11680", "202608", dup, date(2026, 10, 11), bootstrap=True)
     assert con.execute("SELECT COUNT(*) FROM deals").fetchone()[0] == 3
+
+
+def test_unreachable_after_consecutive_connection_failures():
+    import urllib.request
+    from collector.sources import molit
+
+    def boom(*a, **k):
+        raise ConnectionError("reset")
+
+    orig, sleep = urllib.request.urlopen, molit.time.sleep
+    urllib.request.urlopen, molit.time.sleep = boom, (lambda s: None)
+    try:
+        molit.note_ok()
+        kinds = []
+        for _ in range(molit.UNREACHABLE_AFTER):
+            try:
+                molit._get("https://example.invalid", {})
+            except molit.ApiError as e:
+                kinds.append(type(e).__name__)
+        assert kinds == ["ApiError"] * (molit.UNREACHABLE_AFTER - 1) + ["Unreachable"]
+        assert issubclass(molit.Unreachable, molit.QuotaExceeded)   # 작업들이 한도 초과처럼 멈춘다
+    finally:
+        urllib.request.urlopen, molit.time.sleep = orig, sleep
+        molit.note_ok()

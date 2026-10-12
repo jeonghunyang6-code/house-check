@@ -380,7 +380,7 @@ $('#notice').innerHTML = `<b>데이터 범위</b><span>서울 실거래는 2020�
     todo('과열 신호', '하위 급지 신고가 비중 (B5 ②)', 'K-apt 세대수·급지 데이터 연결 후'),
     row('반등 신호', '매매수급지수 상승 전환 · 서울', S.supply_seoul),
     row('반등 신호', '매매수급지수 상승 전환 · 수도권', S.supply_sudo),
-    todo('상승 압력', '신규 전세 계약 감소 (D5)', '전월세 요약(서울 2020~) 있음. 계산 작성 전'),
+    row('상승 압력', '서울 신규 전세 감소 + 전세가 상승 (D5)', S.d5_new_jeonse, S.d5_new_jeonse && S.d5_new_jeonse.value != null ? ` <span class="muted num">${S.d5_new_jeonse.value > 0 ? '+' : ''}${num(S.d5_new_jeonse.value)}%</span>` : ''),
   ].join('').replace(/<span class="pill acc"><\/span>/g, '<span></span>');
 
   // 거시: 상태 + 2년 스파크라인 (단일 계열, 값 라벨은 첫·끝만)
