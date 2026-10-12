@@ -63,11 +63,21 @@ curl -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
 - `0011_market.sql`(Supabase 적용): `rone_breadth`(주별 전국·수도권 상승·하락 말단 지역 수), `region_phase`(지역별 B1 국면·B3 낙폭, 매매·전세), `market_signals`(홈 체크리스트 key별 최신 값)
 - `collector/market.py`(순수 함수) + `jobs/market.py`. `rone.yml`이 weekly 뒤에 실행
   - B1: 주간 지수 → 월말 값 → 12개월 누적(±3%)·방향 일관성(8개월)·최근 3개월. 판정 순서 상승장/하락장 → 보합장 → 일시 반등/조정 → 추세 불명확
-  - B4: ① 전국 하락 지역 비율 4주 평균 ≥70% ② 수도권 전세 8주 연속 하락 ③ 실업률(KOSIS 미연결). 수도권이 하락장·일시 조정일 때만 분류
+  - B4: ① 전국 하락 지역 비율 4주 평균 ≥70% ② 수도권 전세 8주 연속 하락 ③ 실업률(아래 거시 지표). 수도권이 하락장·일시 조정일 때만 분류
   - 반등 신호: 매매수급지수 🔧 4주 연속 상승 = 상승 전환
   - 말단 지역 = 상위 지역이 아니고 묶음 집계(전국·수도권·지방권·4대광역시 등)도 아닌 곳. 세종은 말단으로 셈. 2026-10-05 주 전국 182곳 중 113 상승·69 하락, 수도권 78곳 중 64 상승·14 하락
 - 2026-10-12 결과: 서울 상승장(12개월 +10.17%, 12개월 상승), 수도권 상승장(+6.82%), 낙폭 0%, 전국 하락 지역 4주 평균 35.7%, 상승 지역 전국 62.1%·수도권 82.1%, 매매수급지수 서울 111.0·수도권 105.2
 - 남은 것: 전세·수급지수 과거 적재(rone backfill 진행 중) 후 B4 ②·반등 신호 재계산, 단지 단위 B1(실거래 월별 기준 시세), B2 순조로운 회복의 B1 조건, 시안 시장 홈 체크리스트를 `market_signals`로
+
+### 거시 지표: 실업률 (2026-10-12 작성)
+
+- 키: `KOSIS_API_KEY`(통계청), `ECOS_API_KEY`(한국은행). GitHub 시크릿과 이 작업 환경 변수에 등록됨. 허용 도메인 `kosis.kr`, `ecos.bok.or.kr` 추가 (`ecos.bok.kr`는 인증서가 `*.bok.or.kr`용이라 HTTPS 실패 → API 주소는 `ecos.bok.or.kr`)
+- `0012_macro.sql`(Supabase 적용): `macro_monthly(series, period YYYYMM, value)`. ECOS 지표도 같은 표에 넣는다
+- `collector/sources/kosis.py`: `Param/statisticsParameterData.do`. 계절조정 실업률 = 표 `DT_1DA9001S`(계절조정 경제활동인구 총괄), 항목 `T80`, 분류 `00`(계). 2000-01~ 320개월 한 번에. `itmId=ALL`처럼 크게 요청하면 연결이 끊겼다. 데이터 없음 = `{"err":"30"}`
+- `jobs/macro.py`가 매번 전체를 받아 덮어씀. `rone.yml`에서 rone 뒤·market 앞에 실행
+- `collector/market.py` `unemployment()`: G5 구간(📖 4% 경기침체·6% 경제 위기 p.143~144), B4 ③ = 4% 이상 또는 3개월 전 대비 🔧 +0.5%p 이상
+- 2026-10-12 결과: 2026-08 계절조정 실업률 2.7%(3개월 전 대비 -0.1%p) → 안정, B4 ③ 미충족. 과거 검증: 2020-05 4.3%, 2021-01 4.6%(코로나), 2009-06 3.9%
+- ECOS 호출 확인(기준금리 722Y001/0101000 = 2.5%). G1·G3·G4 연결은 다음 작업
 
 ### 단지 지표 계산 (2026-10-12 작성)
 
@@ -219,6 +229,7 @@ Supabase 무료(500MB, 제3자 자료 기준·공식 미확인)를 유지한다.
 | NAVER 서비스 | API HUB에서 **뉴스(NAVER Search News API) 하나만** 신청. 검색어트렌드(Data Lab)는 선택 지표(G7)라 미신청. 결제수단 등록이 요구됨, 한시적 무료, 한도·과금 방식은 콘솔 확인 필요 |
 | 허용 도메인 (사용자가 추가함) | `www.data.go.kr`, `bigdata-finance.kr`(→`abp.bccard.com`으로 이전), `abp.bccard.com`, `openapi.naver.com`, `naverapihub.apigw.ntruss.com`, `api.ncloud-docs.com`, `www.youtube.com` 등 |
 | 접속 상태 | `www.data.go.kr` 개별 페이지 OK (검색 화면은 연결 끊김). `abp.bccard.com` 403 (**우회 시도 금지**). 네이버 부동산·법원경매정보는 접속 차단 |
+| KOSIS·ECOS 키 | 환경 변수 `KOSIS_API_KEY`, `ECOS_API_KEY` (GitHub 시크릿에도 등록). ECOS API 주소는 `https://ecos.bok.or.kr/api/` |
 | 키 취급 | 채팅에 붙여넣게 하지 말 것. 코드는 환경 변수만 읽고, 로그에 값을 남기지 않는다 |
 
 ## 6. 이 저장소에 없는 것 (사용자 PC에 보관 중)

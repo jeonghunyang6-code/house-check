@@ -5,6 +5,7 @@
 - B4 하락 분류: ① 전국 하락 지역 비율 4주 평균 ≥ 70% ② 수도권 전세 8주 연속 하락 ③ 실업률 (📖 p.435~436 / 🔧 70%, 8주)
 - B5 ① 상승 지역 비율
 - 반등 신호: 매매수급지수 상승 전환 (3절). 🔧 4주 연속 상승을 "전환"으로 본다
+- G5 실업률 구간과 B4 ③ (📖 4% 경기침체·6% 경제 위기 p.143~144 / 🔧 3개월 +0.5%p)
 """
 
 from __future__ import annotations
@@ -17,6 +18,9 @@ CONSIST = 8        # 🔧 12개월 중 8개월
 DOWN_RATIO = 70.0  # 🔧 하락 지역 비율 70%
 JEONSE_WEEKS = 8   # 🔧 전세 8주 연속 하락
 SUPPLY_WEEKS = 4   # 🔧 수급지수 4주 연속 상승 = 상승 전환
+UNEMP_RECESSION = 4.0  # 📖 실업률 4% 접근 = 경기침체 (p.143~144)
+UNEMP_CRISIS = 6.0     # 📖 6% 이상 = 경제 위기
+UNEMP_JUMP = 0.5       # 🔧 3개월 사이 +0.5%p 이상 오르면 B4 ③ 충족
 
 
 def monthly(points: list[tuple[date, float]]) -> list[tuple[str, float]]:
@@ -105,3 +109,23 @@ def b4(down_ratio_4w: float | None, jeonse_down_weeks: int | None, unemployment_
     met = sum(c is True for c in conds)
     known = sum(c is not None for c in conds)
     return met, known, "대세 하락 의심" if met >= 2 else "단기 조정"
+
+
+@dataclass(frozen=True)
+class Unemployment:
+    period: str
+    rate: float
+    chg_3m: float | None   # 3개월 전 대비 %p
+    band: str              # 안정 | 경기침체 | 경제 위기
+    b4_met: bool           # B4 ③: 4% 이상 또는 3개월 +0.5%p 이상
+
+
+def unemployment(months: list[tuple[str, float]]) -> Unemployment | None:
+    """월별 계절조정 실업률(오래된 것부터) → G5 구간과 B4 ③."""
+    if not months:
+        return None
+    period, rate = months[-1]
+    chg = round(rate - months[-4][1], 2) if len(months) >= 4 else None
+    band = "경제 위기" if rate >= UNEMP_CRISIS else "경기침체" if rate >= UNEMP_RECESSION else "안정"
+    met = rate >= UNEMP_RECESSION or (chg is not None and chg >= UNEMP_JUMP)
+    return Unemployment(period, rate, chg, band, met)
