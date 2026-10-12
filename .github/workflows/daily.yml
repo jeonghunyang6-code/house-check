@@ -59,3 +59,10 @@ jobs:
           GH_REPO: ${{ github.repository }}
           PYTHONUNBUFFERED: "1"
         run: python -m jobs.rent_archive daily
+      - name: 단지 지표 계산
+        if: ${{ !cancelled() && !inputs.dry_run }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          HC_DB_BACKEND: psql
+          PYTHONUNBUFFERED: "1"
+        run: python -m jobs.metrics
