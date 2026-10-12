@@ -65,7 +65,9 @@ for seq in d['seqs']:
     ratio = J / C * 100 if (J and C) else None
     nb = band(C) if C else None
     n12 = sum(1 for r in ok if date.fromisoformat(r['cd']) > TODAY - timedelta(days=365))
-    cx.append({'seq': seq, 'name': name, 'region': REG[seq[:5]], 'P': P, 'T': T, 'C': C, 'conf': conf, 'cn': cn if C else 0,
+    phs = [r for r in d.get('cx_phase', []) if r['apt_seq'] == seq and r['phase']]
+    ph = max(phs, key=lambda r: r['area_group'] == 84) if phs else None  # 84 우선
+    cx.append({'phase': ph and {k: ph[k] for k in ('phase', 'chg_12m', 'up_months', 'down_months', 'last3')}, 'seq': seq, 'name': name, 'region': REG[seq[:5]], 'P': P, 'T': T, 'C': C, 'conf': conf, 'cn': cn if C else 0,
                'rec': rec, 'pattern': pattern, 'J': J, 'jn': jn, 'jsrc': '신규' if new else '전체', 'ratio': ratio, 'band': nb,
                'n12': n12, 'ref': ref,
                'pts': [[r['cd'], r['price_10k'], r['floor']] for r in ok],
@@ -119,12 +121,20 @@ def g1():  # 유동성·소득·집값 2005 = 100 (📖 p.50), collector/market.
         out[k] = [[p, v] for p, v in rebase([(r['period'], float(r['value'])) for r in d['g1'] if r['series'] == k])]
     return out
 
+def g2():  # 금리와 집값 (📖 p.48~49): 기준금리, 서울 아파트(KB) 전년비, 달마다 동행/역행
+    from collector.market import rate_price_relation, yoy_series
+    ser = lambda k: [(r['period'], float(r['value'])) for r in d['g1'] if r['series'] == k]
+    rate, kb = ser('base_rate'), ser('apt_kb_seoul')
+    yy = [p for p in yoy_series(kb) if p[0] >= '200601']
+    return {'rate': [[p, v] for p, v in rate if p >= '200601'], 'yoy': [[p, v] for p, v in yy],
+            'rel': [[p, x] for p, x in rate_price_relation(rate, kb) if p >= '200601']}
+
 from collector.regions import REGIONS
 json.dump({'monthly': monthly, 'cx': cx, 'today': today,
            'recent': {'n': len(rh), 'highs': sum(r['price_10k'] > r['prev_high'] for r in rh)},
            'weekly': weekly(), 'signals': {r['key']: r for r in d['signals']},
            'macro': {k: [[r['period'], float(r['value'])] for r in d['macro'] if r['series'] == k] for k in {r['series'] for r in d['macro']}},
-           'g1': g1(),
+           'g1': g1(), 'g2': g2(),
            'geo': json.load(open(ROOT / 'data/geo/sudogwon_sgg_20260701.json')),
            'region_names': REGIONS, 'asof': TODAY.isoformat()}, open(OUT / 'data.json', 'w'), ensure_ascii=False)
 for c in cx: print(c['name'], c['region'], c['P'], c['T'], c['C'], c['conf'], c['cn'], c['pattern'], c['rec'] and round(c['rec'],2), c['J'], c['jn'], c['ratio'] and round(c['ratio']), c['band'], c['n12'])

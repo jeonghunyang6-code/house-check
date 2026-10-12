@@ -84,7 +84,9 @@ curl -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
 - G1 유동성·소득·집값(📖 p.50): `m2` 161Y005/BBHS00(M2 평잔 계절조정, 2003-10~), `household_income` 200Y116/1060130(가계 및 비영리단체 처분가능소득, **연간**), `apt_kb_nat`·`apt_kb_seoul` 901Y062/P63AC·P63ACA(KB 아파트 매매가격지수, 1986~). `0013`이 period에 YYYY(연간)를 허용. `collector/market.py rebase()`로 2005 평균 = 100
   - 2026-10-12: 통화량 450, 가계소득 262(2025), 서울 아파트 266, 전국 아파트 196
   - 집값은 R-ONE 월간 대신 KB(ECOS 제공)를 썼다: R-ONE 주간은 2012년부터, ECOS의 부동산원 유형별 지수(901Y149)는 2021-06부터라 2005 기준을 못 만든다
-- 남은 것: G2(기준금리와 집값 동행·역행). 기준금리는 722Y001/0101000
+- G2 금리와 집값(📖 p.48~49): `base_rate` 722Y001/0101000. `rate_price_relation()` = 기준금리 12개월 변화와 서울 아파트(KB) 전년비가 같은 방향이면 동행, 반대면 역행, 금리가 1년 전과 같으면 동결. `market_signals.g2_rate_price`
+  - 2006-01~2026-09: 동행 101개월·역행 117개월·동결 31개월. 2026-09 기준금리 3.0%(1년 전 2.5%), 서울 아파트 전년비 +15.0% → 동행
+  - 시안: 기준금리·집값 전년비를 위아래 두 칸(한 축 원칙)으로, 가운데 띠에 달마다 동행/역행
 - 화면 시안 공유 링크: https://claude.ai/artifact/RtjwRo7U1bq1UTYZNZsTqg (비공개, `tools/prototype/out/house-check-screens.html`을 같은 경로로 다시 게시하면 갱신)
 - 화면 시안 ① 시장 홈: `market_signals`와 `macro_monthly` 최근 2년을 읽어 시장 국면(B1·B3), 체크리스트(B4 ①②③·B5 ①·수급지수), 거시 지표(G3·G4·G5 + 스파크라인)를 실제 값으로 표시. 준비 안 된 B5 ②·D5는 "준비 중"
 
@@ -95,6 +97,13 @@ curl -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
 - 대응: `molit.Unreachable`(QuotaExceeded 하위). MOLIT·K-apt 호출이 연달아 3번(`HC_UNREACHABLE_AFTER`) 재시도를 다 쓰고 실패하면 작업을 멈춘다(종료 코드 2, 다음 실행이 이어서)
 - 단지 연결은 이 작업 환경에서 실행: K-apt 목록 10,211개(83곳) 완료, complexes·info·match는 백그라운드(`/tmp/claude-0/kapt_*.log`)
 - 확인할 것: 오늘 밤 daily-snapshot(20:47 UTC)이 러너에서 공공데이터포털에 접속되는지
+
+### 단지별 국면 B1 (2026-10-13 작성)
+
+- `0014_complex_phase.sql`(Supabase 적용): `complex_metrics`에 phase, chg_12m, up_months, down_months, last3
+- `sql/metrics.sql`: 지난달까지 13개월 월별 기준 시세(3개월 이동 중앙값)로 `collector/market.py phase()`와 같은 규칙. 🔧 13개월 모두 기준 시세가 있어야 판정(거래 드문 단지·경기·인천은 NULL)
+- B2 "순조로운 회복"에 B1 조건(상승장·보합장) 추가. 국면을 판정 못 한 단지는 회복률만 본다
+- 2026-10-13: 단지·면적 27,626개 중 1,504개 판정(상승장 743, 추세 불명확 566, 일시 반등 111, 보합장 78, 일시 조정 5, 하락장 1)
 
 ### 신규 전세 감소 D5 (2026-10-12 작성)
 

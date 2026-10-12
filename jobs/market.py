@@ -13,7 +13,7 @@ import sys
 from datetime import date, timedelta
 
 from collector.db import Db, DbError, connect, lit, select
-from collector.market import (DOWN_RATIO, JEONSE_WEEKS, SUPPLY_WEEKS, UNEMP_JUMP, b4, loan_growth, new_jeonse, monthly, mortgage_band, phase, run_length,
+from collector.market import (_shift, DOWN_RATIO, JEONSE_WEEKS, SUPPLY_WEEKS, UNEMP_JUMP, b4, loan_growth, new_jeonse, rate_price_relation, yoy_series, monthly, mortgage_band, phase, run_length,
                              unemployment)
 
 SEOUL, CAPITAL = 50008, 50002
@@ -103,6 +103,18 @@ def run(db: Db) -> dict[str, tuple]:
                             f"서울 신규 전세 {_ym(nj.months[0])}~{_ym(nj.months[-1])} {nj.n_new:,}건, 1년 전 {nj.n_new_prev:,}건 "
                             f"({nj.yoy:+.1f}%), 갱신 비중 {nj.renew_share}%, 서울 전세지수 13주 {nj.jeonse_chg:+.2f}%. 신규 감소 + 전세가 상승이면 충족"
                             if nj.yoy is not None and nj.jeonse_chg is not None else "서울 신규 전세 건수·전세지수")
+    # G2 기준금리와 서울 아파트값 (동행/역행). 2006년부터 달마다 세고, 최신 달 관계를 신호로
+    br, kb = macro(db, "base_rate", 400), macro(db, "apt_kb_seoul", 400)
+    rel = [x for x in rate_price_relation(br, kb) if x[0] >= "200601"]
+    if rel and br:
+        p, lab = rel[-1]
+        py = dict(yoy_series(kb)).get(p)
+        r = dict(br)
+        n = {k: sum(1 for _, x in rel if x == k) for k in ("동행", "역행", "금리 동결")}
+        sig["g2_rate_price"] = (r[p], lab, f"{_ym(p)} 기준금리 {r[p]}% (1년 전 {dict(br).get(_shift(p, -12))}%), 서울 아파트 전년비 {py:+.1f}%. "
+                                f"2006년 이후 동행 {n['동행']}개월·역행 {n['역행']}개월·금리 동결 {n['금리 동결']}개월. 금리는 집값을 조절하지 않는다(📖 p.48~49)")
+    else:
+        sig["g2_rate_price"] = (None, "데이터 없음", "기준금리와 서울 아파트값")
     # G3 주담대 금리, G4 가계대출 증가율 (jobs/macro.py, ECOS)
     rate = macro(db, "mortgage_rate", 1)
     sig["g3_mortgage_rate"] = ((rate[-1][1], mortgage_band(rate[-1][1]),

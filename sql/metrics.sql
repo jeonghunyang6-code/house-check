@@ -60,12 +60,43 @@ c AS (
   FROM a1 JOIN hi USING (apt_seq, area_group)
   LEFT JOIN pk USING (apt_seq, area_group) LEFT JOIN tr USING (apt_seq, area_group) LEFT JOIN js USING (apt_seq, area_group)
 ),
+ph_months AS (  -- B1: 지난달까지 13개월 (월별 기준 시세 13개 = 변화 12개)
+  SELECT generate_series(date_trunc('month', {TODAY}::date) - INTERVAL '13 month',
+                         date_trunc('month', {TODAY}::date) - INTERVAL '1 month', INTERVAL '1 month')::date AS m
+),
+ref13 AS (
+  SELECT b.apt_seq, b.area_group, mo.m, percentile_cont(0.5) WITHIN GROUP (ORDER BY b.price_10k) AS v
+  FROM ph_months mo JOIN base b ON b.contract_date >= mo.m - INTERVAL '2 month' AND b.contract_date < mo.m + INTERVAL '1 month'
+  GROUP BY 1, 2, 3
+),
+dv AS (
+  SELECT apt_seq, area_group, m, v,
+    v - lag(v) OVER (PARTITION BY apt_seq, area_group ORDER BY m) AS dv,
+    row_number() OVER (PARTITION BY apt_seq, area_group ORDER BY m DESC) AS rn,
+    count(*) OVER (PARTITION BY apt_seq, area_group) AS cnt,
+    first_value(v) OVER (PARTITION BY apt_seq, area_group ORDER BY m) AS v0
+  FROM ref13
+),
+ph0 AS (  -- 13개월 모두 기준 시세가 있는 단지만 (🔧 3개월 창에 거래가 하나도 없는 달이 있으면 판정 안 함)
+  SELECT apt_seq, area_group,
+    (max(v) FILTER (WHERE rn = 1) / max(v0) - 1) * 100 AS chg,
+    count(*) FILTER (WHERE dv > 0) AS up, count(*) FILTER (WHERE dv < 0) AS down,
+    bool_and(dv > 0) FILTER (WHERE rn <= 3) AS l3up, bool_and(dv < 0) FILTER (WHERE rn <= 3) AS l3dn
+  FROM dv WHERE cnt = 13 GROUP BY 1, 2
+),
+ph AS (  -- collector/market.py phase() 와 같은 규칙: 🔧 ±3%, 8개월 / 📖 추세 최소 1년 p.136
+  SELECT apt_seq, area_group, chg, up, down,
+    CASE WHEN l3up THEN '상승' WHEN l3dn THEN '하락' ELSE '혼조' END AS last3,
+    CASE WHEN chg >= 3 AND up >= 8 THEN '상승장' WHEN chg <= -3 AND down >= 8 THEN '하락장'
+         WHEN abs(chg) < 3 THEN '보합장' WHEN l3up THEN '일시 반등' WHEN l3dn THEN '일시 조정' ELSE '추세 불명확' END AS phase
+  FROM ph0
+),
 d AS (
-  SELECT c.*, round(cur)::int AS ref,
+  SELECT c.*, ph.phase, ph.chg, ph.up, ph.down, ph.last3, round(cur)::int AS ref,
     CASE WHEN cur IS NOT NULL AND peak IS NOT NULL AND trough IS NOT NULL AND peak > trough THEN (cur - trough) / (peak - trough) END AS rec,
     round(coalesce(jnew, jall))::int AS j, CASE WHEN jnew IS NOT NULL THEN nnew ELSE nall END AS jn,
     CASE WHEN jnew IS NOT NULL THEN '신규' WHEN jall IS NOT NULL THEN '전체' END AS jsrc
-  FROM c
+  FROM c LEFT JOIN ph USING (apt_seq, area_group)
 )
 SELECT apt_seq, area_group, {TODAY},
   ref, cur_n, cur_days,
@@ -74,7 +105,7 @@ SELECT apt_seq, area_group, {TODAY},
   round(rec::numeric, 3),
   CASE WHEN ref IS NULL OR peak IS NULL THEN NULL
        WHEN ref >= peak THEN '신고가 돌파'
-       WHEN rec >= 0.6 THEN '순조로운 회복'   -- 🔧 60% (B1 국면 조건은 지역 국면 연결 후 추가)
+       WHEN rec >= 0.6 AND (phase IS NULL OR phase IN ('상승장', '보합장')) THEN '순조로운 회복'   -- 🔧 60%, B1 상승장·보합장 (국면 판정 불가 단지는 회복률만)
        ELSE '회복 지연' END,
   CASE WHEN ref IS NOT NULL AND trough IS NOT NULL THEN ref <= trough * 1.03 END,
   j, jn, jsrc,
@@ -83,7 +114,8 @@ SELECT apt_seq, area_group, {TODAY},
        WHEN ref <= 150000 THEN 50 WHEN ref <= 200000 THEN 50 - 20 * (ref - 150000) / 50000.0 ELSE 30 END,
   CASE WHEN ref IS NULL THEN NULL WHEN ref <= 50000 THEN 90 WHEN ref <= 80000 THEN 90 - 30 * (ref - 50000) / 30000.0
        WHEN ref <= 150000 THEN 60 WHEN ref <= 200000 THEN 60 - 10 * (ref - 150000) / 50000.0 ELSE 50 END,
-  n_365, high_10k, high_date, last_date
+  n_365, high_10k, high_date, last_date,
+  phase, round(chg::numeric, 2), up, down, last3
 FROM d;
 
 COMMIT;
