@@ -13,7 +13,7 @@ import sys
 from datetime import date
 
 from collector.db import Db, DbError, connect, lit, select
-from collector.market import (DOWN_RATIO, JEONSE_WEEKS, SUPPLY_WEEKS, b4, monthly, phase, run_length)
+from collector.market import (DOWN_RATIO, JEONSE_WEEKS, SUPPLY_WEEKS, UNEMP_JUMP, b4, monthly, phase, run_length, unemployment)
 
 SEOUL, CAPITAL = 50008, 50002
 
@@ -61,14 +61,24 @@ def run(db: Db) -> dict[str, tuple]:
     # B4 ② 수도권 전세 연속 하락 주
     jser = [v for _, v in series(db, "jeonse", 6).get(CAPITAL, [])]
     jdown = run_length(jser, -1) if len(jser) > JEONSE_WEEKS else None
-    met, known, cls = b4(ratio4, jdown, None)
+    # B4 ③ / G5 실업률 (jobs/macro.py)
+    um = unemployment([(r["period"], float(r["value"])) for r in select(
+        db, "SELECT period, value FROM macro_monthly WHERE series = 'unemployment_sa' ORDER BY period DESC LIMIT 4")][::-1])
+    met, known, cls = b4(ratio4, jdown, um.b4_met if um else None)
     sudo_phase = getattr(phases.get(("sale", CAPITAL)), "phase", None)
     falling = sudo_phase in ("하락장", "일시 조정")
     sig["b4_down_ratio"] = (ratio4, "데이터 없음" if ratio4 is None else "충족" if ratio4 >= DOWN_RATIO else "미충족",
                             f"전국 시군구 중 주간 하락 지역 비율 최근 4주 평균 (기준 {DOWN_RATIO:.0f}%)")
     sig["b4_jeonse_8w"] = (jdown, "데이터 없음" if jdown is None else "충족" if jdown >= JEONSE_WEEKS else "미충족",
                            f"수도권 전세지수 연속 하락 주 (기준 {JEONSE_WEEKS}주)")
-    sig["b4_unemployment"] = (None, "데이터 없음", "실업률 4% 이상 또는 3개월 +0.5%p (KOSIS 미연결)")
+    if um:
+        chg = f"{um.chg_3m:+.1f}%p" if um.chg_3m is not None else "비교 불가"
+        sig["b4_unemployment"] = (um.rate, "충족" if um.b4_met else "미충족",
+                                  f"{um.period[:4]}.{um.period[4:]} 계절조정 실업률 {um.rate}%, 3개월 전 대비 {chg} (기준 4% 또는 +{UNEMP_JUMP}%p)")
+        sig["g5_unemployment"] = (um.rate, um.band, f"{um.period[:4]}.{um.period[4:]} 계절조정 실업률. 4% 미만 안정, 4~6% 경기침체, 6% 이상 경제 위기")
+    else:
+        sig["b4_unemployment"] = (None, "데이터 없음", "실업률 4% 이상 또는 3개월 +0.5%p (macro_monthly 비어 있음)")
+        sig["g5_unemployment"] = (None, "데이터 없음", "계절조정 실업률")
     sig["b4_class"] = (met, cls if falling else "해당 없음",
                        f"수도권 국면 {sudo_phase}. 하락 국면일 때만 판정. 조건 {met}/{known}개 충족 (판단 가능 {known}/3)")
     # B5 ① 상승 지역 비율 (최신 주)
