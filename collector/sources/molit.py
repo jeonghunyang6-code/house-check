@@ -103,6 +103,30 @@ class QuotaExceeded(ApiError):
     """일일 호출 한도 초과(또는 HTTP 429). 재시도하지 않고 작업 전체를 멈춘다."""
 
 
+class Unreachable(QuotaExceeded):
+    """공공데이터포털에 호출 몇 번이 연달아(각각 재시도 5회 끝에) 접속하지 못함 → 한도 초과처럼 작업 전체를 멈춘다.
+    2026-10-12 GitHub 러너에서 apis.data.go.kr 연결이 모두 끊겨 kapt 작업이 호출마다 3분씩 몇 시간을 허비했다.
+    다음 실행이 이어서 하므로 멈추는 편이 낫다. 우회(다른 IP 등)는 하지 않는다."""
+
+
+UNREACHABLE_AFTER = int(os.environ.get("HC_UNREACHABLE_AFTER", "3"))
+_conn_fails = 0
+
+
+def note_ok() -> None:
+    global _conn_fails
+    _conn_fails = 0
+
+
+def conn_failed() -> ApiError:
+    """재시도를 다 쓴 연결 실패 1회를 세고, 연달아 UNREACHABLE_AFTER 번이면 Unreachable 을 돌려준다 (호출한 쪽이 raise)."""
+    global _conn_fails
+    _conn_fails += 1
+    if _conn_fails >= UNREACHABLE_AFTER:
+        return Unreachable(f"connection failed {_conn_fails} calls in a row")
+    return ApiError("connection failed")
+
+
 def _t(item: ET.Element, tag: str) -> str:
     return (item.findtext(tag) or "").strip()
 
@@ -218,14 +242,16 @@ def _get(url: str, params: dict[str, str | int], retries: int = 5) -> str:
     for attempt in range(retries):
         try:
             with urllib.request.urlopen(full, timeout=30) as r:
-                return r.read().decode("utf-8")
+                body = r.read().decode("utf-8")
+            note_ok()
+            return body
         except urllib.error.HTTPError as e:
             if e.code == 429:
                 raise QuotaExceeded("HTTP 429") from None
             raise ApiError(f"HTTP {e.code}") from None  # URL(키 포함)을 예외에 싣지 않는다
         except (urllib.error.URLError, ConnectionError, TimeoutError):
             if attempt == retries - 1:
-                raise ApiError("connection failed") from None
+                raise conn_failed() from None
             time.sleep(2 * 2**attempt)
     raise AssertionError("unreachable")
 

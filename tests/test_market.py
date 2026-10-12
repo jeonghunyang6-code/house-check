@@ -38,3 +38,13 @@ def test_run_length_and_b4():
     assert b4(75.0, 9, None) == (2, 2, "대세 하락 의심")
     assert b4(40.0, 9, None) == (1, 2, "단기 조정")
     assert b4(None, None, None) == (0, 0, "단기 조정")
+
+
+def test_new_jeonse():
+    from collector.market import new_jeonse
+    cnt = {f"2025{m:02d}": (100, 50) for m in range(1, 13)} | {f"2026{m:02d}": (80, 70) for m in range(1, 13)}
+    nj = new_jeonse(cnt, "202608", 1.2)
+    assert nj.months == ("202606", "202607", "202608") and (nj.n_new, nj.n_new_prev, nj.yoy) == (240, 300, -20.0)
+    assert nj.renew_share == 46.7 and nj.state == "충족"
+    assert new_jeonse(cnt, "202608", -0.5).state == "미충족"
+    assert new_jeonse(cnt, "202508", 1.0).state == "데이터 없음"   # 1년 전 자료 없음

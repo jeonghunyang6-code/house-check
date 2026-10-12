@@ -10,10 +10,10 @@ from __future__ import annotations
 
 import argparse
 import sys
-from datetime import date
+from datetime import date, timedelta
 
 from collector.db import Db, DbError, connect, lit, select
-from collector.market import (DOWN_RATIO, JEONSE_WEEKS, SUPPLY_WEEKS, UNEMP_JUMP, b4, loan_growth, monthly, mortgage_band, phase, run_length,
+from collector.market import (DOWN_RATIO, JEONSE_WEEKS, SUPPLY_WEEKS, UNEMP_JUMP, b4, loan_growth, new_jeonse, monthly, mortgage_band, phase, run_length,
                              unemployment)
 
 SEOUL, CAPITAL = 50008, 50002
@@ -91,6 +91,18 @@ def run(db: Db) -> dict[str, tuple]:
         sig["g5_unemployment"] = (None, "데이터 없음", "계절조정 실업률")
     sig["b4_class"] = (met, cls if falling else "해당 없음",
                        f"수도권 국면 {sudo_phase}. 하락 국면일 때만 판정. 조건 {met}/{known}개 충족 (판단 가능 {known}/3)")
+    # D5 서울 신규 전세 감소 + 전세가 상승 (rent_monthly 는 서울만 2020년~)
+    last_complete = (date.today().replace(day=1) - timedelta(days=1)).replace(day=1) - timedelta(days=1)  # 지지난 달 말
+    cnt = {r["m"]: (int(r["jn"]), int(r["jr"])) for r in select(
+        db, "SELECT contract_month AS m, sum(n_jeonse_new) AS jn, sum(n_jeonse_renew) AS jr FROM rent_monthly "
+            "WHERE region_code LIKE '11%' AND contract_month >= '202106' GROUP BY 1")}
+    js = [v for _, v in series(db, "jeonse", 6).get(SEOUL, [])]
+    jchg = round((js[-1] / js[-14] - 1) * 100, 2) if len(js) >= 14 else None
+    nj = new_jeonse(cnt, last_complete.strftime("%Y%m"), jchg)
+    sig["d5_new_jeonse"] = (nj.yoy, nj.state,
+                            f"서울 신규 전세 {_ym(nj.months[0])}~{_ym(nj.months[-1])} {nj.n_new:,}건, 1년 전 {nj.n_new_prev:,}건 "
+                            f"({nj.yoy:+.1f}%), 갱신 비중 {nj.renew_share}%, 서울 전세지수 13주 {nj.jeonse_chg:+.2f}%. 신규 감소 + 전세가 상승이면 충족"
+                            if nj.yoy is not None and nj.jeonse_chg is not None else "서울 신규 전세 건수·전세지수")
     # G3 주담대 금리, G4 가계대출 증가율 (jobs/macro.py, ECOS)
     rate = macro(db, "mortgage_rate", 1)
     sig["g3_mortgage_rate"] = ((rate[-1][1], mortgage_band(rate[-1][1]),

@@ -88,6 +88,20 @@ curl -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
 - 화면 시안 공유 링크: https://claude.ai/artifact/RtjwRo7U1bq1UTYZNZsTqg (비공개, `tools/prototype/out/house-check-screens.html`을 같은 경로로 다시 게시하면 갱신)
 - 화면 시안 ① 시장 홈: `market_signals`와 `macro_monthly` 최근 2년을 읽어 시장 국면(B1·B3), 체크리스트(B4 ①②③·B5 ①·수급지수), 거시 지표(G3·G4·G5 + 스파크라인)를 실제 값으로 표시. 준비 안 된 B5 ②·D5는 "준비 중"
 
+### GitHub 러너 → 공공데이터포털 접속 실패 (2026-10-12 밤)
+
+- kapt 실행(run 38260612348, steps=complexes,list,info,match, regions=seoul): 14:07부터 **모든 MOLIT 호출이 connection failed**. 호출마다 재시도 5회로 3분씩, 1시간 40분 동안 0건 → 취소함
+- 같은 시각 같은 러너에서 R-ONE·KOSIS·ECOS는 정상(rone weekly 성공). 이 작업 환경에서는 apis.data.go.kr 정상(느림). 403·429가 아니라 연결 자체가 끊김 → 러너 IP 대역 차단인지 일시 장애인지 **확인 못 함**. 우회(IP 변경 등) 하지 않는다
+- 대응: `molit.Unreachable`(QuotaExceeded 하위). MOLIT·K-apt 호출이 연달아 3번(`HC_UNREACHABLE_AFTER`) 재시도를 다 쓰고 실패하면 작업을 멈춘다(종료 코드 2, 다음 실행이 이어서)
+- 단지 연결은 이 작업 환경에서 실행: K-apt 목록 10,211개(83곳) 완료, complexes·info·match는 백그라운드(`/tmp/claude-0/kapt_*.log`)
+- 확인할 것: 오늘 밤 daily-snapshot(20:47 UTC)이 러너에서 공공데이터포털에 접속되는지
+
+### 신규 전세 감소 D5 (2026-10-12 작성)
+
+- `collector/market.py new_jeonse()` + `jobs/market.py` → `market_signals.d5_new_jeonse`. 서울만(rent_monthly 서울 2020~)
+- 🔧 신고 기한(30일)이 지난 최근 3개월(오늘 기준 지지난 달까지) 신규 전세 건수를 1년 전 같은 3개월과 비교, 서울 전세지수 13주 변화 > 0 과 함께면 충족. 계약구분은 2021-06부터 채워짐
+- 2026-10-12: 2026.06~08 신규 전세 11,147건 vs 1년 전 18,363건(-39.3%), 갱신 비중 55.2%, 전세지수 13주 +2.78% → 충족(상승 압력). 외부 통계와 대조는 못 함
+
 ### 단지 지표 계산 (2026-10-12 작성)
 
 - `0010_metrics.sql`(Supabase 적용): `complex_metrics`(단지×면적군: 기준 시세 A1·신뢰도, 전고점 P·저점 T·회복률·패턴 B2·반등 없음 경고, 전세가율 D1·정상 범위, 1년 거래 수, 최고가), `deals.prev_high_10k`(거래별 전고점, 4.3)
