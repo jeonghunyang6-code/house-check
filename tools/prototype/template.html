@@ -133,6 +133,11 @@ footer.foot { color: var(--ink-3); font-size: 12px; max-width: 90ch; display: gr
       <div class="screen">
         <div class="appbar"><h2>서울 아파트 시장</h2><span class="sub num" id="asof1"></span></div>
         <div class="sec">
+          <h3>지금 시장 한눈에</h3>
+          <div class="kpis" id="summary"></div>
+          <p class="src">아래 체크리스트·거시 지표에서 뽑은 요약. 판정 기준과 출처는 각 항목에 있습니다.</p>
+        </div>
+        <div class="sec">
           <h3>월별 매매 거래량</h3>
           <svg class="chart" id="volChart" viewBox="0 0 340 170" role="img" aria-label="서울 월별 아파트 매매 거래량 막대 차트"></svg>
           <div class="legend"><span><i style="background:var(--s-trade)"></i>계약월 기준 거래</span><span><i style="background:var(--s-trade);opacity:.35"></i>신고 기한 전(집계 중)</span></div>
@@ -353,6 +358,26 @@ $('#notice').innerHTML = `<b>데이터 범위</b><span>서울 실거래는 2020�
   draw();
 })();
 
+/* ① 요약 카드: 체크리스트에서 핵심 6개 (값은 market_signals 그대로) */
+(function () {
+  const S = D.signals || {}, g = (k) => S[k] || null;
+  const n1 = (v, d = 1) => v == null ? '–' : Number(v).toFixed(d);
+  const P = { '상승장': 'acc', '하락장': 'bad', '보합장': 'none', '해당 없음': 'good', '대세 하락 의심': 'bad', '단기 조정': 'warn',
+              '충족': 'warn', '미충족': 'none', '있음': 'good', '없음': 'none', '증가': 'warn', '감소': 'good', '동행': 'none', '역행': 'none' };
+  const pill = (t) => t ? `<span class="pill ${P[t] || 'none'}">${t}</span>` : '';
+  const b1s = g('b1_seoul'), b1c = g('b1_sudo'), b4 = g('b4_class'), d5 = g('d5_new_jeonse'), d2 = g('d2_ladder'), br = g('g2_rate_price'), mr = g('g3_mortgage_rate'), f3 = g('f3_unsold'), a4 = g('a4_quick_sale');
+  const met = [g('b4_down_ratio'), g('b4_jeonse_8w'), g('b4_unemployment')].filter(x => x && x.state === '충족').length;
+  const tiles = [
+    ['시장 국면', b1s ? `서울 ${b1s.state}` : '–', b1c ? `수도권 ${b1c.state} · 12개월 서울 ${b1s && b1s.value > 0 ? '+' : ''}${n1(b1s && b1s.value)}%` : '', b1s && b1s.state],
+    ['하락 신호', `${met}/3`, b4 ? `대세 하락 조건 · ${b4.state}` : '', met >= 2 ? '대세 하락 의심' : '해당 없음'],
+    ['상승 압력', d5 ? `신규 전세 ${n1(d5.value)}%` : '–', '서울, 1년 전 같은 3개월 대비', d5 && d5.state],
+    ['기회 지역', d2 && d2.value != null ? `${n1(d2.value, 0)}곳` : '–', '수도권 매매↓·전세↑ (13주)', d2 && d2.state],
+    ['금리', br ? `기준 ${n1(br.value)}%` : '–', mr ? `주담대 ${n1(mr.value, 2)}% · 집값과 ${br ? br.state : ''}` : '', null],
+    ['급매·미분양', a4 ? `급매 ${n1(a4.value)}%` : '–', f3 ? `수도권 미분양 ${Number(f3.value).toLocaleString()}호(${f3.state})` : '', a4 && a4.state],
+  ];
+  $('#summary').innerHTML = tiles.map(([k, v, d, st]) => `<div class="kpi"><span class="k">${k} ${pill(st)}</span><span class="v">${v}</span><span class="d">${d}</span></div>`).join('');
+})();
+
 /* ② D2 매매·전세 4분면 (▶ J2): 매매↓·전세↑ 칸 = 갭이 가장 좁혀지는 곳 */
 (function () {
   const W8 = D.weekly; if (!W8 || !W8.q13_date) return;
@@ -395,7 +420,7 @@ $('#notice').innerHTML = `<b>데이터 범위</b><span>서울 실거래는 2020�
     '안정': 'good', '경기침체': 'warn', '경제 위기': 'bad',
     '3% 미만': 'good', '3~5% (심리적 한계 구간)': 'warn', '5~7% (한계 초과)': 'bad', '7% 이상 (체감 급변)': 'bad',
     '둔화': 'warn', '확대': 'none', '유지': 'none', '비교 불가': 'none',
-    '상승 전환': 'good', '아님': 'none', '있음': 'good', '없음': 'none', '감소': 'none', '증가': 'none', '대세 하락 의심': 'bad', '단기 조정': 'warn',
+    '상승 전환': 'good', '아님': 'none', '있음': 'good', '없음': 'none', '감소': 'none', '증가': 'none', '늘어남': 'warn', '보통': 'none', '유지': 'none', '대세 하락 의심': 'bad', '단기 조정': 'warn',
     '5% 미만': 'good', '5% 이상': 'warn', '10% 이상': 'warn', '20% 이상': 'bad',
   };
   const pill = (state) => `<span class="pill ${PILL[state] || 'acc'}">${state || '–'}</span>`;
@@ -421,9 +446,11 @@ $('#notice').innerHTML = `<b>데이터 범위</b><span>서울 실거래는 2020�
     row('', '① 전국 하락 지역 70% 이상', S.b4_down_ratio, S.b4_down_ratio && S.b4_down_ratio.value != null ? ` <span class="muted num">${num(S.b4_down_ratio.value)}%</span>` : ''),
     row('', '② 수도권 전세 8주 연속 하락', S.b4_jeonse_8w, S.b4_jeonse_8w && S.b4_jeonse_8w.value != null ? ` <span class="muted num">${num(S.b4_jeonse_8w.value, 0)}주</span>` : ''),
     row('', '③ 실업률 4% 또는 3개월 +0.5%p', S.b4_unemployment),
+    row('하락 초입', '서울 직거래 비중 (C5, 보조)', S.c5_direct, S.c5_direct && S.c5_direct.value != null ? ` <span class="muted num">${num(S.c5_direct.value)}%</span>` : ''),
     row('과열 신호', '상승 지역 비율 (B5 ①)', S.b5_up_cap, S.b5_up_cap ? ` <span class="muted num">수도권 ${num(S.b5_up_cap.value)}% · 전국 ${num(S.b5_up_nat && S.b5_up_nat.value)}%</span>` : ''),
     todo('과열 신호', '하위 급지 신고가 비중 (B5 ②)', 'K-apt 세대수·급지 데이터 연결 후'),
     row('기회', '매매↓·전세↑ 지역 (D2)', S.d2_ladder, S.d2_ladder && S.d2_ladder.value != null ? ` <span class="muted num">${num(S.d2_ladder.value, 0)}곳</span>` : ''),
+    row('반등 신호', '서울 급매 체결 비중 (A4)', S.a4_quick_sale, S.a4_quick_sale && S.a4_quick_sale.value != null ? ` <span class="muted num">${num(S.a4_quick_sale.value)}%</span>` : ''),
     row('반등 신호', '매매수급지수 상승 전환 · 서울', S.supply_seoul),
     row('반등 신호', '매매수급지수 상승 전환 · 수도권', S.supply_sudo),
     row('상승 압력', '서울 신규 전세 감소 + 전세가 상승 (D5)', S.d5_new_jeonse, S.d5_new_jeonse && S.d5_new_jeonse.value != null ? ` <span class="muted num">${S.d5_new_jeonse.value > 0 ? '+' : ''}${num(S.d5_new_jeonse.value)}%</span>` : ''),
