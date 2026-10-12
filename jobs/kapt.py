@@ -45,8 +45,9 @@ def run_complexes(db: Db, regions: list[str], months: list[str], today: date) ->
             except ApiError as e:
                 print(f"  {code} {ym}: 실패 {e}", file=sys.stderr)
                 continue
-            if rows:
-                db.query(complexes_sql(rows, today))
+            sql = complexes_sql(rows, today)
+            if sql:
+                db.query(sql)
             missing = select(db, "SELECT count(DISTINCT d.apt_seq) AS n FROM deals d LEFT JOIN complexes c USING (apt_seq) "
                                  f"WHERE d.region_code = {lit(code)} AND c.apt_seq IS NULL")[0]["n"]
         print(f"  {code} {REGIONS[code]}: 속성 없는 단지 {missing}개")

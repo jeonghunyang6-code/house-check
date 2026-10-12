@@ -89,8 +89,9 @@ def main(argv: list[str] | None = None) -> int:
                         continue
                     boot = a.bootstrap or should_bootstrap(db, code, ym, today, kind)
                     ev = apply_snapshot_pg(db, code, ym, rows, today, boot, kind)
-                    if kind.name == "trade" and rows:
-                        db.query(complexes_sql(rows, today))  # 단지 속성 (K-apt 연결용)
+                    sql = complexes_sql(rows, today) if kind.name == "trade" else ""
+                    if sql:
+                        db.query(sql)  # 단지 속성 (K-apt 연결용)
                     c = {k: sum(e.event == k for e in ev) for k in ("registered", "cancelled", "disappeared")}
                     for k, v in c.items():
                         totals[k] += v
