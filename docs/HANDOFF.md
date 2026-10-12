@@ -58,6 +58,13 @@ curl -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
   **매매 당월 칸 44개 실패**: 등기일이 전부 NULL 인 칸에서 `UPDATE … FROM (VALUES …)`의 NULL 열이 text 로 추론됨 → `::date` 캐스트로 수정(후속 PR), 재현 테스트 추가. 실패 칸은 트랜잭션이 통째로 취소돼 데이터 손상 없음.
 - 아직 미확인: 릴리스 업로드(지난 달 이관이 처음 일어나는 11월 1일 전후, 또는 전월세 backfill 때 확인), 페이지 1000건.
 
+### 단지 지표 계산 (2026-10-12 작성)
+
+- `0010_metrics.sql`(Supabase 적용): `complex_metrics`(단지×면적군: 기준 시세 A1·신뢰도, 전고점 P·저점 T·회복률·패턴 B2·반등 없음 경고, 전세가율 D1·정상 범위, 1년 거래 수, 최고가), `deals.prev_high_10k`(거래별 전고점, 4.3)
+- `sql/metrics.sql` + `jobs/metrics.py`: DB 안에서 계산(서울 2020~ 27,626개 단지·면적, 25초). `daily.yml` 마지막 단계에서 매일 실행. 최근 120일 계약분만 전고점 갱신, 처음 한 번은 `--prev-days 4000`(2026-10-12 실행 완료, 38만 건 중 34.8만 건에 전고점)
+- 검증: 시안 Python 계산과 8개 단지 P·T·C·패턴이 원 단위까지 일치, 전세가율은 반올림 차이
+- 남은 것: 회전율 C2(K-apt 세대수 연결 후), 국면 B1(R-ONE 지역 시계열 backfill 후), B2 '순조로운 회복'의 B1 조건, 비교표·시안이 `complex_metrics`를 읽도록
+
 ### R-ONE 주간 지수 수집 (2026-10-12 작성)
 
 - `0009_rone_weekly.sql`(Supabase 적용): `rone_regions`(R-ONE 지역 ID·경로·우리 시군구 코드), `rone_weekly`(stat: sale·jeonse·sale_supply·jeonse_supply × 지역 × ISO 주차)
