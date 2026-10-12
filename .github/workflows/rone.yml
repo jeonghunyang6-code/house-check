@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: daily-snapshot
+  group: rone  # rone_* 표만 쓰므로 매일 수집·kapt 와 동시에 돌아도 된다
   cancel-in-progress: false
 
 jobs:
