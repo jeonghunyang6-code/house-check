@@ -13,7 +13,8 @@ import sys
 from datetime import date
 
 from collector.db import Db, DbError, connect, lit, select
-from collector.market import (DOWN_RATIO, JEONSE_WEEKS, SUPPLY_WEEKS, UNEMP_JUMP, b4, monthly, phase, run_length, unemployment)
+from collector.market import (DOWN_RATIO, JEONSE_WEEKS, SUPPLY_WEEKS, UNEMP_JUMP, b4, loan_growth, monthly, mortgage_band, phase, run_length,
+                             unemployment)
 
 SEOUL, CAPITAL = 50008, 50002
 
@@ -26,6 +27,16 @@ def series(db: Db, stat: str, months: int = 30) -> dict[int, list[tuple[date, fl
     for r in rows:
         out.setdefault(r["cls_id"], []).append((date.fromisoformat(r["d"]), float(r["value"])))
     return out
+
+
+def macro(db: Db, series: str, n: int) -> list[tuple[str, float]]:
+    """macro_monthly 최근 n개월 (오래된 것부터)."""
+    rows = select(db, f"SELECT period, value FROM macro_monthly WHERE series = {lit(series)} ORDER BY period DESC LIMIT {int(n)}")
+    return [(r["period"], float(r["value"])) for r in rows][::-1]
+
+
+def _ym(p: str) -> str:
+    return f"{p[:4]}.{p[4:]}"
 
 
 def run(db: Db) -> dict[str, tuple]:
@@ -62,8 +73,7 @@ def run(db: Db) -> dict[str, tuple]:
     jser = [v for _, v in series(db, "jeonse", 6).get(CAPITAL, [])]
     jdown = run_length(jser, -1) if len(jser) > JEONSE_WEEKS else None
     # B4 ③ / G5 실업률 (jobs/macro.py)
-    um = unemployment([(r["period"], float(r["value"])) for r in select(
-        db, "SELECT period, value FROM macro_monthly WHERE series = 'unemployment_sa' ORDER BY period DESC LIMIT 4")][::-1])
+    um = unemployment(macro(db, "unemployment_sa", 4))
     met, known, cls = b4(ratio4, jdown, um.b4_met if um else None)
     sudo_phase = getattr(phases.get(("sale", CAPITAL)), "phase", None)
     falling = sudo_phase in ("하락장", "일시 조정")
@@ -74,13 +84,24 @@ def run(db: Db) -> dict[str, tuple]:
     if um:
         chg = f"{um.chg_3m:+.1f}%p" if um.chg_3m is not None else "비교 불가"
         sig["b4_unemployment"] = (um.rate, "충족" if um.b4_met else "미충족",
-                                  f"{um.period[:4]}.{um.period[4:]} 계절조정 실업률 {um.rate}%, 3개월 전 대비 {chg} (기준 4% 또는 +{UNEMP_JUMP}%p)")
-        sig["g5_unemployment"] = (um.rate, um.band, f"{um.period[:4]}.{um.period[4:]} 계절조정 실업률. 4% 미만 안정, 4~6% 경기침체, 6% 이상 경제 위기")
+                                  f"{_ym(um.period)} 계절조정 실업률 {um.rate}%, 3개월 전 대비 {chg} (기준 4% 또는 +{UNEMP_JUMP}%p)")
+        sig["g5_unemployment"] = (um.rate, um.band, f"{_ym(um.period)} 계절조정 실업률. 4% 미만 안정, 4~6% 경기침체, 6% 이상 경제 위기")
     else:
         sig["b4_unemployment"] = (None, "데이터 없음", "실업률 4% 이상 또는 3개월 +0.5%p (macro_monthly 비어 있음)")
         sig["g5_unemployment"] = (None, "데이터 없음", "계절조정 실업률")
     sig["b4_class"] = (met, cls if falling else "해당 없음",
                        f"수도권 국면 {sudo_phase}. 하락 국면일 때만 판정. 조건 {met}/{known}개 충족 (판단 가능 {known}/3)")
+    # G3 주담대 금리, G4 가계대출 증가율 (jobs/macro.py, ECOS)
+    rate = macro(db, "mortgage_rate", 1)
+    sig["g3_mortgage_rate"] = ((rate[-1][1], mortgage_band(rate[-1][1]),
+                                f"{_ym(rate[-1][0])} 예금은행 주담대 금리(신규취급액). 3~5% 심리적 한계, 7%면 체감 급변")
+                               if rate else (None, "데이터 없음", "예금은행 주담대 금리"))
+    for name, key, label in (("household_loans", "g4_household_loans", "예금취급기관 가계대출"),
+                             ("housing_loans", "g4_housing_loans", "예금취급기관 주택관련대출")):
+        g = loan_growth(macro(db, name, 16))
+        sig[key] = ((g.yoy, g.state, f"{_ym(g.period)} {label} 잔액 전년비 {g.yoy:+.2f}%"
+                     + (f", 3개월 전 대비 {g.yoy_chg_3m:+.2f}%p (둔화 = 거래 감소 압력)" if g.yoy_chg_3m is not None else ""))
+                    if g else (None, "데이터 없음", f"{label} 증가율"))
     # B5 ① 상승 지역 비율 (최신 주)
     for scope, key in (("전국", "b5_up_nat"), ("수도권", "b5_up_cap")):
         r = select(db, f"SELECT week_date::text AS d, n, n_up FROM rone_breadth WHERE stat = 'sale' AND scope = {lit(scope)} "
