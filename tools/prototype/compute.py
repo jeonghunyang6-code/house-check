@@ -112,11 +112,19 @@ def weekly():
     return {'date': last, 'prev_date': prev, 'year_date': year, 'v': v, 'tot': tot,
             'nodata': [c for c in REGIONS if c not in v and c != '28720']}
 
+def g1():  # 유동성·소득·집값 2005 = 100 (📖 p.50), collector/market.py rebase
+    from collector.market import rebase
+    out = {}
+    for k in ('m2', 'household_income', 'apt_kb_nat', 'apt_kb_seoul'):
+        out[k] = [[p, v] for p, v in rebase([(r['period'], float(r['value'])) for r in d['g1'] if r['series'] == k])]
+    return out
+
 from collector.regions import REGIONS
 json.dump({'monthly': monthly, 'cx': cx, 'today': today,
            'recent': {'n': len(rh), 'highs': sum(r['price_10k'] > r['prev_high'] for r in rh)},
            'weekly': weekly(), 'signals': {r['key']: r for r in d['signals']},
            'macro': {k: [[r['period'], float(r['value'])] for r in d['macro'] if r['series'] == k] for k in {r['series'] for r in d['macro']}},
+           'g1': g1(),
            'geo': json.load(open(ROOT / 'data/geo/sudogwon_sgg_20260701.json')),
            'region_names': REGIONS, 'asof': TODAY.isoformat()}, open(OUT / 'data.json', 'w'), ensure_ascii=False)
 for c in cx: print(c['name'], c['region'], c['P'], c['T'], c['C'], c['conf'], c['cn'], c['pattern'], c['rec'] and round(c['rec'],2), c['J'], c['jn'], c['ratio'] and round(c['ratio']), c['band'], c['n12'])

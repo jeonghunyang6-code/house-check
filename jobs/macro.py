@@ -39,7 +39,7 @@ def run(db: Db) -> int:
                 continue
             if pts:
                 upsert(db, name, pts, today)
-            print(f"  {name}: {len(pts)}개월" + (f", 최신 {pts[-1][0]} = {pts[-1][1]}" if pts else ""))
+            print(f"  {name}: {len(pts)}개 기간" + (f", 최신 {pts[-1][0]} = {pts[-1][1]}" if pts else ""))
     return rc
 
 

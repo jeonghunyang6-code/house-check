@@ -44,6 +44,9 @@ out['rone_series'] = select(db, """SELECT stat, cls_id, week_date::text d, value
 out['signals'] = select(db, "SELECT key, asof::text asof, value, state, detail FROM market_signals")
 out['macro'] = select(db, """SELECT series, period, value FROM macro_monthly
  WHERE period >= to_char(now() - interval '26 months', 'YYYYMM') ORDER BY series, period""")
+# G. 유동성·소득·집값 (G1): 2005년부터 전체
+out['g1'] = select(db, """SELECT series, period, value FROM macro_monthly
+ WHERE series IN ('m2', 'household_income', 'apt_kb_nat', 'apt_kb_seoul') AND period >= '2005' ORDER BY series, period""")
 out['seqs'] = SEQS
 out['regions'] = {k: v for k, v in REGIONS.items()}
 json.dump(out, open(OUT / 'raw.json', 'w'), ensure_ascii=False, default=str)

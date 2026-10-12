@@ -21,6 +21,7 @@
   --gap: #c9d1d8;
   --up3: #a3241b; --up2: #d0493a; --up1: #eba596; --mid: #e3e6e9; --dn1: #9fc1e6; --dn2: #3f7fcf; --dn3: #1d4f99;
   --on-strong: #ffffff; --example: #6b4fbf; --example-bg: #ece6fa;
+  --c1: #2a78d6; --c2: #eb6834; --c3: #1baf7a; --c4: #eda100;  /* 범주 1~4 (dataviz 기본 팔레트, 인접 쌍 검증됨) */
   --f-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
   --f-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
 }
@@ -28,12 +29,12 @@
   --bg: #0f1418; --screen: #182128; --sunk: #1f2a32; --ink: #e8edf1; --ink-2: #b2bec8; --ink-3: #8593a0;
   --line: #2c3a45; --accent: #4fb8ad; --accent-soft: #173a37; --s-trade: #3987e5; --s-rent: #d95926;
   --good: #6fcf8a; --good-bg: #183324; --warn: #e6b450; --warn-bg: #3a2e14; --bad: #f08a72; --bad-bg: #3c1f19;
-  --gap: #34424d; --up3: #e2675a; --up2: #b9473b; --up1: #6e3832; --mid: #2b343c; --dn1: #2c4a6c; --dn2: #3d74bd; --dn3: #73a6e6; --on-strong: #0f1418; --example: #b9a6f2; --example-bg: #2c2545; color-scheme: dark; } }
+  --gap: #34424d; --up3: #e2675a; --up2: #b9473b; --up1: #6e3832; --mid: #2b343c; --dn1: #2c4a6c; --dn2: #3d74bd; --dn3: #73a6e6; --on-strong: #0f1418; --example: #b9a6f2; --example-bg: #2c2545; --c1: #3987e5; --c2: #d95926; --c3: #199e70; --c4: #c98500; color-scheme: dark; } }
 :root[data-theme="dark"] {
   --bg: #0f1418; --screen: #182128; --sunk: #1f2a32; --ink: #e8edf1; --ink-2: #b2bec8; --ink-3: #8593a0;
   --line: #2c3a45; --accent: #4fb8ad; --accent-soft: #173a37; --s-trade: #3987e5; --s-rent: #d95926;
   --good: #6fcf8a; --good-bg: #183324; --warn: #e6b450; --warn-bg: #3a2e14; --bad: #f08a72; --bad-bg: #3c1f19;
-  --gap: #34424d; --up3: #e2675a; --up2: #b9473b; --up1: #6e3832; --mid: #2b343c; --dn1: #2c4a6c; --dn2: #3d74bd; --dn3: #73a6e6; --on-strong: #0f1418; --example: #b9a6f2; --example-bg: #2c2545; color-scheme: dark; }
+  --gap: #34424d; --up3: #e2675a; --up2: #b9473b; --up1: #6e3832; --mid: #2b343c; --dn1: #2c4a6c; --dn2: #3d74bd; --dn3: #73a6e6; --on-strong: #0f1418; --example: #b9a6f2; --example-bg: #2c2545; --c1: #3987e5; --c2: #d95926; --c3: #199e70; --c4: #c98500; color-scheme: dark; }
 * { box-sizing: border-box; }
 body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 14px; line-height: 1.55; }
 .wrap { padding-inline: 16px; padding-block: 28px 48px; max-width: 1640px; margin: 0 auto; display: grid; gap: 24px; }
@@ -151,6 +152,12 @@ footer.foot { color: var(--ink-3); font-size: 12px; max-width: 90ch; display: gr
         <div class="sec">
           <h3>거시 지표 <span class="muted">(최근 2년)</span></h3>
           <div id="macro"></div>
+        </div>
+        <div class="sec">
+          <h3>유동성·소득·집값 <span class="muted">(2005 = 100)</span></h3>
+          <div class="legend" id="g1Legend"></div>
+          <svg class="chart" id="g1Chart" viewBox="0 0 340 210" role="img" aria-label="2005년을 100으로 놓은 통화량, 가계소득, 아파트 가격 선 차트"></svg>
+          <p class="src" id="g1Src"></p>
         </div>
       </div>
     </section>
@@ -395,6 +402,44 @@ $('#notice').innerHTML = `<b>데이터 범위</b><span>서울 실거래는 2020�
     mrow('가계대출 증가율 (G4)', S.g4_household_loans, hl.length > 13 ? yoy(hl) : null, '%', S.g4_household_loans ? '+' + num(S.g4_household_loans.value, 2) + '%' : '–'),
     mrow('실업률 (G5)', S.g5_unemployment, M.unemployment_sa, '%', S.g5_unemployment ? num(S.g5_unemployment.value, 1) + '%' : '–'),
   ].join('') + '<p class="src">주담대 금리: 예금은행 신규취급액 기준, ▶ 3~5% 심리적 한계·7%면 체감이 완전히 다르다. 가계대출: 예금취급기관 잔액 전년비, ▶ 증가율 둔화 → 거래 감소(🔧 3개월 전보다 낮으면 둔화). 실업률: 계절조정, 📖 4% 경기침체·6% 경제 위기(p.143~144). 금리는 단독 판정에 쓰지 않는다(📖 p.48~49). 출처: 한국은행 ECOS, 통계청 KOSIS.</p>';
+})();
+
+/* ① G1 유동성·소득·집값 (📖 p.50): 2005 = 100, 한 축. 연간 소득은 해마다 7월 위치에 점 */
+(function () {
+  const G = D.g1 || {}, svg = $('#g1Chart'), W = 340, H = 210, L = 30, R = 46, T = 10, B = 22;
+  const SER = [['m2', '통화량(M2)', '--c1'], ['household_income', '가계소득', '--c2'], ['apt_kb_seoul', '서울 아파트', '--c3'], ['apt_kb_nat', '전국 아파트', '--c4']]
+    .filter(([k]) => (G[k] || []).length);
+  if (!SER.length) { $('#g1Src').textContent = '데이터 없음'; return; }
+  const mi = (p) => (+p.slice(0, 4) - 2005) * 12 + (p.length === 4 ? 6 : +p.slice(4) - 1);
+  const last = Math.max(...SER.map(([k]) => mi(G[k][G[k].length - 1][0])));
+  const hi = Math.ceil(Math.max(...SER.flatMap(([k]) => G[k].map(p => p[1]))) / 100) * 100;
+  const x = (i) => L + (W - L - R) * i / last, y = (v) => T + (H - T - B) * (1 - v / hi);
+  for (let t = 0; t <= hi; t += 100) { el('line', { x1: L, x2: W - R, y1: y(t), y2: y(t), class: 'grid' }, svg); txt(svg, L - 4, y(t) + 3, t, 'end'); }
+  for (let yr = 2005; yr <= 2005 + last / 12; yr += 5) txt(svg, x((yr - 2005) * 12), H - 6, yr);
+  SER.forEach(([k, n, c]) => {
+    const pts = G[k], col = css(c);
+    el('path', { d: pts.map((p, i) => `${i ? 'L' : 'M'}${x(mi(p[0])).toFixed(1)},${y(p[1]).toFixed(1)}`).join(''), fill: 'none', stroke: col, 'stroke-width': 2, 'stroke-linejoin': 'round' }, svg);
+    if (k === 'household_income') pts.forEach(p => el('circle', { cx: x(mi(p[0])), cy: y(p[1]), r: 3, fill: col, stroke: css('--screen'), 'stroke-width': 1 }, svg));
+  });
+  // 끝값 직접 라벨 (겹치면 아래로 밀어냄). 글자는 본문 색, 옆 막대가 계열 색
+  const ends = SER.map(([k, n, c]) => { const p = G[k][G[k].length - 1]; return { n, c, v: p[1], p: p[0], yy: y(p[1]) }; }).sort((a, b) => a.yy - b.yy);
+  ends.forEach((e, i) => { if (i && e.yy - ends[i - 1].yy < 11) e.yy = ends[i - 1].yy + 11; });
+  ends.forEach(e => { el('rect', { x: W - R + 4, y: e.yy - 4, width: 6, height: 2.5, rx: 1, fill: css(e.c) }, svg); txt(svg, W - R + 12, e.yy + 3, Math.round(e.v), 'start').setAttribute('style', 'fill:var(--ink-2)'); });
+  $('#g1Legend').innerHTML = SER.map(([k, n, c]) => `<span><i style="background:var(${c})"></i>${n}</span>`).join('');
+  // 십자선 + 툴팁: 가까운 달의 네 값 (소득은 그해 값)
+  const cross = el('line', { y1: T, y2: H - B, stroke: css('--ink-3'), 'stroke-width': 1, visibility: 'hidden' }, svg);
+  const at = (k, i) => { const pts = G[k]; if (k === 'household_income') { const yr = String(2005 + Math.floor(i / 12)); const p = pts.find(q => q[0] === yr); return p ? [p[1], yr + '년'] : null; } let best = null; for (const p of pts) if (mi(p[0]) <= i) best = p; return best ? [best[1], ''] : null; };
+  const hit = el('rect', { x: L, y: T, width: W - L - R, height: H - T - B, fill: 'transparent' }, svg);
+  hit.addEventListener('pointermove', (e) => {
+    const r = svg.getBoundingClientRect(), sx = (e.clientX - r.left) * W / r.width, i = Math.max(0, Math.min(last, Math.round((sx - L) / (W - L - R) * last)));
+    cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i)); cross.setAttribute('visibility', 'visible');
+    const ym = `${2005 + Math.floor(i / 12)}.${String(i % 12 + 1).padStart(2, '0')}`;
+    tip.innerHTML = `<b>${ym}</b><br>` + SER.map(([k, n, c]) => { const a = at(k, i); return `<i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(${c})"></i> ${n} ${a ? Math.round(a[0]) + (a[1] ? ` (${a[1]})` : '') : '–'}`; }).join('<br>');
+    tip.hidden = false; tip.style.left = Math.min(e.clientX + 12, innerWidth - tip.offsetWidth - 8) + 'px'; tip.style.top = (e.clientY - tip.offsetHeight - 8) + 'px';
+  });
+  hit.addEventListener('pointerleave', () => { tip.hidden = true; cross.setAttribute('visibility', 'hidden'); });
+  const lv = (k) => G[k] && G[k].length ? Math.round(G[k][G[k].length - 1][1]) : '–';
+  $('#g1Src').textContent = `2005년을 100으로 놓으면 지금 통화량 ${lv('m2')}, 가계소득 ${lv('household_income')}(${(G.household_income || [['–']]).slice(-1)[0][0]}년), 서울 아파트 ${lv('apt_kb_seoul')}, 전국 아파트 ${lv('apt_kb_nat')}. ▶ 정책은 일시적 파도, 소득과 통화량이 배의 엔진(📖 p.50, p.291~292). 통화량: M2 평잔(계절조정), 가계소득: 가계 및 비영리단체 처분가능소득(명목, 연간), 아파트: KB 주택매매가격지수. 출처: 한국은행 ECOS.`;
 })();
 
 /* ② 오늘의 실거래 */
