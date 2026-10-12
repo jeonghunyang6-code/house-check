@@ -98,6 +98,14 @@ curl -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
 - 단지 연결은 이 작업 환경에서 실행: K-apt 목록 10,211개(83곳) 완료, complexes·info·match는 백그라운드(`/tmp/claude-0/kapt_*.log`)
 - 확인할 것: 오늘 밤 daily-snapshot(20:47 UTC)이 러너에서 공공데이터포털에 접속되는지
 
+### 4분면 D2·공급 F2·F3·상대강도 B6 (2026-10-13 작성)
+
+- `0015_quadrant_strength.sql`(Supabase 적용): `region_phase.chg_13w`, `complex_metrics.region_chg_12m`·`rel_strength`
+- D2 (▶ J2): 지역 지수 13주 변화(매매·전세). `market_signals.d2_ladder` = 수도권 시군구 중 매매↓·전세↑ 곳. 2026-10-13: 78곳 중 8곳(미추홀·영종·남동·평택·일산동·일산서·동두천·파주), 매매↑전세↑ 66, 매매↓전세↓ 4. 시안 ②에 산점도
+- F2 (📖 p.54~56): KOSIS 국토부 표. 착공 `DT_MLTM_5387`(월계), 인허가 `DT_MLTM_1948`(월별 누계 → `from_year_to_date`로 달별), 아파트, 수도권·서울. 2025.09~2026.08 인허가 216,715호(-4.2%), 착공 154,272호(+15.0%). 판정 없이 참고(공급 효과는 지역마다 반대)
+- F3 (📖 p.155~160): 미분양 `DT_MLTM_2082`(시도 계), 준공 후 `DT_MLTM_5328`. 2026.08 수도권 19,136호(1년 전 +30.8%), 준공 후 4,369호. 원인 구분(분양가 vs 주변 시세)은 청약홈 연결 전이라 없음. 시군구별은 아직 안 받음
+- B6 (📖 p.420~421): 단지 12개월 변화 − 같은 시군구 국면 판정 단지들의 중앙값(🔧 5곳 이상). 생활권(E0)·바로 위 급지(E3) 비교는 아직 없음. 판정 단지(거래 많은 곳)만으로 중앙값을 내므로 지역 평균보다 높게 나올 수 있다
+
 ### 단지별 국면 B1 (2026-10-13 작성)
 
 - `0014_complex_phase.sql`(Supabase 적용): `complex_metrics`에 phase, chg_12m, up_months, down_months, last3

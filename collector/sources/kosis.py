@@ -30,13 +30,30 @@ URL = "https://kosis.kr/openapi/Param/statisticsParameterData.do"
 class Series:
     tbl_id: str
     itm_id: str
-    obj_l1: str
+    objs: tuple[str, ...]      # objL1, objL2, ... 분류 코드
     org_id: str = "101"
+    year_to_date: bool = False  # 월별 누계(1월부터 쌓인 값) → 달별 값으로 바꾼다
 
 
+_A, _B, _C, _D = "13102766969A", "13102766969B.0006", "13102766969C.0007", "13102766969D.0008"   # 착공: 구분, 아파트×3
+_PA, _PB, _PC, _PD = "13102871090A", "13102871090B.0006", "13102871090C.0007", "13102871090D.0009"  # 인허가
 SERIES = {
     # 계절조정 경제활동인구 총괄 > 계 > 실업률(%). 2000-01 부터 (G5, B4 ③)
-    "unemployment_sa": Series("DT_1DA9001S", "T80", "00"),
+    "unemployment_sa": Series("DT_1DA9001S", "T80", ("00",)),
+    # F2 (📖 p.54~56) 국토교통부 주택유형별 주택건설 착공실적(월계) > 아파트, 호. 2011-01 부터
+    "starts_sudo": Series("DT_MLTM_5387", "13103766969T1", (f"{_A}.0002", _B, _C, _D), "116"),
+    "starts_seoul": Series("DT_MLTM_5387", "13103766969T1", (f"{_A}.0003", _B, _C, _D), "116"),
+    # 주택유형별 주택건설 인허가실적(월별 누계) > 아파트, 호. 2007 부터
+    "permits_sudo": Series("DT_MLTM_1948", "13103871090T1", (f"{_PA}.0002", _PB, _PC, _PD), "116", year_to_date=True),
+    "permits_seoul": Series("DT_MLTM_1948", "13103871090T1", (f"{_PA}.0003", _PB, _PC, _PD), "116", year_to_date=True),
+    # F3 (📖 p.155~160) 시·군·구별 미분양현황 > 시도 계, 호. 2000 부터
+    "unsold_seoul": Series("DT_MLTM_2082", "13103871087T1", ("13102871087A.0002", "13102871087B.0001"), "116"),
+    "unsold_incheon": Series("DT_MLTM_2082", "13103871087T1", ("13102871087A.0005", "13102871087B.0001"), "116"),
+    "unsold_gyeonggi": Series("DT_MLTM_2082", "13103871087T1", ("13102871087A.0009", "13102871087B.0001"), "116"),
+    # 공사완료후(준공 후) 미분양현황 > 시도 > 계·계·계, 호. 2007 부터
+    "unsold_done_seoul": Series("DT_MLTM_5328", "13103871088T1", ("13102871088A.0002", "13102871088B.0002", "13102871088C.0001", "13102871088D.0001"), "116"),
+    "unsold_done_incheon": Series("DT_MLTM_5328", "13103871088T1", ("13102871088A.0006", "13102871088B.0002", "13102871088C.0001", "13102871088D.0001"), "116"),
+    "unsold_done_gyeonggi": Series("DT_MLTM_5328", "13103871088T1", ("13102871088A.0010", "13102871088B.0002", "13102871088C.0001", "13102871088D.0001"), "116"),
 }
 
 
@@ -66,7 +83,23 @@ def parse(j: list | dict) -> list[tuple[str, float]]:
     return sorted((r["PRD_DE"], float(r["DT"])) for r in j if r.get("DT") not in (None, "", "-"))
 
 
+def from_year_to_date(pts: list[tuple[str, float]]) -> list[tuple[str, float]]:
+    """월별 누계 → 달별 값. 1월은 그대로, 이후 달은 전달 누계와의 차. 전달이 빠지면 그 달은 버린다."""
+    d = dict(pts)
+    out = []
+    for p, v in pts:
+        if p.endswith("01"):
+            out.append((p, v))
+        else:
+            prev = f"{p[:4]}{int(p[4:]) - 1:02d}"
+            if prev in d:
+                out.append((p, v - d[prev]))
+    return out
+
+
 def fetch(name: str, start: str, end: str) -> list[tuple[str, float]]:
     s = SERIES[name]
-    return parse(_call({"orgId": s.org_id, "tblId": s.tbl_id, "itmId": s.itm_id, "objL1": s.obj_l1,
-                        "prdSe": "M", "startPrdDe": start, "endPrdDe": end}))
+    objs = {f"objL{i + 1}": o for i, o in enumerate(s.objs)}
+    pts = parse(_call({"orgId": s.org_id, "tblId": s.tbl_id, "itmId": s.itm_id, **objs,
+                       "prdSe": "M", "startPrdDe": start, "endPrdDe": end}))
+    return from_year_to_date(pts) if s.year_to_date else pts
