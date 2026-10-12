@@ -5,6 +5,8 @@
 - B4 하락 분류: ① 전국 하락 지역 비율 4주 평균 ≥ 70% ② 수도권 전세 8주 연속 하락 ③ 실업률 (📖 p.435~436 / 🔧 70%, 8주)
 - B5 ① 상승 지역 비율
 - 반등 신호: 매매수급지수 상승 전환 (3절). 🔧 4주 연속 상승을 "전환"으로 본다
+- G3 주담대 금리 구간 (▶ 3~5% 심리적 한계, 7%면 체감이 완전히 다르다)
+- G4 가계대출 증가율: 잔액 전년비와 3개월 전 대비 변화 (▶ 증가율 둔화 → 거래 감소 / 🔧 3개월 변화 < 0 이면 둔화)
 - G5 실업률 구간과 B4 ③ (📖 4% 경기침체·6% 경제 위기 p.143~144 / 🔧 3개월 +0.5%p)
 """
 
@@ -21,6 +23,7 @@ SUPPLY_WEEKS = 4   # 🔧 수급지수 4주 연속 상승 = 상승 전환
 UNEMP_RECESSION = 4.0  # 📖 실업률 4% 접근 = 경기침체 (p.143~144)
 UNEMP_CRISIS = 6.0     # 📖 6% 이상 = 경제 위기
 UNEMP_JUMP = 0.5       # 🔧 3개월 사이 +0.5%p 이상 오르면 B4 ③ 충족
+RATE_BANDS = (3.0, 5.0, 7.0)  # ▶ 주담대 금리 3~5% 심리적 한계, 7%
 
 
 def monthly(points: list[tuple[date, float]]) -> list[tuple[str, float]]:
@@ -129,3 +132,38 @@ def unemployment(months: list[tuple[str, float]]) -> Unemployment | None:
     band = "경제 위기" if rate >= UNEMP_CRISIS else "경기침체" if rate >= UNEMP_RECESSION else "안정"
     met = rate >= UNEMP_RECESSION or (chg is not None and chg >= UNEMP_JUMP)
     return Unemployment(period, rate, chg, band, met)
+
+
+def mortgage_band(rate: float) -> str:
+    """G3 주담대 금리(신규취급) 구간."""
+    lo, hi, shock = RATE_BANDS
+    if rate >= shock:
+        return "7% 이상 (체감 급변)"
+    if rate >= hi:
+        return "5~7% (한계 초과)"
+    if rate >= lo:
+        return "3~5% (심리적 한계 구간)"
+    return "3% 미만"
+
+
+@dataclass(frozen=True)
+class LoanGrowth:
+    period: str
+    yoy: float               # 잔액 전년 동월 대비 %
+    yoy_chg_3m: float | None  # 3개월 전 전년비 대비 %p
+    state: str               # 둔화 | 확대 | 비교 불가
+
+
+def loan_growth(months: list[tuple[str, float]]) -> LoanGrowth | None:
+    """월말 잔액(오래된 것부터, 빠진 달 없음 가정) → G4. 13개월 미만이면 None."""
+    if len(months) < 13:
+        return None
+    vals = [v for _, v in months]
+
+    def yoy(i: int) -> float:
+        return (vals[i] / vals[i - 12] - 1) * 100
+
+    now = yoy(len(vals) - 1)
+    chg = round(now - yoy(len(vals) - 4), 2) if len(vals) >= 16 else None
+    state = "비교 불가" if chg is None else "둔화" if chg < 0 else "확대" if chg > 0 else "유지"
+    return LoanGrowth(months[-1][0], round(now, 2), chg, state)
