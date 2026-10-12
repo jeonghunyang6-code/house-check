@@ -11,7 +11,7 @@ from datetime import date
 from typing import Callable
 
 from collector.db import Db, lit, select
-from collector.snapshot import Diff, Event, diff_snapshot
+from collector.snapshot import Diff, Event, diff_snapshot, keyed
 from collector.sources.molit import Deal, Rent
 
 CHUNK = 500
@@ -118,9 +118,23 @@ def apply_snapshot_pg(
     kind: Kind = TRADE,
 ) -> list[Event]:
     known = load_known(db, kind, region_code, contract_month)
-    d = diff_snapshot(known, rows, today, bootstrap)
-    db.query(build_sql(kind, region_code, contract_month, len(rows), d, today, bootstrap))
+    foreign = load_foreign(db, kind, region_code, contract_month, [k for k in keyed(rows) if k not in known])
+    d = diff_snapshot(known, rows, today, bootstrap, foreign)
+    db.query(build_sql(kind, region_code, contract_month, len(rows) - len(foreign), d, today, bootstrap))
     return d.events
+
+
+def load_foreign(db: Db, k: Kind, region_code: str, contract_month: str, keys: list[str]) -> frozenset[str]:
+    """새로 넣으려는 키 중 다른 칸에 이미 있는 것 (경계 단지 중복)."""
+    out: set[str] = set()
+    for part in _chunks(keys, 1000):
+        rows = select(
+            db,
+            f"SELECT {k.key} AS key FROM {k.table} WHERE {k.key} IN ({', '.join(lit(x) for x in part)}) "
+            f"AND NOT (region_code = {lit(region_code)} AND contract_month = {lit(contract_month)})",
+        )
+        out.update(r["key"] for r in rows)
+    return frozenset(out)
 
 
 def should_bootstrap(db: Db, region_code: str, contract_month: str, today: date, kind: Kind = TRADE) -> bool:
