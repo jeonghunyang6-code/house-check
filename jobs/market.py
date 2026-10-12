@@ -42,6 +42,7 @@ def _ym(p: str) -> str:
 def run(db: Db) -> dict[str, tuple]:
     stmts = ["BEGIN;", "DELETE FROM region_phase;"]
     phases: dict[tuple[str, int], object] = {}
+    c13s: dict[tuple[str, int], float | None] = {}
     asof = None
     for stat in ("sale", "jeonse"):
         ser = series(db, stat)
@@ -50,10 +51,12 @@ def run(db: Db) -> dict[str, tuple]:
             ph = phase(monthly(pts))
             phases[(stat, cid)] = ph
             asof = max(asof or pts[-1][0], pts[-1][0])
+            c13 = round((pts[-1][1] / pts[-14][1] - 1) * 100, 2) if len(pts) >= 14 and pts[-14][1] else None
+            c13s[(stat, cid)] = c13
             vals.append("(" + ", ".join(lit(v) for v in (stat, cid, pts[-1][0], ph.chg_12m, ph.up_months, ph.down_months,
-                                                        ph.last3, ph.phase, ph.drawdown)) + ")")
+                                                        ph.last3, ph.phase, ph.drawdown, c13)) + ")")
         if vals:
-            stmts.append("INSERT INTO region_phase (stat, cls_id, asof, chg_12m, up_months, down_months, last3, phase, drawdown) VALUES "
+            stmts.append("INSERT INTO region_phase (stat, cls_id, asof, chg_12m, up_months, down_months, last3, phase, drawdown, chg_13w) VALUES "
                          + ", ".join(vals) + ";")
 
     sig: dict[str, tuple] = {}  # key → (value, state, detail)
@@ -103,6 +106,50 @@ def run(db: Db) -> dict[str, tuple]:
                             f"서울 신규 전세 {_ym(nj.months[0])}~{_ym(nj.months[-1])} {nj.n_new:,}건, 1년 전 {nj.n_new_prev:,}건 "
                             f"({nj.yoy:+.1f}%), 갱신 비중 {nj.renew_share}%, 서울 전세지수 13주 {nj.jeonse_chg:+.2f}%. 신규 감소 + 전세가 상승이면 충족"
                             if nj.yoy is not None and nj.jeonse_chg is not None else "서울 신규 전세 건수·전세지수")
+    # D2 4분면 (▶ J2): 수도권 시군구 중 13주 매매↓·전세↑ ("부의 사다리" 칸)
+    q = [{"full_name": r["full_name"], "s": c13s.get(("sale", r["cls_id"])), "j": c13s.get(("jeonse", r["cls_id"]))}
+         for r in select(db, "SELECT cls_id, full_name FROM rone_regions WHERE region_code IS NOT NULL")]
+    q = [r for r in q if r["s"] is not None and r["j"] is not None]
+    if q:
+        quad = {"매매↓전세↑": 0, "매매↑전세↑": 0, "매매↑전세↓": 0, "매매↓전세↓": 0}
+        ladder = []
+        for r in q:
+            sv, jv = float(r["s"]), float(r["j"])
+            k = ("매매↑" if sv >= 0 else "매매↓") + ("전세↑" if jv >= 0 else "전세↓")
+            quad[k] += 1
+            if k == "매매↓전세↑":
+                ladder.append(r["full_name"].rsplit(">", 1)[-1])
+        sig["d2_ladder"] = (quad["매매↓전세↑"], "있음" if ladder else "없음",
+                            f"수도권 {len(q)}곳 최근 13주: 매매↓전세↑ {quad['매매↓전세↑']}곳"
+                            + (f"({', '.join(ladder[:8])}{' 외' if len(ladder) > 8 else ''})" if ladder else "")
+                            + f", 매매↑전세↑ {quad['매매↑전세↑']}, 매매↑전세↓ {quad['매매↑전세↓']}, 매매↓전세↓ {quad['매매↓전세↓']}")
+    else:
+        sig["d2_ladder"] = (None, "데이터 없음", "매매·전세 4분면")
+    # F2 인허가·착공 (📖 p.54~56): 수도권 아파트 최근 12개월 합계 vs 그 전 12개월. 공급 효과는 지역마다 반대라 판정 없이 참고
+    for key, name, label in (("f2_permits", "permits_sudo", "인허가"), ("f2_starts", "starts_sudo", "착공")):
+        m = macro(db, name, 24)
+        if len(m) == 24:
+            a, b = sum(v for _, v in m[12:]), sum(v for _, v in m[:12])
+            chg = round((a / b - 1) * 100, 1) if b else None
+            sig[key] = (round(a), "감소" if chg is not None and chg < 0 else "증가",
+                        f"수도권 아파트 {label} {_ym(m[12][0])}~{_ym(m[-1][0])} {a:,.0f}호, 그 전 12개월 {b:,.0f}호 ({chg:+.1f}%). "
+                        "대기 수요가 많은 곳은 입주장만 전세↓, 적은 곳은 매매·전세 모두↓(📖 p.54~56)")
+        else:
+            sig[key] = (None, "데이터 없음", f"수도권 아파트 {label}")
+    # F3 미분양 (📖 원인 5가지 p.155~160): 수도권 합계와 준공 후 미분양, 1년 전 대비
+    tot = {}
+    for kind in ("unsold", "unsold_done"):
+        ser = [dict(macro(db, f"{kind}_{sd}", 13)) for sd in ("seoul", "incheon", "gyeonggi")]
+        common = sorted(set.intersection(*(set(x) for x in ser))) if all(ser) else []
+        tot[kind] = [(p, sum(x[p] for x in ser)) for p in common]
+    u, ud = tot["unsold"], tot["unsold_done"]
+    if len(u) == 13 and ud:
+        chg = round((u[-1][1] / u[0][1] - 1) * 100, 1) if u[0][1] else None
+        sig["f3_unsold"] = (round(u[-1][1]), "증가" if chg is not None and chg > 0 else "감소",
+                            f"{_ym(u[-1][0])} 수도권 미분양 {u[-1][1]:,.0f}호(1년 전 {u[0][1]:,.0f}호, {chg:+.1f}%), 그중 준공 후 {ud[-1][1]:,.0f}호. "
+                            "원인(분양가·입지·상품성·공급 집중·거시)은 단지별로 봐야 한다(📖 p.155~160)")
+    else:
+        sig["f3_unsold"] = (None, "데이터 없음", "수도권 미분양")
     # G2 기준금리와 서울 아파트값 (동행/역행). 2006년부터 달마다 세고, 최신 달 관계를 신호로
     br, kb = macro(db, "base_rate", 400), macro(db, "apt_kb_seoul", 400)
     rel = [x for x in rate_price_relation(br, kb) if x[0] >= "200601"]

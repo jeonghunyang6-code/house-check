@@ -67,7 +67,7 @@ for seq in d['seqs']:
     n12 = sum(1 for r in ok if date.fromisoformat(r['cd']) > TODAY - timedelta(days=365))
     phs = [r for r in d.get('cx_phase', []) if r['apt_seq'] == seq and r['phase']]
     ph = max(phs, key=lambda r: r['area_group'] == 84) if phs else None  # 84 우선
-    cx.append({'phase': ph and {k: ph[k] for k in ('phase', 'chg_12m', 'up_months', 'down_months', 'last3')}, 'seq': seq, 'name': name, 'region': REG[seq[:5]], 'P': P, 'T': T, 'C': C, 'conf': conf, 'cn': cn if C else 0,
+    cx.append({'phase': ph and {k: ph[k] for k in ('phase', 'chg_12m', 'up_months', 'down_months', 'last3', 'region_chg_12m', 'rel_strength')}, 'seq': seq, 'name': name, 'region': REG[seq[:5]], 'P': P, 'T': T, 'C': C, 'conf': conf, 'cn': cn if C else 0,
                'rec': rec, 'pattern': pattern, 'J': J, 'jn': jn, 'jsrc': '신규' if new else '전체', 'ratio': ratio, 'band': nb,
                'n12': n12, 'ref': ref,
                'pts': [[r['cd'], r['price_10k'], r['floor']] for r in ok],
@@ -92,6 +92,8 @@ def weekly():
     last, prev = dates[-1], dates[-2]
     yd = [x for x in dates if x <= (date.fromisoformat(last) - timedelta(days=364)).isoformat()]
     year = yd[-1] if yd else None
+    qd = [x for x in dates if x <= (date.fromisoformat(last) - timedelta(days=91)).isoformat()]
+    q13 = qd[-1] if qd else None  # D2: 13주(약 3개월) 전 발표 주
     val = {(r['stat'], r['cls_id'], r['d']): r['value'] for r in rows}
     v = {}
     for r in rows:
@@ -101,6 +103,8 @@ def weekly():
             y = val.get((r['stat'], r['cls_id'], year)) if year else None
             v.setdefault(r['region_code'], {})[k] = round((a / b - 1) * 100, 2) if b else None
             v[r['region_code']]['y' + k] = round((a / y - 1) * 100, 2) if y else None
+            q = val.get((r['stat'], r['cls_id'], q13)) if q13 else None
+            v[r['region_code']]['q' + k] = round((a / q - 1) * 100, 2) if q else None
     tot = {}
     for stat, k in (('sale', 't'), ('jeonse', 'j')):
         for cls, nm in ((50008, 'seoul'), (50002, 'sudo')):
@@ -111,7 +115,7 @@ def weekly():
                 else: break
             tot[f'{nm}_{k}'] = {'w': round((s[-1] / s[-2] - 1) * 100, 2), 'streak': n, 'weeks': len(s)}
     from collector.regions import REGIONS
-    return {'date': last, 'prev_date': prev, 'year_date': year, 'v': v, 'tot': tot,
+    return {'date': last, 'prev_date': prev, 'year_date': year, 'q13_date': q13, 'v': v, 'tot': tot,
             'nodata': [c for c in REGIONS if c not in v and c != '28720']}
 
 def g1():  # 유동성·소득·집값 2005 = 100 (📖 p.50), collector/market.py rebase

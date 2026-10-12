@@ -28,3 +28,9 @@ def test_unemployment_bands_and_b4():
     assert unemployment([("202601", 4.1)]).band == "경기침체" and unemployment([("202601", 4.1)]).b4_met
     assert unemployment([("202601", 6.0)]).band == "경제 위기"
     assert unemployment([]) is None
+
+
+def test_from_year_to_date():
+    from collector.sources.kosis import from_year_to_date
+    cum = [("202511", 90.0), ("202512", 100.0), ("202601", 10.0), ("202602", 25.0), ("202604", 50.0)]
+    assert from_year_to_date(cum) == [("202512", 10.0), ("202601", 10.0), ("202602", 15.0)]   # 3월이 빠져 4월은 버림

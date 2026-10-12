@@ -185,6 +185,12 @@ footer.foot { color: var(--ink-3); font-size: 12px; max-width: 90ch; display: gr
           <div class="sec"><h3>하락률 상위 10</h3><table class="rank" id="rkDn"></table></div>
         </div>
         <p class="src" id="wkSrc"></p>
+        <div class="sec">
+          <h3>매매·전세 4분면 <span class="muted">(최근 13주, 수도권)</span></h3>
+          <svg class="chart" id="quadChart" viewBox="0 0 340 300" role="img" aria-label="시군구별 13주 매매 변동률과 전세 변동률 산점도"></svg>
+          <div id="quadList"></div>
+          <p class="src" id="quadSrc"></p>
+        </div>
       </div>
     </section>
 
@@ -347,6 +353,38 @@ $('#notice').innerHTML = `<b>데이터 범위</b><span>서울 실거래는 2020�
   draw();
 })();
 
+/* ② D2 매매·전세 4분면 (▶ J2): 매매↓·전세↑ 칸 = 갭이 가장 좁혀지는 곳 */
+(function () {
+  const W8 = D.weekly; if (!W8 || !W8.q13_date) return;
+  const names = D.region_names, dt = (s) => s.slice(2).replace(/-/g, '.'), fmt = (v) => (v > 0 ? '+' : '') + v.toFixed(2) + '%';
+  const short = (k) => names[k].replace(/^(서울|경기|인천) /, '').replace(/시 (.+구)$/, ' $1');
+  const pts = Object.entries(W8.v).filter(([k, v]) => v.qt != null && v.qj != null).map(([k, v]) => [k, v.qt, v.qj]);
+  const svg = $('#quadChart'), W = 340, H = 300, L = 36, R = 10, T = 12, B = 30;
+  const ext = (i) => { const a = Math.max(...pts.map(p => Math.abs(p[i]))); return Math.ceil(a * 2) / 2 || 1; };
+  const xm = ext(1), ym = ext(2);
+  const x = (v) => L + (W - L - R) * (v + xm) / (2 * xm), y = (v) => T + (H - T - B) * (1 - (v + ym) / (2 * ym));
+  el('rect', { x: L, y: T, width: x(0) - L, height: y(0) - T, fill: css('--accent-soft') }, svg);  // 매매↓전세↑
+  txt(svg, L + 4, T + 12, '매매↓ 전세↑', 'start').setAttribute('style', 'fill:var(--accent);font-weight:700');
+  txt(svg, W - R - 4, T + 12, '매매↑ 전세↑', 'end').setAttribute('style', 'fill:var(--ink-3)');
+  txt(svg, W - R - 4, H - B - 6, '매매↑ 전세↓', 'end').setAttribute('style', 'fill:var(--ink-3)');
+  txt(svg, L + 4, H - B - 6, '매매↓ 전세↓', 'start').setAttribute('style', 'fill:var(--ink-3)');
+  for (const t of [-xm, 0, xm]) { el('line', { x1: x(t), x2: x(t), y1: T, y2: H - B, class: 'grid', 'stroke-width': t === 0 ? 1.4 : 1 }, svg); txt(svg, x(t), H - B + 14, (t > 0 ? '+' : '') + t + '%'); }
+  for (const t of [-ym, 0, ym]) { el('line', { x1: L, x2: W - R, y1: y(t), y2: y(t), class: 'grid', 'stroke-width': t === 0 ? 1.4 : 1 }, svg); txt(svg, L - 4, y(t) + 3, (t > 0 ? '+' : '') + t + '%', 'end'); }
+  txt(svg, (L + W - R) / 2, H - 4, '매매 13주 변동률 →');
+  const yl = txt(svg, 10, (T + H - B) / 2, '전세 13주 변동률 →'); yl.setAttribute('transform', `rotate(-90 10 ${(T + H - B) / 2})`);
+  const ladder = [];
+  pts.forEach(([k, a, b]) => {
+    const hit = a < 0 && b >= 0; if (hit) ladder.push([k, a, b]);
+    const c = el('circle', { cx: x(a), cy: y(b), r: 4, fill: css(hit ? '--accent' : '--s-trade'), 'fill-opacity': hit ? 1 : 0.55, stroke: css('--screen'), 'stroke-width': 1.5 }, svg);
+    hover(c, `${short(k)} · 매매 ${fmt(a)} · 전세 ${fmt(b)}`);
+  });
+  ladder.sort((p, q) => (q[2] - q[1]) - (p[2] - p[1]));
+  $('#quadList').innerHTML = ladder.length
+    ? `<p style="margin:0"><b>매매↓·전세↑ ${ladder.length}곳</b> <span class="muted">${ladder.map(([k, a, b]) => `${short(k)} (${fmt(a)} / ${fmt(b)})`).join(', ')}</span></p>`
+    : '<p class="muted" style="margin:0">지금 매매↓·전세↑ 칸에 든 곳이 없습니다.</p>';
+  $('#quadSrc').textContent = `한국부동산원 R-ONE 주간 지수, ${dt(W8.q13_date)} 주 대비 ${dt(W8.date)} 주. 점 하나가 시군구 하나(전세 축은 세로). ▶ 매매↓·전세↑ = 갭이 가장 좁혀지는 "부의 사다리" 기회(요즘 전세가는 거품인가 1:35).`;
+})();
+
 /* ① 국면·체크리스트·거시: market_signals 실제 값 (jobs/market.py). 준비 안 된 항목은 그렇다고 표시 */
 (function () {
   const S = D.signals || {}, M = D.macro || {};
@@ -357,7 +395,7 @@ $('#notice').innerHTML = `<b>데이터 범위</b><span>서울 실거래는 2020�
     '안정': 'good', '경기침체': 'warn', '경제 위기': 'bad',
     '3% 미만': 'good', '3~5% (심리적 한계 구간)': 'warn', '5~7% (한계 초과)': 'bad', '7% 이상 (체감 급변)': 'bad',
     '둔화': 'warn', '확대': 'none', '유지': 'none', '비교 불가': 'none',
-    '상승 전환': 'good', '아님': 'none', '대세 하락 의심': 'bad', '단기 조정': 'warn',
+    '상승 전환': 'good', '아님': 'none', '있음': 'good', '없음': 'none', '감소': 'none', '증가': 'none', '대세 하락 의심': 'bad', '단기 조정': 'warn',
     '5% 미만': 'good', '5% 이상': 'warn', '10% 이상': 'warn', '20% 이상': 'bad',
   };
   const pill = (state) => `<span class="pill ${PILL[state] || 'acc'}">${state || '–'}</span>`;
@@ -385,9 +423,13 @@ $('#notice').innerHTML = `<b>데이터 범위</b><span>서울 실거래는 2020�
     row('', '③ 실업률 4% 또는 3개월 +0.5%p', S.b4_unemployment),
     row('과열 신호', '상승 지역 비율 (B5 ①)', S.b5_up_cap, S.b5_up_cap ? ` <span class="muted num">수도권 ${num(S.b5_up_cap.value)}% · 전국 ${num(S.b5_up_nat && S.b5_up_nat.value)}%</span>` : ''),
     todo('과열 신호', '하위 급지 신고가 비중 (B5 ②)', 'K-apt 세대수·급지 데이터 연결 후'),
+    row('기회', '매매↓·전세↑ 지역 (D2)', S.d2_ladder, S.d2_ladder && S.d2_ladder.value != null ? ` <span class="muted num">${num(S.d2_ladder.value, 0)}곳</span>` : ''),
     row('반등 신호', '매매수급지수 상승 전환 · 서울', S.supply_seoul),
     row('반등 신호', '매매수급지수 상승 전환 · 수도권', S.supply_sudo),
     row('상승 압력', '서울 신규 전세 감소 + 전세가 상승 (D5)', S.d5_new_jeonse, S.d5_new_jeonse && S.d5_new_jeonse.value != null ? ` <span class="muted num">${S.d5_new_jeonse.value > 0 ? '+' : ''}${num(S.d5_new_jeonse.value)}%</span>` : ''),
+    row('공급', '수도권 아파트 인허가 12개월 (F2)', S.f2_permits, S.f2_permits && S.f2_permits.value != null ? ` <span class="muted num">${Number(S.f2_permits.value).toLocaleString()}호</span>` : ''),
+    row('공급', '수도권 아파트 착공 12개월 (F2)', S.f2_starts, S.f2_starts && S.f2_starts.value != null ? ` <span class="muted num">${Number(S.f2_starts.value).toLocaleString()}호</span>` : ''),
+    row('공급', '수도권 미분양 (F3)', S.f3_unsold, S.f3_unsold && S.f3_unsold.value != null ? ` <span class="muted num">${Number(S.f3_unsold.value).toLocaleString()}호</span>` : ''),
   ].join('').replace(/<span class="pill acc"><\/span>/g, '<span></span>');
 
   // 거시: 상태 + 2년 스파크라인 (단일 계열, 값 라벨은 첫·끝만)
@@ -559,7 +601,9 @@ function drawCx(c) {
   notes.push(c.phase
     ? `국면(B1): 지난달까지 12개월 기준 시세 ${(+c.phase.chg_12m > 0 ? '+' : '') + (+c.phase.chg_12m).toFixed(1)}%, 오른 달 ${c.phase.up_months}개·내린 달 ${c.phase.down_months}개, 최근 3개월 ${c.phase.last3}. 12개월 ±3%·8개월 이상 같은 방향이면 상승장/하락장(🔧, 📖 추세 최소 1년 p.136).`
     : '국면(B1)은 최근 13개월 중 3개월 창에 거래가 없는 달이 있어 판정하지 않았습니다.');
-  notes.push('상대강도(B6)는 다음 단계에서 계산합니다.');
+  notes.push(c.phase && c.phase.rel_strength != null
+    ? `상대강도(B6): 같은 구 단지들의 12개월 중앙값 ${(+c.phase.region_chg_12m).toFixed(1)}% 대비 ${(+c.phase.rel_strength > 0 ? '+' : '') + (+c.phase.rel_strength).toFixed(1)}%p. ${+c.phase.rel_strength < 0 ? '지역보다 덜 오른 "약한 파도"' : '지역보다 더 오름'}(📖 상승의 차이 p.420~421). 바로 위 급지 비교(E3)는 급지 계산 뒤에 붙입니다.`
+    : '상대강도(B6)는 국면을 판정한 단지만 계산합니다.');
   $('#cxNotes').innerHTML = notes.map(n => `<p class="muted" style="margin:0">${n}</p>`).join('');
 }
 drawCx(cxs[initial]);

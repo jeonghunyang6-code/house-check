@@ -91,12 +91,21 @@ ph AS (  -- collector/market.py phase() 와 같은 규칙: 🔧 ±3%, 8개월 / 
          WHEN abs(chg) < 3 THEN '보합장' WHEN l3up THEN '일시 반등' WHEN l3dn THEN '일시 조정' ELSE '추세 불명확' END AS phase
   FROM ph0
 ),
+rs AS (  -- B6 상대강도 (📖 상승의 차이 p.420~421): 같은 시군구(생활권 E0 전까지 대용) 판정 단지들의 12개월 변화 중앙값
+  SELECT x.region_code, percentile_cont(0.5) WITHIN GROUP (ORDER BY ph.chg) AS region_chg, count(*) AS region_n
+  FROM ph JOIN (SELECT DISTINCT apt_seq, region_code FROM deals) x USING (apt_seq) GROUP BY 1
+),
 d AS (
-  SELECT c.*, ph.phase, ph.chg, ph.up, ph.down, ph.last3, round(cur)::int AS ref,
+  SELECT c.*, ph.phase, ph.chg, ph.up, ph.down, ph.last3,
+    -- 🔧 판정 단지 5개 이상인 시군구만
+    CASE WHEN ph.chg IS NOT NULL AND rs.region_n >= 5 THEN rs.region_chg END AS region_chg,
+    round(cur)::int AS ref,
     CASE WHEN cur IS NOT NULL AND peak IS NOT NULL AND trough IS NOT NULL AND peak > trough THEN (cur - trough) / (peak - trough) END AS rec,
     round(coalesce(jnew, jall))::int AS j, CASE WHEN jnew IS NOT NULL THEN nnew ELSE nall END AS jn,
     CASE WHEN jnew IS NOT NULL THEN '신규' WHEN jall IS NOT NULL THEN '전체' END AS jsrc
   FROM c LEFT JOIN ph USING (apt_seq, area_group)
+  LEFT JOIN (SELECT DISTINCT ON (apt_seq) apt_seq, region_code FROM deals ORDER BY apt_seq, contract_date DESC) rc USING (apt_seq)
+  LEFT JOIN rs ON rs.region_code = rc.region_code
 )
 SELECT apt_seq, area_group, {TODAY},
   ref, cur_n, cur_days,
@@ -115,7 +124,8 @@ SELECT apt_seq, area_group, {TODAY},
   CASE WHEN ref IS NULL THEN NULL WHEN ref <= 50000 THEN 90 WHEN ref <= 80000 THEN 90 - 30 * (ref - 50000) / 30000.0
        WHEN ref <= 150000 THEN 60 WHEN ref <= 200000 THEN 60 - 10 * (ref - 150000) / 50000.0 ELSE 50 END,
   n_365, high_10k, high_date, last_date,
-  phase, round(chg::numeric, 2), up, down, last3
+  phase, round(chg::numeric, 2), up, down, last3,
+  round(region_chg::numeric, 2), round((chg - region_chg)::numeric, 2)
 FROM d;
 
 COMMIT;
