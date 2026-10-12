@@ -1,0 +1,121 @@
+"""raw.json → data.json (시안에 넣을 계산 결과). 지표 정의는 docs/insights/indicators.md A1·B1·B2·D1, ARCHITECTURE 4.3."""
+import json, statistics as st, sys
+from datetime import date, timedelta
+from pathlib import Path
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+OUT = ROOT / 'tools/prototype/out'
+d = json.load(open(OUT / 'raw.json'))
+TODAY = date.fromisoformat(sys.argv[1]) if len(sys.argv) > 1 else date.today()
+REG = d['regions']
+
+def months(a, b):
+    y, m = int(a[:4]), int(a[4:]); out = []
+    while (y, m) <= (int(b[:4]), int(b[4:])):
+        out.append(f"{y}{m:02d}"); y, m = (y + 1, 1) if m == 12 else (y, m + 1)
+    return out
+
+ALL = months('202001', '202610')
+GAP = set()  # 2026-10-12 backfill 로 공백 해소
+mon = {r['m']: r for r in d['monthly']}
+monthly = [{'m': m, 'n': (mon[m]['n'] if m in mon else None), 'p84': (round(mon[m]['p84']) if m in mon and mon[m]['p84'] else None),
+            'gap': m in GAP, 'partial': m in ('202609', '202610')} for m in ALL]
+
+def band(price):  # D1 정상 범위 (책 p.152), 사이 가격대는 선형 보간
+    pts = [(0, (60, 90)), (50000, (60, 90)), (80000, (50, 60)), (150000, (50, 60)), (200000, (30, 50)), (10**9, (30, 50))]
+    for (x0, r0), (x1, r1) in zip(pts, pts[1:]):
+        if x0 <= price <= x1:
+            t = 0 if x1 == x0 else (price - x0) / (x1 - x0)
+            return [round(r0[0] + (r1[0] - r0[0]) * t), round(r0[1] + (r1[1] - r0[1]) * t)]
+
+cx = []
+for seq in d['seqs']:
+    deals = [r for r in d['cx_deals'] if r['apt_seq'] == seq]
+    ok = [r for r in deals if not r['is_cancelled'] and r['deal_type'] == '중개']
+    name = deals[-1]['apt_name']
+    bym = {}
+    for r in ok: bym.setdefault(r['cd'][:7].replace('-', ''), []).append(r['price_10k'])
+    ref = []  # 3개월 이동 중앙값 (B1·B2 의 월별 기준 시세)
+    for i, m in enumerate(ALL):
+        win = sum((bym.get(x, []) for x in ALL[max(0, i - 2):i + 1]), [])
+        ref.append({'m': m, 'v': round(st.median(win)) if win and m not in GAP else None, 'n': len(bym.get(m, []))})
+    def rng(a, b, f):
+        vs = [x['v'] for x in ref if a <= x['m'] <= b and x['v']]
+        return f(vs) if vs else None
+    P, T = rng('202101', '202206', max), rng('202207', '202306', min)
+    # A1 기준 시세: 최근 60일 중앙값, 3건 미만이면 90→180일
+    C = conf = None
+    for days, c in ((60, '높음'), (90, '보통'), (180, '낮음')):
+        w = [r['price_10k'] for r in ok if date.fromisoformat(r['cd']) > TODAY - timedelta(days=days)]
+        if len(w) >= 3: C, conf, cn = round(st.median(w)), c, len(w); break
+    rec = (C - T) / (P - T) if (C and P and T and P > T) else None
+    pattern = None if C is None else ('신고가 돌파' if C >= P else ('순조로운 회복' if rec is not None and rec >= 0.6 else '회복 지연'))
+    rents = [r for r in d['cx_rent'] if r['apt_seq'] == seq]
+    jm = {}
+    for r in rents:
+        if r['n_jeonse'] and r['jeonse_median_10k']:
+            jm.setdefault(r['m'], []).append((r['n_jeonse'], r['jeonse_median_10k']))
+    jser = [{'m': m, 'v': round(sum(n * v for n, v in jm[m]) / sum(n for n, _ in jm[m]))} for m in ALL if m in jm]
+    cur = [r for r in rents if r['m'] in ('202609', '202610')]
+    new = [(r['n_jeonse_new'], r['jeonse_new_median_10k']) for r in cur if r['n_jeonse_new'] and r['jeonse_new_median_10k']]
+    allj = [(r['n_jeonse'], r['jeonse_median_10k']) for r in cur if r['n_jeonse'] and r['jeonse_median_10k']]
+    src = new or allj
+    J = round(sum(n * v for n, v in src) / sum(n for n, _ in src)) if src else None
+    jn = sum(n for n, _ in src) if src else 0
+    ratio = J / C * 100 if (J and C) else None
+    nb = band(C) if C else None
+    n12 = sum(1 for r in ok if date.fromisoformat(r['cd']) > TODAY - timedelta(days=365))
+    cx.append({'seq': seq, 'name': name, 'region': REG[seq[:5]], 'P': P, 'T': T, 'C': C, 'conf': conf, 'cn': cn if C else 0,
+               'rec': rec, 'pattern': pattern, 'J': J, 'jn': jn, 'jsrc': '신규' if new else '전체', 'ratio': ratio, 'band': nb,
+               'n12': n12, 'ref': ref,
+               'pts': [[r['cd'], r['price_10k'], r['floor']] for r in ok],
+               'jser': jser})
+
+def status(r):
+    seoul = r['region_code'].startswith('11')
+    if r['is_cancelled']: return 'cancelled'
+    if r['deal_type'] != '중개': return 'direct'
+    if not seoul: return 'short'          # 경기·인천: 이력이 2026-09부터라 전고점 판정 보류
+    if r['prev_high'] is None: return 'first'
+    return 'high' if r['price_10k'] > r['prev_high'] else 'below'
+today = [{**r, 'region': REG[r['region_code']], 'status': status(r)} for r in d['today']]
+rh = d['recent_highs']
+
+# R-ONE 주간: 최신 주 대비 직전 주(주간), 52주 전 이전의 가장 가까운 주(연간). 연속 상승 주수는 서울·수도권 시계열에서.
+def weekly():
+    rows = d['rone']
+    dates = sorted({r['d'] for r in rows})
+    if len(dates) < 2:
+        return None
+    last, prev = dates[-1], dates[-2]
+    yd = [x for x in dates if x <= (date.fromisoformat(last) - timedelta(days=364)).isoformat()]
+    year = yd[-1] if yd else None
+    val = {(r['stat'], r['cls_id'], r['d']): r['value'] for r in rows}
+    v = {}
+    for r in rows:
+        if r['region_code'] and r['d'] == last:
+            k = 't' if r['stat'] == 'sale' else 'j'
+            a, b = r['value'], val.get((r['stat'], r['cls_id'], prev))
+            y = val.get((r['stat'], r['cls_id'], year)) if year else None
+            v.setdefault(r['region_code'], {})[k] = round((a / b - 1) * 100, 2) if b else None
+            v[r['region_code']]['y' + k] = round((a / y - 1) * 100, 2) if y else None
+    tot = {}
+    for stat, k in (('sale', 't'), ('jeonse', 'j')):
+        for cls, nm in ((50008, 'seoul'), (50002, 'sudo')):
+            s = [x['value'] for x in d['rone_series'] if x['stat'] == stat and x['cls_id'] == cls]
+            n = 0
+            for i in range(len(s) - 1, 0, -1):
+                if s[i] > s[i - 1]: n += 1
+                else: break
+            tot[f'{nm}_{k}'] = {'w': round((s[-1] / s[-2] - 1) * 100, 2), 'streak': n, 'weeks': len(s)}
+    from collector.regions import REGIONS
+    return {'date': last, 'prev_date': prev, 'year_date': year, 'v': v, 'tot': tot,
+            'nodata': [c for c in REGIONS if c not in v and c != '28720']}
+
+from collector.regions import REGIONS
+json.dump({'monthly': monthly, 'cx': cx, 'today': today,
+           'recent': {'n': len(rh), 'highs': sum(r['price_10k'] > r['prev_high'] for r in rh)},
+           'weekly': weekly(), 'geo': json.load(open(ROOT / 'data/geo/sudogwon_sgg_20260701.json')),
+           'region_names': REGIONS, 'asof': TODAY.isoformat()}, open(OUT / 'data.json', 'w'), ensure_ascii=False)
+for c in cx: print(c['name'], c['region'], c['P'], c['T'], c['C'], c['conf'], c['cn'], c['pattern'], c['rec'] and round(c['rec'],2), c['J'], c['jn'], c['ratio'] and round(c['ratio']), c['band'], c['n12'])
+print('today statuses', {s: sum(t['status'] == s for t in today) for s in set(t['status'] for t in today)})

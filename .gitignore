@@ -6,3 +6,5 @@ __pycache__/
 data/raw/
 # 실거래 원본 보관 파일의 로컬 사본 (원본은 GitHub Releases)
 data/archive/
+# 화면 시안 생성 결과 (DB 데이터 포함)
+tools/prototype/out/

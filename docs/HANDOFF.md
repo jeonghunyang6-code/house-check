@@ -58,6 +58,16 @@ curl -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
   **매매 당월 칸 44개 실패**: 등기일이 전부 NULL 인 칸에서 `UPDATE … FROM (VALUES …)`의 NULL 열이 text 로 추론됨 → `::date` 캐스트로 수정(후속 PR), 재현 테스트 추가. 실패 칸은 트랜잭션이 통째로 취소돼 데이터 손상 없음.
 - 아직 미확인: 릴리스 업로드(지난 달 이관이 처음 일어나는 11월 1일 전후, 또는 전월세 backfill 때 확인), 페이지 1000건.
 
+### R-ONE 주간 지수 수집 (2026-10-12 작성)
+
+- `0009_rone_weekly.sql`(Supabase 적용): `rone_regions`(R-ONE 지역 ID·경로·우리 시군구 코드), `rone_weekly`(stat: sale·jeonse·sale_supply·jeonse_supply × 지역 × ISO 주차)
+- `collector/sources/rone.py` + `jobs/rone.py`: `weekly`(마지막 주 다음부터 이번 주까지, 발표 전이면 건너뜀) / `backfill`(지역별 2012년~ 전체 시계열). 같은 주는 덮어쓰므로 재실행 안전
+- 저장 범위: 지수는 서울·경기·인천 + 상위 집계(전국·수도권 등, 약 140개 지역), 수급동향은 권역 42개 전부
+- 이 세션에서 weekly 를 실제로 돌려 2026-09-21~10-05 3주 적재, 서울 +0.12%·강남 -0.34%·영통 +0.62% 확인. 시군구 연결 78개
+- `.github/workflows/rone.yml`: 목·금 17:47 KST. **처음엔 수동으로 mode=backfill** (과거 시계열이 있어야 연속 상승 주수·연간 변동률이 나온다)
+- 미확인: R-ONE 발표 요일·시각(목요일로 알고 있음), 하루 호출 한도
+- 시안 생성 코드: `tools/prototype/`(extract → compute → build, 결과는 `out/`, git 제외). 지도 경계 `data/geo/` (출처 ATTRIBUTION.md, CC BY 4.0)
+
 ### K-apt 단지 연결 (2026-10-12 작성)
 
 - `0008_complexes.sql`(Supabase 적용 완료): `complexes`(실거래 단지: 법정동·지번·도로명·건축연도·연결된 kapt_code), `kapt_complexes`(K-apt: 세대수·사용승인일·동수·최고층·시공사·난방·면적대별 세대수)
