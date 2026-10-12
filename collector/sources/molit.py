@@ -46,6 +46,10 @@ class Deal:
     is_cancelled: bool
     cancel_date: date | None
     rgst_date: date | None
+    # 단지 식별용 (K-apt 연결, collector/kapt.py). 2026-10-12 실제 응답으로 확인
+    bjd_code: str = ""      # 법정동 10자리 = sggCd + umdCd
+    jibun: str = ""         # '316', '12-3'
+    road_addr: str = ""     # '삼성로 212' (roadNm + roadNmBonbun-roadNmBubun)
 
     @property
     def area_group(self) -> int:
@@ -164,7 +168,17 @@ def _item_to_deal(item: ET.Element) -> Deal:
         is_cancelled=cancelled,
         cancel_date=_yy_mm_dd(_t(item, "cdealDay")) if cancelled else None,
         rgst_date=_yy_mm_dd(_t(item, "rgstDate")),
+        bjd_code=_t(item, "sggCd") + _t(item, "umdCd"),
+        jibun=_t(item, "jibun"),
+        road_addr=_road(_t(item, "roadNm"), _t(item, "roadNmBonbun"), _t(item, "roadNmBubun")),
     )
+
+
+def _road(name: str, bon: str, bu: str) -> str:
+    """'삼성로', '00212', '00000' → '삼성로 212'. 번호가 없으면 ''."""
+    if not name or not bon.strip("0"):
+        return ""
+    return f"{name} {int(bon)}" + (f"-{int(bu)}" if bu.strip("0") else "")
 
 
 _QUOTA_MARKERS = ("LIMITED_NUMBER_OF_SERVICE_REQUESTS", "EXCEEDS")

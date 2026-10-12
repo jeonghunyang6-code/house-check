@@ -58,6 +58,15 @@ curl -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
   **매매 당월 칸 44개 실패**: 등기일이 전부 NULL 인 칸에서 `UPDATE … FROM (VALUES …)`의 NULL 열이 text 로 추론됨 → `::date` 캐스트로 수정(후속 PR), 재현 테스트 추가. 실패 칸은 트랜잭션이 통째로 취소돼 데이터 손상 없음.
 - 아직 미확인: 릴리스 업로드(지난 달 이관이 처음 일어나는 11월 1일 전후, 또는 전월세 backfill 때 확인), 페이지 1000건.
 
+### K-apt 단지 연결 (2026-10-12 작성)
+
+- `0008_complexes.sql`(Supabase 적용 완료): `complexes`(실거래 단지: 법정동·지번·도로명·건축연도·연결된 kapt_code), `kapt_complexes`(K-apt: 세대수·사용승인일·동수·최고층·시공사·난방·면적대별 세대수)
+- 매매 파서가 `bjd_code`(sggCd+umdCd)·`jibun`·`road_addr`를 읽고, `jobs.daily`가 매일 `complexes`를 갱신
+- `jobs/kapt.py`: `complexes`(과거 이력 단지 속성 1회 채우기, 최근 달부터 훑다가 다 찾으면 멈춤) → `list`(K-apt 목록) → `info`(기본 정보, 안 받은 단지만, 한도 초과면 멈춤) → `match`
+- 연결 규칙(`collector/kapt.py match_complexes`): ① 같은 법정동+지번 ② 같은 도로명 주소 ③ 같은 법정동+이름 포함. 후보가 여럿이면 이름으로 좁히고 그래도 여럿이면 연결 안 함. `match_method='manual'`은 덮어쓰지 않음
+- `.github/workflows/kapt.yml`: 매주 일요일 list·info·match. **처음엔 수동으로 steps=complexes,list,info,match** 실행
+- 미확인: 실제 매칭률, 기본 정보 하루 호출 한도(수도권 약 1만 단지), 인천 신설 구·화성 구 코드로 K-apt 목록이 조회되는지
+
 ### 2026-10-12 확인 사항
 
 - **서울 매매·전월세 2020-01~2026-08 빠짐없이 적재 완료** (backfill 2회 + 관악구 2칸 수동). 전월세 원본은 Releases `raw-data`에 월별 파일, 요약은 `rent_monthly`.

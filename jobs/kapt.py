@@ -1,0 +1,162 @@
+"""K-apt 단지 정보 수집과 실거래 단지 연결 (collector/kapt.py, 0008).
+
+    python -m jobs.kapt complexes --regions seoul --months 202001-202608  # 과거 실거래에서 단지 속성 채우기
+    python -m jobs.kapt list --regions sudogwon                           # K-apt 단지 목록
+    python -m jobs.kapt info --limit 3000                                 # 기본 정보 (아직 안 받은 단지만)
+    python -m jobs.kapt match --regions sudogwon                          # 연결
+
+매일 수집(jobs.daily)이 그날 받은 매매의 단지 속성을 complexes 에 넣으므로, complexes 모드는
+그 이전 이력에 있는 단지를 채우는 1회용이다. 시군구마다 deals 에 있는 단지가 모두 채워지면 거기서 멈춘다.
+호출 한도 초과(QuotaExceeded)면 종료 코드 2 로 멈추고, 다시 실행하면 이어서 한다.
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+import time
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
+
+from collector.db import Db, DbError, connect, lit, select
+from collector.kapt import fetch_info, fetch_list, info_row, match_complexes
+from collector.pg_store import complexes_sql
+from collector.regions import REGIONS, select_regions
+from collector.sources.molit import ApiError, QuotaExceeded, fetch_trades
+from jobs.daily import parse_months
+
+KST = ZoneInfo("Asia/Seoul")
+INFO_COLS = ("addr", "road_addr", "households", "use_date", "dong_cnt", "top_floor", "builder", "heat_type",
+             "sale_type", "hh_lt60", "hh_60_85", "hh_85_135", "hh_gt135")
+
+
+def run_complexes(db: Db, regions: list[str], months: list[str], today: date) -> int:
+    for code in regions:
+        missing = select(db, "SELECT count(DISTINCT d.apt_seq) AS n FROM deals d LEFT JOIN complexes c USING (apt_seq) "
+                             f"WHERE d.region_code = {lit(code)} AND c.apt_seq IS NULL")[0]["n"]
+        for ym in sorted(months, reverse=True):  # 최근 달부터: 대부분의 단지가 먼저 잡힌다
+            if missing == 0:
+                break
+            try:
+                rows = fetch_trades(code, ym)
+            except QuotaExceeded as e:
+                print(f"  {code} {ym}: 호출 한도 초과로 중단: {e}", file=sys.stderr)
+                return 2
+            except ApiError as e:
+                print(f"  {code} {ym}: 실패 {e}", file=sys.stderr)
+                continue
+            sql = complexes_sql(rows, today)
+            if sql:
+                db.query(sql)
+            missing = select(db, "SELECT count(DISTINCT d.apt_seq) AS n FROM deals d LEFT JOIN complexes c USING (apt_seq) "
+                                 f"WHERE d.region_code = {lit(code)} AND c.apt_seq IS NULL")[0]["n"]
+        print(f"  {code} {REGIONS[code]}: 속성 없는 단지 {missing}개")
+    return 0
+
+
+def run_list(db: Db, regions: list[str], today: date) -> int:
+    rc = 0
+    for code in regions:
+        try:
+            items = fetch_list(code)
+        except QuotaExceeded as e:
+            print(f"  {code}: 호출 한도 초과로 중단: {e}", file=sys.stderr)
+            return 2
+        except ApiError as e:
+            print(f"  {code} {REGIONS[code]}: 실패 {e}", file=sys.stderr)
+            rc = 1
+            continue
+        if items:
+            vals = ", ".join(f"({lit(i['kaptCode'])}, {lit(i['kaptName'])}, {lit(code)}, {lit(i.get('bjdCode'))}, {lit(today)})"
+                             for i in items)
+            db.query("INSERT INTO kapt_complexes (kapt_code, kapt_name, region_code, bjd_code, listed_at) "
+                     f"VALUES {vals} ON CONFLICT (kapt_code) DO UPDATE SET kapt_name = EXCLUDED.kapt_name, "
+                     "region_code = EXCLUDED.region_code, bjd_code = EXCLUDED.bjd_code, listed_at = EXCLUDED.listed_at;")
+        print(f"  {code} {REGIONS[code]}: K-apt 단지 {len(items)}개")
+    return rc
+
+
+def run_info(db: Db, limit: int, today: date) -> int:
+    todo = [r["kapt_code"] for r in select(db, f"SELECT kapt_code FROM kapt_complexes WHERE info_at IS NULL ORDER BY region_code, kapt_code LIMIT {int(limit)}")]
+    done = fail = 0
+    batch: list[str] = []
+
+    def flush() -> None:
+        if batch:
+            db.query("BEGIN;\n" + "\n".join(batch) + "\nCOMMIT;")
+            batch.clear()
+
+    for code in todo:
+        try:
+            item = fetch_info(code)
+        except QuotaExceeded as e:
+            flush()
+            print(f"  기본 정보 {done}개 받음, 호출 한도 초과로 중단: {e}", file=sys.stderr)
+            return 2
+        except ApiError as e:
+            fail += 1
+            print(f"  {code}: 실패 {e}", file=sys.stderr)
+            continue
+        row = info_row(item) if item else {}
+        sets = ", ".join(f"{c} = {lit(row.get(c))}" for c in INFO_COLS)
+        batch.append(f"UPDATE kapt_complexes SET {sets}, info_at = {lit(today)} WHERE kapt_code = {lit(code)};")
+        done += 1
+        if len(batch) >= 200:
+            flush()
+    flush()
+    print(f"  기본 정보 {done}개 받음, 실패 {fail}, 남은 단지 {select(db, 'SELECT count(*) AS n FROM kapt_complexes WHERE info_at IS NULL')[0]['n']}개")
+    return 1 if fail else 0
+
+
+def run_match(db: Db, regions: list[str]) -> int:
+    rl = ", ".join(lit(r) for r in regions)
+    cx = select(db, "SELECT apt_seq, apt_name, bjd_code, jibun, road_addr FROM complexes "
+                    f"WHERE region_code IN ({rl}) AND (match_method IS NULL OR match_method <> 'manual')")
+    kp = select(db, f"SELECT kapt_code, kapt_name, bjd_code, addr, road_addr FROM kapt_complexes WHERE region_code IN ({rl})")
+    m = match_complexes(cx, kp)
+    stmts = ["BEGIN;",
+             f"UPDATE complexes SET kapt_code = NULL, match_method = NULL WHERE region_code IN ({rl}) AND match_method IS DISTINCT FROM 'manual';"]
+    items = list(m.items())
+    for i in range(0, len(items), 500):
+        vals = ", ".join(f"({lit(s)}, {lit(x.kapt_code)}, {lit(x.method)})" for s, x in items[i:i + 500])
+        stmts.append("UPDATE complexes AS c SET kapt_code = v.k, match_method = v.m "
+                     f"FROM (VALUES {vals}) AS v(s, k, m) WHERE c.apt_seq = v.s;")
+    stmts.append("COMMIT;")
+    db.query("\n".join(stmts))
+    by = {}
+    for x in m.values():
+        by[x.method] = by.get(x.method, 0) + 1
+    print(f"  실거래 단지 {len(cx)}개 중 {len(m)}개 연결 {by} (K-apt 단지 {len(kp)}개)")
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("mode", choices=["complexes", "list", "info", "match"])
+    ap.add_argument("--regions", default="sudogwon")
+    ap.add_argument("--months", default="202001-202608", help="complexes 모드용")
+    ap.add_argument("--limit", type=int, default=5000, help="info 모드: 한 번에 받을 단지 수")
+    ap.add_argument("--db", choices=["api", "psql"])
+    a = ap.parse_args(argv)
+    today = datetime.now(KST).date()
+    db = connect(a.db)
+    regions = select_regions(a.regions)
+    t0 = time.monotonic()
+    try:
+        if a.mode == "complexes":
+            rc = run_complexes(db, regions, parse_months(a.months), today)
+        elif a.mode == "list":
+            rc = run_list(db, regions, today)
+        elif a.mode == "info":
+            rc = run_info(db, a.limit, today)
+        else:
+            rc = run_match(db, regions)
+    except DbError as e:
+        print(f"DB 오류: {e}", file=sys.stderr)
+        rc = 1
+    print(f"[kapt] {a.mode} done in {time.monotonic() - t0:.0f}s rc={rc}")
+    return rc
+
+
+if __name__ == "__main__":
+    sys.exit(main())

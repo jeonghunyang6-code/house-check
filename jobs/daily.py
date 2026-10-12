@@ -20,7 +20,7 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from collector.db import DbError, connect
-from collector.pg_store import KINDS, apply_snapshot_pg, done_cells, should_bootstrap
+from collector.pg_store import KINDS, apply_snapshot_pg, complexes_sql, done_cells, should_bootstrap
 from collector.regions import REGIONS, select_regions
 from collector.sources.molit import ApiError, QuotaExceeded, fetch_rents, fetch_trades
 
@@ -89,6 +89,9 @@ def main(argv: list[str] | None = None) -> int:
                         continue
                     boot = a.bootstrap or should_bootstrap(db, code, ym, today, kind)
                     ev = apply_snapshot_pg(db, code, ym, rows, today, boot, kind)
+                    sql = complexes_sql(rows, today) if kind.name == "trade" else ""
+                    if sql:
+                        db.query(sql)  # 단지 속성 (K-apt 연결용)
                     c = {k: sum(e.event == k for e in ev) for k in ("registered", "cancelled", "disappeared")}
                     for k, v in c.items():
                         totals[k] += v

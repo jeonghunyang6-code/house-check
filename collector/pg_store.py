@@ -166,3 +166,25 @@ def done_cells(db: Db, kind: Kind, regions: list[str], months: list[str]) -> set
         f"AND contract_month IN ({', '.join(lit(m) for m in months)})",
     )
     return {(r["region_code"], r["contract_month"]) for r in rows}
+
+
+def complexes_sql(deals: list[Deal], today: date) -> str:
+    """실거래 응답의 단지 속성을 complexes 에 upsert (K-apt 연결용, 0008). 연결 결과(kapt_code)는 건드리지 않는다."""
+    latest: dict[str, Deal] = {}
+    for d in deals:
+        if d.apt_seq and (d.apt_seq not in latest or d.contract_date >= latest[d.apt_seq].contract_date):
+            latest[d.apt_seq] = d
+    if not latest:
+        return ""
+    vals = ", ".join(
+        "(" + ", ".join(lit(v) for v in (d.apt_seq, d.apt_name, d.region_code, d.bjd_code or None, d.umd_name or None,
+                                         d.jibun or None, d.road_addr or None, d.build_year, today)) + ")"
+        for d in latest.values()
+    )
+    return (
+        "INSERT INTO complexes (apt_seq, apt_name, region_code, bjd_code, umd_name, jibun, road_addr, build_year, updated_at) "
+        f"VALUES {vals} ON CONFLICT (apt_seq) DO UPDATE SET apt_name = EXCLUDED.apt_name, "
+        "bjd_code = COALESCE(EXCLUDED.bjd_code, complexes.bjd_code), umd_name = COALESCE(EXCLUDED.umd_name, complexes.umd_name), "
+        "jibun = COALESCE(EXCLUDED.jibun, complexes.jibun), road_addr = COALESCE(EXCLUDED.road_addr, complexes.road_addr), "
+        "build_year = COALESCE(EXCLUDED.build_year, complexes.build_year), updated_at = EXCLUDED.updated_at;"
+    )
