@@ -58,6 +58,23 @@ curl -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
   **매매 당월 칸 44개 실패**: 등기일이 전부 NULL 인 칸에서 `UPDATE … FROM (VALUES …)`의 NULL 열이 text 로 추론됨 → `::date` 캐스트로 수정(후속 PR), 재현 테스트 추가. 실패 칸은 트랜잭션이 통째로 취소돼 데이터 손상 없음.
 - 아직 미확인: 릴리스 업로드(지난 달 이관이 처음 일어나는 11월 1일 전후, 또는 전월세 backfill 때 확인), 페이지 1000건.
 
+### 2026-10-12 확인 사항
+
+- **서울 매매·전월세 2020-01~2026-08 빠짐없이 적재 완료** (backfill 2회 + 관악구 2칸 수동). 전월세 원본은 Releases `raw-data`에 월별 파일, 요약은 `rent_monthly`.
+- **경계 단지 중복**: 국토부는 시군구 경계에 걸친 단지 거래를 두 시군구 응답에 모두 싣는다(예: 관악푸르지오 102동 `11590-3369`, 동작구·관악구). `deal_key` 중복으로 칸 전체가 실패하던 문제를 `load_foreign()`으로 수정(먼저 받은 칸이 가짐). 단지번호 앞 5자리가 지역코드와 다른 거래가 1,610건(497개 단지) 있으나 대부분 중복은 아님.
+- **K-apt (공공데이터포털 키로 동작 확인)**
+  - 단지 목록: `apis.data.go.kr/1613000/AptListService4/getSigunguAptList4?sigunguCode=11680` (JSON, `kaptCode`·`kaptName`·`bjdCode`·`as1~as3`). 강남구 233개. `getLegaldongAptList4?bjdCode=` 도 됨. `getTotalAptList4`는 연결 실패(미확인)
+  - 기본 정보: `AptBasisInfoServiceV5/getAphusBassInfoV5?kaptCode=` → `kaptdaCnt`(세대수)·`hoCnt`·`kaptUsedate`(사용승인일)·`kaptDongCnt`·`kaptTopFloor`·`kaptBcompany`·`codeHeatNm`·`kaptMparea60/85/135/136`(면적대별 세대수). 상세: `getAphusDtlInfoV5` → 주차(`kaptdPcntu`), 지하철(`subwayLine`·`kaptdWtimesub`), 학교 등
+  - **K-apt `kaptCode`와 실거래 `aptSeq` 사이 공통 키가 없다.** 법정동(`bjdCode`) + 단지명/지번으로 맞춰야 함(다음 작업)
+- **R-ONE (`RONE_API_KEY`, `www.reb.or.kr/r-one/openapi/SttsApiTblData.do?KEY=&Type=json&STATBL_ID=&DTACYCLE_CD=WK&WRTTIME_IDTFR_ID=YYYYWW`)**
+  - 표: (주) 매매가격지수 `T244183132827305`, (주) 전세가격지수 `T247713133046872`, (주) 매매수급동향 `T248163133074619`, (주) 전세수급동향 `T245423133086632`. 표 목록 `SttsApiTbl.do`(738개)
+  - 기준시점 2026.07.06=100. 지역은 `CLS_FULLNM`(예: `경기>경부2권>수원시>영통구`), 지역 시계열은 `CLS_ID`(서울 50008, 수도권 50002)로 받음(2012년 19주~)
+  - **검증**: 2026-10-05 주 서울 +0.12%·수도권 +0.14%·강남 -0.34%·영통 +0.62%, 연속 상승 서울 88주·수도권 84주가 외부 앱 화면과 일치
+  - 수도권 83개 중 78개 매칭. 강화·옹진·연천·가평·양평은 주간 조사 대상 아님. 인천 신설 4개 구·화성 4개 구는 1년 전 값 없음. 2025-10-06 주(추석)는 발표 없음
+  - 이 환경에서 www.reb.or.kr 연결이 가끔 끊김 → 재시도 필요
+- 화면 시안: https://claude.ai/artifact/5vaeqk1AvcDxLhneGS8EL6 (5장: 시장 홈·주간 가격 동향 지도·오늘의 실거래·단지 상세·후보 비교표). 지도 경계는 vuski/admdongkor `ver20260701` 행정동을 시군구로 합침(시군구 코드 83개가 우리 목록과 일치). 시안 생성 스크립트는 아직 저장소에 없음(세션 임시 폴더)
+- 사용자 결정 대기: 비교표 관심 단지 목록(네이버 매물·호가와 함께), 웹/모바일 형태(보류, 모바일 폭 카드로 진행 중)
+
 ### 저장 방식 (2026-10-11 사용자와 합의)
 
 Supabase 무료(500MB, 제3자 자료 기준·공식 미확인)를 유지한다. 실측: 매매 행당 약 300B, 전월세 약 370B. 서울 월 건수(실측): 매매 1천~1만 6천, 전월세 1만 7천~2만 → 서울 2020~ 전월세 원본만 약 560MB로 한도 초과.

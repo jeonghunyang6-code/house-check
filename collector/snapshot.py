@@ -71,9 +71,14 @@ def diff_snapshot(
     deals: list[Deal],
     today: date,
     bootstrap: bool = False,
+    foreign: frozenset[str] = frozenset(),
 ) -> Diff:
-    """known: deal_key → (is_cancelled, disappeared). 이벤트 순서는 SQLite 구현과 같다."""
-    seen = keyed(deals)
+    """known: deal_key → (is_cancelled, disappeared). 이벤트 순서는 SQLite 구현과 같다.
+
+    foreign: 다른 (시군구, 계약월) 칸에 이미 저장된 키. 경계에 걸친 단지는 국토부가 두 시군구 응답에
+    같은 거래를 모두 싣는다(예: 관악푸르지오 102동, 동작구·관악구). 먼저 받은 칸이 갖고 여기서는 건너뛴다.
+    """
+    seen = {k: v for k, v in keyed(deals).items() if k not in foreign}
     d = Diff({}, {}, {}, [], [])
     for key, deal in seen.items():
         if key not in known:

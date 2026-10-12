@@ -109,3 +109,19 @@ def test_all_null_dates_in_update_batch():
     gone = [replace(fresh[0], is_cancelled=True, cancel_date=None)] + fresh[1:]      # 해제일 없는 해제
     ev = apply_snapshot_pg(db, "11680", "202610", gone, date(2026, 10, 13), False)
     assert [e.event for e in ev] == ["cancelled"]
+
+
+def test_cross_region_duplicate_is_skipped():
+    """2026-10-12 backfill 실패 재현: 경계 단지 거래가 동작구(11590)·관악구(11620) 응답에 모두 실린다."""
+    if not URL:
+        return
+    db = _db()
+    deals, _ = parse_trade_page(XML)
+    apply_snapshot_pg(db, "11590", "202608", deals[:2], date(2026, 10, 12), True)
+    apply_snapshot_pg(db, "11620", "202608", deals, date(2026, 10, 12), True)   # 앞 2건은 이미 동작구에 있음
+    assert select(db, "SELECT count(*) AS n FROM deals")[0]["n"] == len(deals)
+    assert select(db, "SELECT count(*) AS n FROM deals WHERE region_code = '11620'")[0]["n"] == len(deals) - 2
+    runs = select(db, "SELECT region_code, n_deals FROM snapshot_runs ORDER BY 1")
+    assert [(r["region_code"], r["n_deals"]) for r in runs] == [("11590", 2), ("11620", len(deals) - 2)]
+    # 다음 날 같은 응답이 와도 관악구 칸에서 그 2건을 '사라짐'으로 잡지 않는다
+    assert apply_snapshot_pg(db, "11620", "202608", deals, date(2026, 10, 13), False) == []
