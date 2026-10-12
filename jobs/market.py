@@ -40,6 +40,7 @@ def _ym(p: str) -> str:
 
 
 def run(db: Db) -> dict[str, tuple]:
+    today = date.today()
     stmts = ["BEGIN;", "DELETE FROM region_phase;"]
     phases: dict[tuple[str, int], object] = {}
     c13s: dict[tuple[str, int], float | None] = {}
@@ -150,6 +151,40 @@ def run(db: Db) -> dict[str, tuple]:
                             "원인(분양가·입지·상품성·공급 집중·거시)은 단지별로 봐야 한다(📖 p.155~160)")
     else:
         sig["f3_unsold"] = (None, "데이터 없음", "수도권 미분양")
+    # A4 급매 체결 비중 (📖 급매 = 실거래 대비 5% 이상 저렴 p.245~247): 서울 최근 4주 중개 거래 중
+    # 같은 단지·면적의 직전 90일 중앙값(3건 이상) × 0.95 이하. 층 보정 없음. 경기·인천은 이력이 짧아 제외
+    a4 = select(db, f"""WITH r AS (
+        SELECT d.apt_seq, d.area_group, d.contract_date, d.price_10k FROM deals d
+        WHERE d.region_code LIKE '11%' AND NOT d.is_cancelled AND d.deal_type = '중개' AND d.contract_date > {lit(today)}::date - 56),
+      p AS (SELECT r.contract_date, r.price_10k, x.ref, x.n FROM r CROSS JOIN LATERAL (
+        SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY b.price_10k) AS ref, count(*) AS n FROM deals b
+        WHERE b.apt_seq = r.apt_seq AND b.area_group = r.area_group AND NOT b.is_cancelled AND b.deal_type = '중개'
+          AND b.contract_date < r.contract_date AND b.contract_date >= r.contract_date - 90) x)
+      SELECT (contract_date > {lit(today)}::date - 28) AS cur, count(*) FILTER (WHERE n >= 3) AS total,
+             count(*) FILTER (WHERE n >= 3 AND price_10k <= ref * 0.95) AS gm FROM p GROUP BY 1""")
+    g = {r["cur"]: r for r in a4}
+    cur, prev = g.get(True), g.get(False)
+    if cur and cur["total"]:
+        rc = round(cur["gm"] * 100.0 / cur["total"], 1)
+        rp = round(prev["gm"] * 100.0 / prev["total"], 1) if prev and prev["total"] else None
+        sig["a4_quick_sale"] = (rc, "참고" if rp is None else "감소" if rc < rp else "증가" if rc > rp else "유지",
+                                f"서울 최근 4주 중개 거래 {cur['total']:,}건 중 직전 시세보다 5% 이상 싸게 팔린 거래 {cur['gm']:,}건 ({rc}%)"
+                                + (f", 그 전 4주 {rp}%" if rp is not None else "")
+                                + ". 급매가 소진되고 하단이 오르면 반등(📖 p.245~247). 최근 거래는 신고 기한(30일) 전이라 더 늘어난다")
+    else:
+        sig["a4_quick_sale"] = (None, "데이터 없음", "서울 급매 체결 비중")
+    # C5 직거래 비중 (📖 하락기에 늘어남 p.404, 보조): 서울, 신고 기한이 지난 마지막 달 vs 그 전 12개월 평균
+    c5 = select(db, """SELECT contract_month AS m, count(*) FILTER (WHERE deal_type = '직거래') * 100.0 / count(*) AS r, count(*) AS n
+        FROM deals WHERE region_code LIKE '11%' AND NOT is_cancelled AND contract_month >= to_char(now() - interval '15 months', 'YYYYMM')
+        GROUP BY 1 ORDER BY 1""")
+    c5 = [r for r in c5 if r["m"] <= last_complete.strftime("%Y%m")]
+    if len(c5) >= 13:
+        lastr, avg = float(c5[-1]["r"]), sum(float(r["r"]) for r in c5[-13:-1]) / 12
+        sig["c5_direct"] = (round(lastr, 1), "늘어남" if lastr > avg * 1.2 else "보통",
+                            f"{_ym(c5[-1]['m'])} 서울 매매 {c5[-1]['n']:,}건 중 직거래 {lastr:.1f}%, 그 전 12개월 평균 {avg:.1f}%. "
+                            "하락기에 늘어나는 보조 지표(📖 p.404, 🔧 평균의 1.2배 넘으면 늘어남)")
+    else:
+        sig["c5_direct"] = (None, "데이터 없음", "서울 직거래 비중")
     # G2 기준금리와 서울 아파트값 (동행/역행). 2006년부터 달마다 세고, 최신 달 관계를 신호로
     br, kb = macro(db, "base_rate", 400), macro(db, "apt_kb_seoul", 400)
     rel = [x for x in rate_price_relation(br, kb) if x[0] >= "200601"]
