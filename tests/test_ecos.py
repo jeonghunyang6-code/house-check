@@ -37,3 +37,11 @@ def test_loan_growth():
     up = loan_growth(_ms([100 * 1.01 ** (i * i / 10) for i in range(16)]))   # 증가 속도가 빨라짐
     assert up.state == "확대"
     assert loan_growth(_ms([100] * 13)).state == "비교 불가" and loan_growth(_ms([100] * 12)) is None
+
+
+def test_rebase_2005():
+    from collector.market import rebase
+    monthly = [("200412", 90.0), ("200501", 99.0), ("200512", 101.0), ("202601", 300.0)]
+    assert rebase(monthly) == [("200501", 99.0), ("200512", 101.0), ("202601", 300.0)]   # 2005 평균 100
+    assert rebase([("2004", 5.0), ("2005", 50.0), ("2025", 175.0)]) == [("2005", 100.0), ("2025", 350.0)]
+    assert rebase([("2010", 1.0)]) == []

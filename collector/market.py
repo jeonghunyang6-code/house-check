@@ -5,6 +5,7 @@
 - B4 하락 분류: ① 전국 하락 지역 비율 4주 평균 ≥ 70% ② 수도권 전세 8주 연속 하락 ③ 실업률 (📖 p.435~436 / 🔧 70%, 8주)
 - B5 ① 상승 지역 비율
 - 반등 신호: 매매수급지수 상승 전환 (3절). 🔧 4주 연속 상승을 "전환"으로 본다
+- G1 유동성·소득·집값: 2005 = 100 재기준화 (📖 p.50)
 - G3 주담대 금리 구간 (▶ 3~5% 심리적 한계, 7%면 체감이 완전히 다르다)
 - G4 가계대출 증가율: 잔액 전년비와 3개월 전 대비 변화 (▶ 증가율 둔화 → 거래 감소 / 🔧 3개월 변화 < 0 이면 둔화)
 - G5 실업률 구간과 B4 ③ (📖 4% 경기침체·6% 경제 위기 p.143~144 / 🔧 3개월 +0.5%p)
@@ -167,3 +168,15 @@ def loan_growth(months: list[tuple[str, float]]) -> LoanGrowth | None:
     chg = round(now - yoy(len(vals) - 4), 2) if len(vals) >= 16 else None
     state = "비교 불가" if chg is None else "둔화" if chg < 0 else "확대" if chg > 0 else "유지"
     return LoanGrowth(months[-1][0], round(now, 2), chg, state)
+
+
+G1_BASE = "2005"  # 📖 p.50 그래프의 기준 연도
+
+
+def rebase(points: list[tuple[str, float]], base: str = G1_BASE) -> list[tuple[str, float]]:
+    """(YYYY 또는 YYYYMM, 값) → 기준 연도 = 100. 월간은 기준 연도 평균, 연간은 그 해 값으로 나눈다. 기준 연도 값이 없으면 빈 목록."""
+    b = [v for p, v in points if p[:4] == base]
+    if not b:
+        return []
+    m = sum(b) / len(b)
+    return [(p, round(v / m * 100, 1)) for p, v in points if p[:4] >= base]

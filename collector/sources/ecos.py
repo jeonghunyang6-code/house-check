@@ -27,6 +27,7 @@ BASE = "https://ecos.bok.or.kr/api/StatisticSearch"
 class Series:
     stat: str
     item: str
+    cycle: str = "M"   # M 월간(YYYYMM) | A 연간(YYYY)
 
 
 SERIES = {
@@ -36,6 +37,11 @@ SERIES = {
     "household_loans": Series("151Y005", "1110000"),
     # 같은 표 > 주택관련대출-예금취급기관. 2007-12 부터 (G4 참고)
     "housing_loans": Series("151Y005", "11100A0"),
+    # G1 유동성·소득·집값 (📖 p.50, 2005 = 100 으로 재기준화해 겹친다)
+    "m2": Series("161Y005", "BBHS00"),                   # 1.1.3.1.1 M2 평잔, 계절조정, 십억원. 2003-10 부터
+    "household_income": Series("200Y116", "1060130", "A"),  # 2.1.3.2.2 가계 및 비영리단체 처분가능소득(명목), 십억원. 연간
+    "apt_kb_nat": Series("901Y062", "P63AC"),            # 4.4.1.1 KB 주택매매가격지수 > 아파트(전국). 1986-01 부터
+    "apt_kb_seoul": Series("901Y062", "P63ACA"),         # 같은 표 > 아파트(서울)
 }
 
 
@@ -67,5 +73,8 @@ def parse(j: dict) -> list[tuple[str, float]]:
 
 
 def fetch(name: str, start: str, end: str) -> list[tuple[str, float]]:
+    """start·end 는 YYYYMM. 연간 지표는 앞 4자리만 쓰고 (YYYY, 값)을 돌려준다."""
     s = SERIES[name]
-    return parse(_call(f"1/10000/{s.stat}/M/{start}/{end}/{s.item}"))
+    if s.cycle == "A":
+        start, end = start[:4], end[:4]
+    return parse(_call(f"1/10000/{s.stat}/{s.cycle}/{start}/{end}/{s.item}"))
