@@ -91,6 +91,10 @@ td.r, th.r { text-align: right; font-variant-numeric: tabular-nums; }
 .check { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
 .check .t { font-weight: 500; }
 .check .why { font-size: 12px; color: var(--ink-3); grid-column: 2 / 4; }
+.check.macro { grid-template-columns: minmax(0, 1fr) auto; }
+.check.macro .why { grid-column: 1 / 3; }
+.check.macro .sp { display: grid; justify-items: end; gap: 2px; }
+.check.macro svg { display: block; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-3); }
 .pill.ex { background: var(--example-bg); color: var(--example); }
 .seg { display: inline-flex; background: var(--sunk); border-radius: 999px; padding: 3px; gap: 2px; }
@@ -137,8 +141,16 @@ footer.foot { color: var(--ink-3); font-size: 12px; max-width: 90ch; display: gr
           <p class="src">중개거래·해제 제외. 단지 구성이 달마다 달라 가격지수가 아닙니다.</p>
         </div>
         <div class="sec">
+          <h3>시장 국면 <span class="muted" id="phaseAsof"></span></h3>
+          <div id="phase"></div>
+        </div>
+        <div class="sec">
           <h3>시장 체크리스트 <span class="muted">(송희구 관점)</span></h3>
           <div id="checks"></div>
+        </div>
+        <div class="sec">
+          <h3>거시 지표 <span class="muted">(최근 2년)</span></h3>
+          <div id="macro"></div>
         </div>
       </div>
     </section>
@@ -201,7 +213,7 @@ footer.foot { color: var(--ink-3); font-size: 12px; max-width: 90ch; display: gr
   </div>
 
   <footer class="foot">
-    <span>출처: 국토교통부 아파트 매매·전월세 실거래가(공공데이터포털), 한국부동산원 R-ONE 주간 아파트 가격동향. 기준 시세(A1)·국면(B1)·회복 패턴(B2)·전세가율 정상 범위(D1) 정의는 docs/insights/indicators.md, 신고가 판정은 ARCHITECTURE 4.3.</span>
+    <span>출처: 국토교통부 아파트 매매·전월세 실거래가(공공데이터포털), 한국부동산원 R-ONE 주간 아파트 가격동향, 한국은행 ECOS(주담대 금리·가계대출), 통계청 KOSIS(계절조정 실업률). 기준 시세(A1)·국면(B1)·회복 패턴(B2)·전세가율 정상 범위(D1) 정의는 docs/insights/indicators.md, 신고가 판정은 ARCHITECTURE 4.3.</span>
     <span>전세가율 정상 범위: 20억 이상 30~50%, 8~15억 50~60%, 5억 이하 60~90%, 그 사이는 선형 보간 (『나의 첫 번째 부동산 교과서』 p.152).</span>
   </footer>
 </div>
@@ -227,7 +239,7 @@ function niceMax(v) { const p = Math.pow(10, Math.floor(Math.log10(v))); for (co
 
 $('#asof1').textContent = D.asof + ' 기준';
 $('#asof2').textContent = D.asof.slice(5).replace('-', '월 ') + '일';
-$('#notice').innerHTML = `<b>데이터 범위</b><span>서울 실거래는 2020년 1월부터 빈 달 없이, 경기·인천은 2026년 9월부터 들어 있습니다. 주간 가격 동향은 한국부동산원 R-ONE ${D.weekly.date.replace(/-/g, '.')} 발표치입니다. 단지 세대수(K-apt)는 연결됐지만 아직 화면 계산에 쓰지 않았습니다.</span>`;
+$('#notice').innerHTML = `<b>데이터 범위</b><span>서울 실거래는 2020년 1월부터 빈 달 없이, 경기·인천은 2026년 9월부터 들어 있습니다. 주간 가격 동향은 한국부동산원 R-ONE ${D.weekly.date.replace(/-/g, '.')} 발표치입니다. 시장 체크리스트와 거시 지표는 매주 계산되는 실제 신호(R-ONE·한국은행·통계청)입니다. 단지 세대수(K-apt)는 아직 연결 중입니다.</span>`;
 
 /* ① 거래량 막대 */
 (function () {
@@ -321,16 +333,68 @@ $('#notice').innerHTML = `<b>데이터 범위</b><span>서울 실거래는 2020�
   draw();
 })();
 
-/* ① 체크리스트: 데이터가 연결된 것과 아닌 것을 정직하게 */
+/* ① 국면·체크리스트·거시: market_signals 실제 값 (jobs/market.py). 준비 안 된 항목은 그렇다고 표시 */
 (function () {
-  const items = [
-    ['과열 신호', '하위 급지 신고가 비중 (B5)', 'none', 'K-apt 세대수·급지 데이터 연결 후'],
-    ['하락 초입', '하락 지역 비율·전세 동반 하락 (B4)', 'none', 'R-ONE 주간 지수 연결됨. 판정 로직 작성 전'],
-    ['상승 압력', '신규 전세 계약 감소 (D5)', 'none', '전월세 요약(서울 2020~) 있음. 계산 작성 전'],
-    ['반등 신호', '매매수급지수 전환', 'none', 'R-ONE 주간 수급동향 표 확인됨. 수집 작성 전'],
-    ['거시', '실업률 구간 (G5)', 'none', 'KOSIS API 연결 필요'],
-  ];
-  $('#checks').innerHTML = items.map(([g, t, s, why]) => `<div class="check"><span class="pill acc">${g}</span><span class="t">${t}</span><span class="pill ${s}">준비 중</span><span class="why">${why}</span></div>`).join('');
+  const S = D.signals || {}, M = D.macro || {};
+  const num = (v, d = 1) => v == null ? '–' : Number(v).toFixed(d);
+  const dt = (s) => s.slice(2).replace(/-/g, ".");
+  const PILL = {  // 상태 → 색. 경고 신호가 켜지면 bad, 꺼져 있으면 good, 참고만이면 none
+    '충족': 'bad', '미충족': 'good', '데이터 없음': 'none', '해당 없음': 'none', '참고': 'none',
+    '안정': 'good', '경기침체': 'warn', '경제 위기': 'bad',
+    '3% 미만': 'good', '3~5% (심리적 한계 구간)': 'warn', '5~7% (한계 초과)': 'bad', '7% 이상 (체감 급변)': 'bad',
+    '둔화': 'warn', '확대': 'none', '유지': 'none', '비교 불가': 'none',
+    '상승 전환': 'good', '아님': 'none', '대세 하락 의심': 'bad', '단기 조정': 'warn',
+    '5% 미만': 'good', '5% 이상': 'warn', '10% 이상': 'warn', '20% 이상': 'bad',
+  };
+  const pill = (state) => `<span class="pill ${PILL[state] || 'acc'}">${state || '–'}</span>`;
+  const row = (g, t, sig, extra = '') => sig
+    ? `<div class="check"><span class="pill acc">${g}</span><span class="t">${t}${extra}</span>${pill(sig.state)}<span class="why">${sig.detail}</span></div>`
+    : `<div class="check"><span class="pill acc">${g}</span><span class="t">${t}</span><span class="pill none">준비 중</span><span class="why">계산 전</span></div>`;
+  const todo = (g, t, why) => `<div class="check"><span class="pill acc">${g}</span><span class="t">${t}</span><span class="pill none">준비 중</span><span class="why">${why}</span></div>`;
+
+  // 국면 (B1) + 낙폭 (B3)
+  const b1 = [['서울', 'seoul'], ['수도권', 'sudo']];
+  const any = S.b1_seoul || S.b1_sudo;
+  $('#phaseAsof').textContent = any ? `${dt(any.asof)} 주 기준` : '';
+  $('#phase').innerHTML = b1.map(([n, k]) => {
+    const p = S['b1_' + k], d = S['b3_' + k];
+    if (!p) return todo('국면', n, 'R-ONE 지수 없음');
+    return `<div class="check"><span class="pill acc">${n}</span><span class="t">12개월 ${p.value == null ? '–' : (p.value >= 0 ? '+' : '') + num(p.value, 2) + '%'}</span>${pill(p.state)}<span class="why">${p.detail.replace(/^12개월 [^,]*, /, '')}${d ? ` · 고점 대비 낙폭 ${num(d.value, 1)}% (${d.state})` : ''}</span></div>`;
+  }).join('') + '<p class="src">B1 국면: 12개월 누적 ±3%·12개월 중 8개월 같은 방향(🔧), 추세는 최소 1년(📖 p.136). B3 낙폭: 최근 24개월 최고 대비(📖 p.434·444).</p>';
+
+  // 체크리스트 (indicators.md 4절 묶음)
+  const b4c = S.b4_class;
+  $('#checks').innerHTML = [
+    row('하락 초입', '하락장 분류 (B4)', b4c),
+    row('', '① 전국 하락 지역 70% 이상', S.b4_down_ratio, S.b4_down_ratio && S.b4_down_ratio.value != null ? ` <span class="muted num">${num(S.b4_down_ratio.value)}%</span>` : ''),
+    row('', '② 수도권 전세 8주 연속 하락', S.b4_jeonse_8w, S.b4_jeonse_8w && S.b4_jeonse_8w.value != null ? ` <span class="muted num">${num(S.b4_jeonse_8w.value, 0)}주</span>` : ''),
+    row('', '③ 실업률 4% 또는 3개월 +0.5%p', S.b4_unemployment),
+    row('과열 신호', '상승 지역 비율 (B5 ①)', S.b5_up_cap, S.b5_up_cap ? ` <span class="muted num">수도권 ${num(S.b5_up_cap.value)}% · 전국 ${num(S.b5_up_nat && S.b5_up_nat.value)}%</span>` : ''),
+    todo('과열 신호', '하위 급지 신고가 비중 (B5 ②)', 'K-apt 세대수·급지 데이터 연결 후'),
+    row('반등 신호', '매매수급지수 상승 전환 · 서울', S.supply_seoul),
+    row('반등 신호', '매매수급지수 상승 전환 · 수도권', S.supply_sudo),
+    todo('상승 압력', '신규 전세 계약 감소 (D5)', '전월세 요약(서울 2020~) 있음. 계산 작성 전'),
+  ].join('').replace(/<span class="pill acc"><\/span>/g, '<span></span>');
+
+  // 거시: 상태 + 2년 스파크라인 (단일 계열, 값 라벨은 첫·끝만)
+  const yoy = (s) => s.slice(12).map(([p, v], i) => [p, (v / s[i][1] - 1) * 100]);
+  const spark = (pts, unit) => {
+    if (!pts || pts.length < 2) return '';
+    const W = 120, H = 34, vs = pts.map(p => p[1]), lo = Math.min(...vs), hi = Math.max(...vs), r = hi - lo || 1;
+    const x = (i) => 2 + i * (W - 4) / (pts.length - 1), y = (v) => H - 4 - (v - lo) / r * (H - 8);
+    const d = pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p[1]).toFixed(1)}`).join('');
+    const hits = pts.map((p, i) => `<rect x="${(x(i) - (W - 4) / (pts.length - 1) / 2).toFixed(1)}" y="0" width="${((W - 4) / (pts.length - 1)).toFixed(1)}" height="${H}" fill="transparent"><title>${p[0].slice(0, 4)}.${p[0].slice(4)} ${p[1].toFixed(2)}${unit}</title></rect>`).join('');
+    const last = pts[pts.length - 1];
+    return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="최근 ${pts.length}개월 추이, 최신 ${last[1].toFixed(2)}${unit}"><path d="${d}" fill="none" stroke="var(--s-trade)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${x(pts.length - 1).toFixed(1)}" cy="${y(last[1]).toFixed(1)}" r="3" fill="var(--s-trade)" stroke="var(--screen)" stroke-width="2"/>${hits}</svg>`;
+  };
+  const range = (pts, unit) => pts && pts.length > 1 ? `2년 범위 ${Math.min(...pts.map(p => p[1])).toFixed(1)}~${Math.max(...pts.map(p => p[1])).toFixed(1)}${unit}` : '';
+  const mrow = (t, sig, pts, unit, v) => `<div class="check macro"><span class="t">${t} ${pill(sig ? sig.state : '데이터 없음')}<br><span class="num" style="font-size:18px;font-weight:700">${v}</span></span><span class="sp">${spark(pts, unit)}<span class="src">${range(pts, unit)}</span></span><span class="why">${sig ? sig.detail : '수집 전'}</span></div>`;
+  const hl = M.household_loans || [];
+  $('#macro').innerHTML = [
+    mrow('주담대 금리 (G3)', S.g3_mortgage_rate, M.mortgage_rate, '%', S.g3_mortgage_rate ? num(S.g3_mortgage_rate.value, 2) + '%' : '–'),
+    mrow('가계대출 증가율 (G4)', S.g4_household_loans, hl.length > 13 ? yoy(hl) : null, '%', S.g4_household_loans ? '+' + num(S.g4_household_loans.value, 2) + '%' : '–'),
+    mrow('실업률 (G5)', S.g5_unemployment, M.unemployment_sa, '%', S.g5_unemployment ? num(S.g5_unemployment.value, 1) + '%' : '–'),
+  ].join('') + '<p class="src">주담대 금리: 예금은행 신규취급액 기준, ▶ 3~5% 심리적 한계·7%면 체감이 완전히 다르다. 가계대출: 예금취급기관 잔액 전년비, ▶ 증가율 둔화 → 거래 감소(🔧 3개월 전보다 낮으면 둔화). 실업률: 계절조정, 📖 4% 경기침체·6% 경제 위기(p.143~144). 금리는 단독 판정에 쓰지 않는다(📖 p.48~49). 출처: 한국은행 ECOS, 통계청 KOSIS.</p>';
 })();
 
 /* ② 오늘의 실거래 */
