@@ -115,7 +115,9 @@ def weekly():
 from collector.regions import REGIONS
 json.dump({'monthly': monthly, 'cx': cx, 'today': today,
            'recent': {'n': len(rh), 'highs': sum(r['price_10k'] > r['prev_high'] for r in rh)},
-           'weekly': weekly(), 'geo': json.load(open(ROOT / 'data/geo/sudogwon_sgg_20260701.json')),
+           'weekly': weekly(), 'signals': {r['key']: r for r in d['signals']},
+           'macro': {k: [[r['period'], float(r['value'])] for r in d['macro'] if r['series'] == k] for k in {r['series'] for r in d['macro']}},
+           'geo': json.load(open(ROOT / 'data/geo/sudogwon_sgg_20260701.json')),
            'region_names': REGIONS, 'asof': TODAY.isoformat()}, open(OUT / 'data.json', 'w'), ensure_ascii=False)
 for c in cx: print(c['name'], c['region'], c['P'], c['T'], c['C'], c['conf'], c['cn'], c['pattern'], c['rec'] and round(c['rec'],2), c['J'], c['jn'], c['ratio'] and round(c['ratio']), c['band'], c['n12'])
 print('today statuses', {s: sum(t['status'] == s for t in today) for s in set(t['status'] for t in today)})

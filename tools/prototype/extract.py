@@ -40,6 +40,10 @@ out['rone'] = select(db, """SELECT w.stat, w.cls_id, r.full_name, r.region_code,
    AND w.week_date >= (SELECT max(week_date) FROM rone_weekly) - 380""")
 out['rone_series'] = select(db, """SELECT stat, cls_id, week_date::text d, value FROM rone_weekly
  WHERE stat IN ('sale','jeonse') AND cls_id IN (50008, 50002) ORDER BY week_date""")
+# F. 시장 체크리스트 신호 (market_signals, jobs/market.py) + 거시 최근 25개월 (macro_monthly)
+out['signals'] = select(db, "SELECT key, asof::text asof, value, state, detail FROM market_signals")
+out['macro'] = select(db, """SELECT series, period, value FROM macro_monthly
+ WHERE period >= to_char(now() - interval '26 months', 'YYYYMM') ORDER BY series, period""")
 out['seqs'] = SEQS
 out['regions'] = {k: v for k, v in REGIONS.items()}
 json.dump(out, open(OUT / 'raw.json', 'w'), ensure_ascii=False, default=str)
