@@ -21,7 +21,8 @@
   --gap: #c9d1d8;
   --up3: #a3241b; --up2: #d0493a; --up1: #eba596; --mid: #e3e6e9; --dn1: #9fc1e6; --dn2: #3f7fcf; --dn3: #1d4f99;
   --on-strong: #ffffff; --example: #6b4fbf; --example-bg: #ece6fa;
-  --c1: #2a78d6; --c2: #eb6834; --c3: #1baf7a; --c4: #eda100;  /* 범주 1~4 (dataviz 기본 팔레트, 인접 쌍 검증됨) */
+  --c1: #2a78d6; --c2: #eb6834; --c3: #1baf7a; --c4: #eda100;
+  --g2-same: #9aa6b2; --g2-opp: #3d4852; --g2-hold: #dde2e6;  /* 동행·역행·동결 띠: 명도만 다른 무채색 */  /* 범주 1~4 (dataviz 기본 팔레트, 인접 쌍 검증됨) */
   --f-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
   --f-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
 }
@@ -29,12 +30,12 @@
   --bg: #0f1418; --screen: #182128; --sunk: #1f2a32; --ink: #e8edf1; --ink-2: #b2bec8; --ink-3: #8593a0;
   --line: #2c3a45; --accent: #4fb8ad; --accent-soft: #173a37; --s-trade: #3987e5; --s-rent: #d95926;
   --good: #6fcf8a; --good-bg: #183324; --warn: #e6b450; --warn-bg: #3a2e14; --bad: #f08a72; --bad-bg: #3c1f19;
-  --gap: #34424d; --up3: #e2675a; --up2: #b9473b; --up1: #6e3832; --mid: #2b343c; --dn1: #2c4a6c; --dn2: #3d74bd; --dn3: #73a6e6; --on-strong: #0f1418; --example: #b9a6f2; --example-bg: #2c2545; --c1: #3987e5; --c2: #d95926; --c3: #199e70; --c4: #c98500; color-scheme: dark; } }
+  --gap: #34424d; --up3: #e2675a; --up2: #b9473b; --up1: #6e3832; --mid: #2b343c; --dn1: #2c4a6c; --dn2: #3d74bd; --dn3: #73a6e6; --on-strong: #0f1418; --example: #b9a6f2; --example-bg: #2c2545; --c1: #3987e5; --c2: #d95926; --c3: #199e70; --c4: #c98500; --g2-same: #6b7884; --g2-opp: #c9d2da; --g2-hold: #2b343c; color-scheme: dark; } }
 :root[data-theme="dark"] {
   --bg: #0f1418; --screen: #182128; --sunk: #1f2a32; --ink: #e8edf1; --ink-2: #b2bec8; --ink-3: #8593a0;
   --line: #2c3a45; --accent: #4fb8ad; --accent-soft: #173a37; --s-trade: #3987e5; --s-rent: #d95926;
   --good: #6fcf8a; --good-bg: #183324; --warn: #e6b450; --warn-bg: #3a2e14; --bad: #f08a72; --bad-bg: #3c1f19;
-  --gap: #34424d; --up3: #e2675a; --up2: #b9473b; --up1: #6e3832; --mid: #2b343c; --dn1: #2c4a6c; --dn2: #3d74bd; --dn3: #73a6e6; --on-strong: #0f1418; --example: #b9a6f2; --example-bg: #2c2545; --c1: #3987e5; --c2: #d95926; --c3: #199e70; --c4: #c98500; color-scheme: dark; }
+  --gap: #34424d; --up3: #e2675a; --up2: #b9473b; --up1: #6e3832; --mid: #2b343c; --dn1: #2c4a6c; --dn2: #3d74bd; --dn3: #73a6e6; --on-strong: #0f1418; --example: #b9a6f2; --example-bg: #2c2545; --c1: #3987e5; --c2: #d95926; --c3: #199e70; --c4: #c98500; --g2-same: #6b7884; --g2-opp: #c9d2da; --g2-hold: #2b343c; color-scheme: dark; }
 * { box-sizing: border-box; }
 body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 14px; line-height: 1.55; }
 .wrap { padding-inline: 16px; padding-block: 28px 48px; max-width: 1640px; margin: 0 auto; display: grid; gap: 24px; }
@@ -158,6 +159,12 @@ footer.foot { color: var(--ink-3); font-size: 12px; max-width: 90ch; display: gr
           <div class="legend" id="g1Legend"></div>
           <svg class="chart" id="g1Chart" viewBox="0 0 340 210" role="img" aria-label="2005년을 100으로 놓은 통화량, 가계소득, 아파트 가격 선 차트"></svg>
           <p class="src" id="g1Src"></p>
+        </div>
+        <div class="sec">
+          <h3>금리와 집값 <span class="muted">(서울 아파트)</span></h3>
+          <svg class="chart" id="g2Chart" viewBox="0 0 340 250" role="img" aria-label="기준금리와 서울 아파트값 전년비, 달마다 동행·역행 구분"></svg>
+          <div class="legend"><span><i style="background:var(--g2-same)"></i>동행 (금리·집값 같은 방향)</span><span><i style="background:var(--g2-opp)"></i>역행</span><span><i style="background:var(--g2-hold)"></i>금리 동결</span></div>
+          <p class="src" id="g2Src"></p>
         </div>
       </div>
     </section>
@@ -442,6 +449,35 @@ $('#notice').innerHTML = `<b>데이터 범위</b><span>서울 실거래는 2020�
   $('#g1Src').textContent = `2005년을 100으로 놓으면 지금 통화량 ${lv('m2')}, 가계소득 ${lv('household_income')}(${(G.household_income || [['–']]).slice(-1)[0][0]}년), 서울 아파트 ${lv('apt_kb_seoul')}, 전국 아파트 ${lv('apt_kb_nat')}. ▶ 정책은 일시적 파도, 소득과 통화량이 배의 엔진(📖 p.50, p.291~292). 통화량: M2 평잔(계절조정), 가계소득: 가계 및 비영리단체 처분가능소득(명목, 연간), 아파트: KB 주택매매가격지수. 출처: 한국은행 ECOS.`;
 })();
 
+/* ① G2 금리와 집값 (📖 p.48~49): 두 값은 단위가 달라 축을 나눠 위아래로 (한 축 원칙). 가운데 띠 = 달마다 동행/역행 */
+(function () {
+  const G = D.g2; if (!G || !G.rate.length) return;
+  const svg = $('#g2Chart'), W = 340, L = 30, R = 42, x0 = '200601';
+  const mi = (p) => (+p.slice(0, 4) - 2006) * 12 + +p.slice(4) - 1;
+  const last = Math.max(mi(G.rate[G.rate.length - 1][0]), mi(G.yoy[G.yoy.length - 1][0]));
+  const x = (i) => L + (W - L - R) * i / last;
+  const panel = (pts, T, H, unit, col, zero) => {
+    const vs = pts.map(p => p[1]); let lo = Math.min(...vs, zero ? 0 : Infinity), hi = Math.max(...vs);
+    const step = (hi - lo) > 12 ? 10 : (hi - lo) > 4 ? 2 : 1; lo = Math.floor(lo / step) * step; hi = Math.ceil(hi / step) * step;
+    const y = (v) => T + H * (1 - (v - lo) / (hi - lo));
+    for (let t = lo; t <= hi + 1e-9; t += step) { el('line', { x1: L, x2: W - R, y1: y(t), y2: y(t), class: 'grid', 'stroke-width': t === 0 && zero ? 1.4 : 1 }, svg); txt(svg, L - 4, y(t) + 3, t + unit, 'end'); }
+    el('path', { d: pts.map((p, i) => `${i ? 'L' : 'M'}${x(mi(p[0])).toFixed(1)},${y(p[1]).toFixed(1)}`).join(''), fill: 'none', stroke: css(col), 'stroke-width': 2, 'stroke-linejoin': 'round' }, svg);
+    const e = pts[pts.length - 1]; el('circle', { cx: x(mi(e[0])), cy: y(e[1]), r: 3, fill: css(col), stroke: css('--screen'), 'stroke-width': 2 }, svg);
+    txt(svg, W - R + 4, y(e[1]) + 3, (e[1] > 0 && zero ? '+' : '') + e[1].toFixed(1) + unit, 'start').setAttribute('style', 'fill:var(--ink-2)');
+    return y;
+  };
+  txt(svg, L, 9, '기준금리', 'start').setAttribute('style', 'fill:var(--ink-2);font-weight:600');
+  panel(G.rate, 16, 70, '%', '--c1', false);
+  // 동행/역행 띠
+  const SY = 98, SH = 10, C = { '동행': '--g2-same', '역행': '--g2-opp', '금리 동결': '--g2-hold' }, bw = (W - L - R) / last;
+  G.rel.forEach(([p, lab]) => { const r = el('rect', { x: x(mi(p)) - bw / 2, y: SY, width: bw + 0.3, height: SH, fill: css(C[lab]) }, svg); hover(r, `${p.slice(0, 4)}.${p.slice(4)} ${lab}`); });
+  txt(svg, L, 132, '서울 아파트값 1년 변화율', 'start').setAttribute('style', 'fill:var(--ink-2);font-weight:600');
+  panel(G.yoy, 140, 86, '%', '--c3', true);
+  for (let yr = 2006; yr <= 2006 + last / 12; yr += 5) txt(svg, x((yr - 2006) * 12), 246, yr);
+  const n = (k) => G.rel.filter(r => r[1] === k).length, cur = G.rel[G.rel.length - 1];
+  $('#g2Src').textContent = `2006년 이후 ${G.rel.length}개월 중 금리와 집값이 같은 방향 ${n('동행')}개월, 반대 방향 ${n('역행')}개월, 금리 동결 ${n('금리 동결')}개월. 최근(${cur[0].slice(0, 4)}.${cur[0].slice(4)})은 ${cur[1]}. 📖 금리는 집값을 조절하지 않는다, 금리 인하는 경기가 나쁘다는 뜻일 수 있다(p.48~49). 동행 = 1년 전보다 금리가 오르며 집값도 오름, 또는 둘 다 내림. 출처: 한국은행 ECOS(기준금리, KB 아파트 매매가격지수).`;
+})();
+
 /* ② 오늘의 실거래 */
 (function () {
   const rows = D.today, state = { region: '전체', high: false };
@@ -483,7 +519,9 @@ function ratioState(c) {
 function recLabel(c) { if (c.rec == null) return '–'; return c.C >= c.P ? '+' + pct((c.C / c.P - 1) * 100) : pct(c.rec * 100); }
 function patState(c) { return c.pattern == null ? ['none', '판정 보류'] : c.pattern === '회복 지연' ? ['warn', c.pattern] : ['good', c.pattern]; }
 function drawCx(c) {
-  $('#cxName').textContent = c.name; $('#cxRegion').textContent = c.region;
+  $('#cxName').textContent = c.name;
+  const PH = { '상승장': 'acc', '하락장': 'bad', '보합장': 'none', '일시 반등': 'acc', '일시 조정': 'warn', '추세 불명확': 'none' };
+  $('#cxRegion').innerHTML = `${c.region} ${c.phase ? `<span class="pill ${PH[c.phase.phase] || 'none'}">${c.phase.phase}</span>` : '<span class="pill none">국면 판정 보류</span>'}`;
   const [rc, rl] = ratioState(c), [pc, pl] = patState(c);
   $('#cxKpis').innerHTML = `
     <div class="kpi"><span class="k">기준 시세</span><span class="v">${eok(c.C)}</span><span class="d">${c.C ? `최근 거래 ${c.cn}건 · 신뢰도 ${c.conf}` : '최근 180일 거래 3건 미만'}</span></div>
@@ -518,7 +556,10 @@ function drawCx(c) {
   const notes = [];
   if (!c.C) notes.push('최근 180일 거래가 3건 미만이라 기준 시세를 정하지 않았습니다.');
   notes.push(`전세는 ${c.jsrc === '신규' ? '신규 계약' : '전체 계약'} 중앙값(2026년 9~10월, ${c.jn}건)으로 전세가율을 계산했습니다.`);
-  notes.push('국면 라벨(B1)과 상대강도(B6)는 다음 단계에서 계산합니다.');
+  notes.push(c.phase
+    ? `국면(B1): 지난달까지 12개월 기준 시세 ${(+c.phase.chg_12m > 0 ? '+' : '') + (+c.phase.chg_12m).toFixed(1)}%, 오른 달 ${c.phase.up_months}개·내린 달 ${c.phase.down_months}개, 최근 3개월 ${c.phase.last3}. 12개월 ±3%·8개월 이상 같은 방향이면 상승장/하락장(🔧, 📖 추세 최소 1년 p.136).`
+    : '국면(B1)은 최근 13개월 중 3개월 창에 거래가 없는 달이 있어 판정하지 않았습니다.');
+  notes.push('상대강도(B6)는 다음 단계에서 계산합니다.');
   $('#cxNotes').innerHTML = notes.map(n => `<p class="muted" style="margin:0">${n}</p>`).join('');
 }
 drawCx(cxs[initial]);

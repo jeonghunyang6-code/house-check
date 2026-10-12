@@ -45,3 +45,16 @@ def test_rebase_2005():
     assert rebase(monthly) == [("200501", 99.0), ("200512", 101.0), ("202601", 300.0)]   # 2005 평균 100
     assert rebase([("2004", 5.0), ("2005", 50.0), ("2025", 175.0)]) == [("2005", 100.0), ("2025", 350.0)]
     assert rebase([("2010", 1.0)]) == []
+
+
+def test_rate_price_relation():
+    from collector.market import rate_price_relation, yoy_series
+    ms = [f"{2024 + i // 12}{i % 12 + 1:02d}" for i in range(24)]
+    price = [(m, 100 + i) for i, m in enumerate(ms)]                 # 계속 상승
+    rate = [(m, 3.0 if i < 12 else (3.5 if i < 18 else 3.0)) for i, m in enumerate(ms)]
+    assert yoy_series(price)[0] == ("202501", 12.0)
+    rel = dict(rate_price_relation(rate, price))
+    assert rel["202501"] == "동행"        # 금리 +0.5 (1년 전 3.0 → 3.5), 집값 상승
+    assert rel["202507"] == "금리 동결"    # 3.0 → 3.0
+    down = [(m, 3.0 - (0.5 if i >= 12 else 0)) for i, m in enumerate(ms)]
+    assert dict(rate_price_relation(down, price))["202503"] == "역행"   # 금리 인하기에 집값 상승

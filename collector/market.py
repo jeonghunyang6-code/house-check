@@ -7,6 +7,7 @@
 - 반등 신호: 매매수급지수 상승 전환 (3절). 🔧 4주 연속 상승을 "전환"으로 본다
 - D5 신규 전세 감소 + 전세가 상승 = 전세 부족 → 매매 상승 압력 (▶ J5 / 🔧 최근 신고 완료 3개월 신규 전세 건수 전년 같은 달 대비 감소, 전세지수 13주 상승)
 - G1 유동성·소득·집값: 2005 = 100 재기준화 (📖 p.50)
+- G2 금리와 집값: 기준금리 12개월 변화와 아파트값 전년비가 같은 방향이면 동행, 반대면 역행 (📖 p.48~49 "금리는 집값을 조절하지 않는다")
 - G3 주담대 금리 구간 (▶ 3~5% 심리적 한계, 7%면 체감이 완전히 다르다)
 - G4 가계대출 증가율: 잔액 전년비와 3개월 전 대비 변화 (▶ 증가율 둔화 → 거래 감소 / 🔧 3개월 변화 < 0 이면 둔화)
 - G5 실업률 구간과 B4 ③ (📖 4% 경기침체·6% 경제 위기 p.143~144 / 🔧 3개월 +0.5%p)
@@ -216,3 +217,29 @@ def new_jeonse(counts: dict[str, tuple[int, int]], last_complete: str, jeonse_ch
     else:
         state = "충족" if yoy < 0 and jeonse_chg > 0 else "미충족"
     return NewJeonse(ms, n, n0, yoy, share, jeonse_chg, state)
+
+
+
+def yoy_series(months: list[tuple[str, float]]) -> list[tuple[str, float]]:
+    """월별 값 → 전년 같은 달 대비 % (12개월 전 값이 있는 달만)."""
+    d = dict(months)
+    return [(p, round((v / d[_shift(p, -12)] - 1) * 100, 2)) for p, v in months if _shift(p, -12) in d and d[_shift(p, -12)]]
+
+
+def rate_price_relation(rate: list[tuple[str, float]], price: list[tuple[str, float]]) -> list[tuple[str, str]]:
+    """G2: 달마다 기준금리 12개월 변화 방향과 아파트값 전년비 방향 → 동행 | 역행 | 금리 동결.
+    인상기(+)·상승(+) 또는 인하기(-)·하락(-)이면 동행. 금리가 1년 전과 같으면 금리 동결."""
+    r = dict(rate)
+    out = []
+    for p, py in yoy_series(price):
+        prev = _shift(p, -12)
+        if p not in r or prev not in r:
+            continue
+        dr = r[p] - r[prev]
+        if abs(dr) < 1e-9:
+            out.append((p, "금리 동결"))
+        elif py == 0:
+            continue
+        else:
+            out.append((p, "동행" if (dr > 0) == (py > 0) else "역행"))
+    return out

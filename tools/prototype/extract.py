@@ -33,6 +33,8 @@ out['cx_deals'] = select(db, f"""SELECT apt_seq, apt_name, contract_date::text c
  FROM deals WHERE apt_seq IN ({sl}) AND area_group IN (84,85) ORDER BY contract_date""")
 out['cx_rent'] = select(db, f"""SELECT apt_seq, contract_month m, area_group, n_jeonse, jeonse_median_10k, n_jeonse_new, jeonse_new_median_10k, n_jeonse_renew
  FROM rent_monthly WHERE apt_seq IN ({sl}) AND area_group IN (84,85) ORDER BY contract_month""")
+out['cx_phase'] = select(db, f"""SELECT apt_seq, area_group, phase, chg_12m, up_months, down_months, last3
+ FROM complex_metrics WHERE apt_seq IN ({sl}) AND area_group IN (84,85)""")
 # E. R-ONE 주간 지수 (rone_weekly, jobs/rone.py)
 out['rone'] = select(db, """SELECT w.stat, w.cls_id, r.full_name, r.region_code, w.week_id, w.week_date::text d, w.value
  FROM rone_weekly w JOIN rone_regions r USING (cls_id)
@@ -46,7 +48,7 @@ out['macro'] = select(db, """SELECT series, period, value FROM macro_monthly
  WHERE period >= to_char(now() - interval '26 months', 'YYYYMM') ORDER BY series, period""")
 # G. 유동성·소득·집값 (G1): 2005년부터 전체
 out['g1'] = select(db, """SELECT series, period, value FROM macro_monthly
- WHERE series IN ('m2', 'household_income', 'apt_kb_nat', 'apt_kb_seoul') AND period >= '2005' ORDER BY series, period""")
+ WHERE series IN ('m2', 'household_income', 'apt_kb_nat', 'apt_kb_seoul', 'base_rate') AND period >= '2004' ORDER BY series, period""")
 out['seqs'] = SEQS
 out['regions'] = {k: v for k, v in REGIONS.items()}
 json.dump(out, open(OUT / 'raw.json', 'w'), ensure_ascii=False, default=str)
