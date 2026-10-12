@@ -2,6 +2,7 @@
 
     python -m jobs.rone weekly     # 마지막으로 받은 주 다음부터 이번 주까지 (매주 목요일 발표 뒤)
     python -m jobs.rone backfill   # 지역마다 전체 시계열 (2012년~). 이미 있는 행은 덮어쓴다
+    python -m jobs.rone breadth --weeks 8   # 최근 N주의 전국·수도권 상승·하락 지역 수 (rone_breadth, 0011)
 
 같은 (stat, cls_id, week_id)는 덮어쓰므로 몇 번을 다시 돌려도 된다(발표 후 수정치 반영).
 """
@@ -17,7 +18,8 @@ from zoneinfo import ZoneInfo
 from collector.db import Db, DbError, connect, lit, select
 from collector.regions import REGIONS
 from collector.sources.molit import ApiError, QuotaExceeded
-from collector.sources.rone import TABLES, Point, fetch_series, fetch_week, keep, map_regions, weeks_between
+from collector.market import breadth
+from collector.sources.rone import CAPITAL_PREFIXES, TABLES, Point, fetch_series, fetch_week, keep, map_regions, weeks_between
 
 KST = ZoneInfo("Asia/Seoul")
 CHUNK = 1000
@@ -43,6 +45,46 @@ def upsert(db: Db, stat: str, pts: list[Point]) -> int:
     return len(pts)
 
 
+def store_breadth(db: Db, stat: str, cur: list[Point], prev: list[Point]) -> None:
+    """한 주 전체 응답(전국 모든 지역)과 직전 발표 주 → 전국·수도권 상승·하락 말단 지역 수."""
+    c = {p.full_name: p.value for p in cur}
+    pv = {p.full_name: p.value for p in prev}
+    w = cur[0]
+    vals = []
+    for scope, keep_name in (("전국", lambda n: True), ("수도권", lambda n: n.split(">")[0] in CAPITAL_PREFIXES)):
+        n, up, down = breadth({k: v for k, v in c.items() if keep_name(k)}, {k: v for k, v in pv.items() if keep_name(k)})
+        vals.append(f"({lit(stat)}, {lit(w.week_id)}, {lit(w.week_date)}, {lit(scope)}, {n}, {up}, {down})")
+    db.query("INSERT INTO rone_breadth (stat, week_id, week_date, scope, n, n_up, n_down) VALUES " + ", ".join(vals) +
+             " ON CONFLICT (stat, week_id, scope) DO UPDATE SET n = EXCLUDED.n, n_up = EXCLUDED.n_up, n_down = EXCLUDED.n_down;")
+
+
+def prev_published(stat: str, d: date) -> list[Point]:
+    """d 주 직전의 발표 주 (추석처럼 건너뛴 주가 있으면 그 앞 주)."""
+    for back in (7, 14, 21):
+        pts = fetch_week(stat, weeks_between(d - timedelta(days=back), d - timedelta(days=back))[0])
+        if pts:
+            return pts
+    return []
+
+
+def run_breadth(db: Db, weeks: int, today: date) -> int:
+    rc = 0
+    for stat in ("sale", "jeonse"):
+        for wk in weeks_between(today - timedelta(days=7 * weeks), today):
+            try:
+                cur = fetch_week(stat, wk)
+                if cur:
+                    store_breadth(db, stat, cur, prev_published(stat, cur[0].week_date))
+                    print(f"  breadth {stat} {wk}: 저장")
+            except QuotaExceeded as e:
+                print(f"  breadth {stat} {wk}: 호출 한도 초과로 중단: {e}", file=sys.stderr)
+                return 2
+            except (ApiError, DbError) as e:
+                print(f"  breadth {stat} {wk}: 실패 {e}", file=sys.stderr)
+                rc = 1
+    return rc
+
+
 def run_weekly(db: Db, today: date) -> int:
     rc = 0
     for stat in TABLES:
@@ -50,7 +92,10 @@ def run_weekly(db: Db, today: date) -> int:
         start = date.fromisoformat(last) + timedelta(days=7) if last else today - timedelta(days=21)
         for wk in weeks_between(start, today):
             try:
-                n = upsert(db, stat, fetch_week(stat, wk))
+                pts = fetch_week(stat, wk)
+                n = upsert(db, stat, pts)
+                if pts and stat in ("sale", "jeonse"):
+                    store_breadth(db, stat, pts, prev_published(stat, pts[0].week_date))
             except QuotaExceeded as e:
                 print(f"  {stat} {wk}: 호출 한도 초과로 중단: {e}", file=sys.stderr)
                 return 2
@@ -98,12 +143,14 @@ def _latest_points(stat: str) -> list[Point]:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("mode", choices=["weekly", "backfill"])
+    ap.add_argument("mode", choices=["weekly", "backfill", "breadth"])
+    ap.add_argument("--weeks", type=int, default=8, help="breadth 모드: 최근 몇 주")
     ap.add_argument("--db", choices=["api", "psql"])
     a = ap.parse_args(argv)
     db = connect(a.db)
     t0 = time.monotonic()
-    rc = run_weekly(db, datetime.now(KST).date()) if a.mode == "weekly" else run_backfill(db)
+    today = datetime.now(KST).date()
+    rc = run_weekly(db, today) if a.mode == "weekly" else run_backfill(db) if a.mode == "backfill" else run_breadth(db, a.weeks, today)
     print(f"[rone] {a.mode} done in {time.monotonic() - t0:.0f}s rc={rc}")
     return rc
 

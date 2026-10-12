@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "weekly | backfill"
+        description: "weekly | backfill | breadth"
         default: "weekly"
 
 permissions:
@@ -39,5 +39,8 @@ jobs:
           PYTHONUNBUFFERED: "1"
           MODE: ${{ inputs.mode || 'weekly' }}
         run: |
-          case "$MODE" in weekly|backfill) ;; *) echo "알 수 없는 mode: $MODE"; exit 1 ;; esac
-          python -m jobs.rone "$MODE"
+          case "$MODE" in weekly|backfill|breadth) ;; *) echo "알 수 없는 mode: $MODE"; exit 1 ;; esac
+          rc=0
+          python -m jobs.rone "$MODE" || rc=$?
+          python -m jobs.market || rc=$?   # 국면·체크리스트 신호 (region_phase, market_signals)
+          exit $rc
