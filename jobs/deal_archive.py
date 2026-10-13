@@ -2,6 +2,7 @@
 오래된 매매 원본을 GitHub Releases 의 월별 CSV.gz (`deals_YYYYMM.csv.gz`) 로 옮기고 DB 에는 최근 2년만 둔다.
 
     python -m jobs.deal_archive export --months 202001-202409 --archive gh   # DB → 파일 (DB 는 읽기만)
+    python -m jobs.deal_archive anchor --months 202001-202409 --archive gh   # 파일 → 과거 고정값 파일 (DB 안 씀)
 
 파일 하나 = 계약월 1개 × 수도권 전체 시군구. 올린 뒤 다시 내려받아 행 수를 DB 와 맞춰 본다.
 DB 에서 지우는 단계는 따로(사용자 확인 뒤) 둔다. 종료 코드: 0 정상, 1 불일치·실패.
@@ -16,6 +17,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from collector.archive import asset_name, decode, encode, open_store
+from collector.deal_anchor import ANCHOR_COLUMNS, REGION_MONTH_COLUMNS, anchors, region_months
 from collector.db import Db, DbError, connect, lit, select
 from collector.regions import select_regions
 from jobs.daily import parse_months
@@ -50,9 +52,25 @@ def run_export(db: Db, store, months: list[str], regions: list[str]) -> int:
     return 1 if bad else 0
 
 
+def run_anchor(store, months: list[str]) -> int:
+    rows: list[dict] = []
+    for m in months:
+        data = store.get(asset_name("deal", m))
+        if data is None:
+            print(f"  {asset_name('deal', m)} 없음 (export 먼저)", file=sys.stderr)
+            return 1
+        rows += decode(data)
+    a, rm = anchors(rows), region_months(rows)
+    store.put("deal_anchor.csv.gz", encode(a, ANCHOR_COLUMNS))
+    store.put("deal_region_month.csv.gz", encode(rm, REGION_MONTH_COLUMNS))
+    print(f"  보관 {len(rows):,}행 → deal_anchor {len(a):,}행 (전고점 구간 {sum(1 for x in a if x['peak_10k']):,}), "
+          f"deal_region_month {len(rm):,}행 ({months[0]}~{months[-1]})")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("step", choices=["export"])
+    ap.add_argument("step", choices=["export", "anchor"])
     ap.add_argument("--months", required=True)
     ap.add_argument("--regions", default="sudogwon")
     ap.add_argument("--archive")
@@ -60,6 +78,8 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     print(f"[deal_archive] {a.step} {a.months} {datetime.now(KST):%Y-%m-%d %H:%M}")
     try:
+        if a.step == "anchor":
+            return run_anchor(open_store(a.archive), parse_months(a.months))
         return run_export(connect(a.db), open_store(a.archive), parse_months(a.months), select_regions(a.regions))
     except DbError as e:
         print(f"[deal_archive] 실패: {e}", file=sys.stderr)

@@ -1,5 +1,5 @@
 # 매매 원본 보관 (jobs/deal_archive.py, 저장 구조 C): 오래된 달을 GitHub Releases(raw-data) 의 deals_YYYYMM.csv.gz 로 올린다.
-# DB 는 읽기만 한다(무료 플랜 읽기 전용 상태에서도 돈다). 수동 실행.
+# 이어서 보관 파일로 과거 고정값(deal_anchor·deal_region_month CSV)을 만든다. DB 는 읽기만 한다(읽기 전용 상태에서도 돈다). 수동 실행.
 name: deal-archive
 
 on:
@@ -35,4 +35,6 @@ jobs:
           GH_REPO: ${{ github.repository }}
           PYTHONUNBUFFERED: "1"
           MONTHS: ${{ inputs.months || '202001-202409' }}
-        run: python -m jobs.deal_archive export --months "$MONTHS" --archive gh
+        run: |
+          python -m jobs.deal_archive export --months "$MONTHS" --archive gh
+          python -m jobs.deal_archive anchor --months "$MONTHS" --archive gh   # 과거 고정값(전고점·B2·A6, 월별 거래 수)
