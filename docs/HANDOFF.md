@@ -98,6 +98,14 @@ curl -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
 - 단지 연결은 이 작업 환경에서 실행: K-apt 목록 10,211개(83곳) 완료, complexes·info·match는 백그라운드(`/tmp/claude-0/kapt_*.log`)
 - 확인할 것: 오늘 밤 daily-snapshot(20:47 UTC)이 러너에서 공공데이터포털에 접속되는지
 
+### 역전세 D3·실질 가격 A6 (2026-10-13 작성)
+
+- `0016_reverse_real.sql`(Supabase 적용) + `sql/metrics.sql`: `complex_metrics`에 jeonse_24m_10k·jeonse_24m_n·reverse_risk·reserve_10k·real_ref_10k·base2020_10k·real_chg_2020
+- D3 (📖 p.153): 지금 전세(당월·전월 신규, 없으면 전체) < 24개월 전 ±1개월 전세 중앙값(2건 이상)이면 위험, 대비금 = 전세 × 10%. 전월세 이력이 서울만이라 경기·인천은 판정 못 함. `market_signals.d3_reverse_share` = 서울 위험 비율
+- A6 (📖 p.108~110): ECOS `cpi` 901Y009/0(2020=100). 실질 시세 = 기준 시세 ÷ CPI × 100, 2020년 1분기 중개 거래 중앙값 대비 실질 변화. 예: 헬리오시티 84㎡ 17.3억 → 30.1억, 실질 +44.8%
+- **주의**: 경기 백필로 deals 가 120만 건을 넘어 `jobs.metrics` 전체 계산이 Management API(이 작업 환경)에서 시간 초과. Actions(psql)에서는 제한 없음. 이 환경에서 확인할 때는 시군구 하나로 잘라서 돌린다
+- 2026-10-13: 시안 예시 단지 지역만 부분 계산(송파 등). 전체 값은 PR 병합 후 매일 계산에서 채워진다
+
 ### 급지 E1: 합의된 방식 (2026-10-13, 세대수 들어오면 최종 확정 → 그 뒤 B5 ②·시안)
 
 사용자와 합의한 것 (분석만 했고 코드·DB·시안에는 아직 없음. 분석 스크립트 결과는 대화에만):
