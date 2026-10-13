@@ -14,10 +14,10 @@ TODAY = date(2026, 10, 12)
 def _db():
     db = PsqlDb(URL)
     db.query("DROP TABLE IF EXISTS deal_events, deals, rent_events, rents, snapshot_runs, rent_monthly, archive_cells, complex_metrics, "
-             "macro_monthly, deal_anchor, deal_region_month, region_phase, market_signals, rone_weekly, rone_regions CASCADE;")
+             "macro_monthly, deal_anchor, deal_region_month, region_phase, market_signals, rone_weekly, rone_regions, complexes, kapt_complexes CASCADE;")
     for m in ("0001_deals.sql", "0005_snapshot_runs.sql", "0006_rents.sql", "0007_rent_archive.sql", "0010_metrics.sql",
               "0009_rone_weekly.sql", "0011_market.sql", "0012_macro.sql", "0013_macro_annual.sql", "0014_complex_phase.sql", "0015_quadrant_strength.sql",
-              "0016_reverse_real.sql", "0019_deal_anchor.sql"):
+              "0016_reverse_real.sql", "0008_complexes.sql", "0019_deal_anchor.sql", "0020_turnover_e3.sql"):
         db.query((ROOT / "db" / "migrations" / m).read_text(encoding="utf-8"))
     return db
 
@@ -79,3 +79,30 @@ def test_metrics_with_deal_anchor():
     assert d["high_10k"] == 200000 and str(d["high_date"]) == "2021-08-01" and d["base2020_10k"] == 90000
     prev = {r["price_10k"]: r["prev_high_10k"] for r in select(db, "SELECT price_10k, prev_high_10k FROM deals WHERE apt_seq = 'D'")}
     assert prev == {150000: 200000, 160000: 200000, 170000: 200000}   # 보관 구간 최고가가 전고점
+
+
+def test_metrics_turnover_e3():
+    """C2 회전율(세대수 대비 월 거래), E3 같은 시군구에서 ㎡당 10~40% 비싼 단지."""
+    if not URL:
+        return
+    db = _db()
+    db.query("INSERT INTO kapt_complexes (kapt_code, kapt_name, region_code, households, listed_at) VALUES ('KA', 'a', '11680', 200, '2026-10-01'), ('KB', 'b', '11680', 1000, '2026-10-01');")
+    db.query("INSERT INTO complexes (apt_seq, apt_name, region_code, umd_name, kapt_code, updated_at) VALUES "
+             "('A', 'a', '11680', '역삼동', 'KA', '2026-10-01'), ('B', 'b', '11680', '역삼동', 'KB', '2026-10-01'), "
+             "('C', 'c', '11680', '대치동', NULL, '2026-10-01');")
+    # A: 2025-09~2026-08 에 12건(해제 1건 빼고) → 월 1건 / 200세대 = 0.5% → 꽤 괜찮음. 기준 시세 10억
+    for mth in range(9, 21):
+        y, mm = 2025 + (mth - 1) // 12, (mth - 1) % 12 + 1
+        _deal(db, "A", f"{y}-{mm:02d}-10", 100000)
+    _deal(db, "A", "2026-08-11", 100000, cancelled=True)
+    for d in ("2026-09-01", "2026-09-10", "2026-10-01"):
+        _deal(db, "A", d, 100000)
+        _deal(db, "B", d, 120000)      # B: ㎡당 20% 비쌈 → A 의 E3
+        _deal(db, "C", d, 200000)      # C: 100% 비쌈 → 제외
+    db.query(render(TODAY, 4000))
+    m = {r["apt_seq"]: r for r in select(db, "SELECT * FROM complex_metrics")}
+    a = m["A"]
+    assert (a["households"], float(a["turnover_pct"]), a["turnover_state"]) == (200, 0.5, "꽤 괜찮음")
+    assert m["B"]["turnover_state"] == "적음" and m["C"]["turnover_pct"] is None
+    assert (a["e3_seqs"], a["e3_target_10k"]) == ("B", 120000)
+    assert m["B"]["e3_seqs"] is None          # C 는 B 보다 67% 비싸 범위 밖

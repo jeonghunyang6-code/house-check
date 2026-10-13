@@ -72,7 +72,9 @@ for seq in d['seqs']:
     gr = next((g for g in d.get('cx_grade', []) if g['apt_seq'] == seq), None)
     cx.append({'grade': gr and gr['grade'] is not None and {k: gr[k] for k in ('umd_name', 'grade', 'value_10k', 'q1_10k', 'q3_10k', 'n_complex', 'old_share', 'flag_rebuild', 'flag_gap', 'new_big_name', 'new_big_10k', 'asof')},
                'hh': gr and gr['households'],
-               'm': m84 and {k: m84[k] for k in ('jeonse_24m_10k', 'jeonse_24m_n', 'reverse_risk', 'reserve_10k', 'real_ref_10k', 'base2020_10k', 'real_chg_2020')},
+               'm': m84 and {k: m84[k] for k in ('jeonse_24m_10k', 'jeonse_24m_n', 'reverse_risk', 'reserve_10k', 'real_ref_10k', 'base2020_10k', 'real_chg_2020',
+               'turnover_pct', 'turnover_state', 'e3_target_10k', 'e3_chg_12m', 'rel_strength_e3')},
+               'e3': m84 and m84['e3_seqs'] and [n['apt_name'] for n in d.get('e3_names', []) if n['apt_seq'] in m84['e3_seqs'].split(',')],
                'phase': ph and {k: ph[k] for k in ('phase', 'chg_12m', 'up_months', 'down_months', 'last3', 'region_chg_12m', 'rel_strength')}, 'seq': seq, 'name': name, 'region': REG[seq[:5]], 'P': P, 'T': T, 'C': C, 'conf': conf, 'cn': cn if C else 0,
                'rec': rec, 'pattern': pattern, 'J': J, 'jn': jn, 'jsrc': '신규' if new else '전체', 'ratio': ratio, 'band': nb,
                'n12': n12, 'ref': ref,
@@ -145,10 +147,10 @@ json.dump({'monthly': monthly, 'cx': cx, 'today': today,
            'weekly': weekly(), 'signals': {r['key']: r for r in d['signals']},
            'macro': {k: [[r['period'], float(r['value'])] for r in d['macro'] if r['series'] == k] for k in {r['series'] for r in d['macro']}},
            'g1': g1(), 'g2': g2(),
-           # ⑦ 후보 단지: [단지, 시군구, 동, 면적군, 기준 시세(만원), 신뢰도, 국면, 급지, 재건축 기대, 동 안 격차, 신축 대단지, 세대수, 준공]
+           # ⑦ 후보 단지: [단지, 시군구, 동, 면적군, 기준 시세(만원), 신뢰도, 국면, 급지, 재건축 기대, 동 안 격차, 신축 대단지, 세대수, 준공, 월 회전율 %]
            'cand': [[r['apt_name'], r['region_code'], r['umd_name'], r['area_group'], r['ref_10k'], r['confidence'], r['phase'], r['grade'],
                      bool(r['flag_rebuild']), bool(r['flag_gap']), r['new_big_name'] == r['apt_name'] if r['new_big_name'] else False,
-                     r['households'], r['build_year']] for r in d.get('cand', [])],
+                     r['households'], r['build_year'], r['turnover_pct'] and float(r['turnover_pct'])] for r in d.get('cand', [])],
            'geo': json.load(open(ROOT / 'data/geo/sudogwon_sgg_20260701.json')),
            'region_names': REGIONS, 'asof': TODAY.isoformat()}, open(OUT / 'data.json', 'w'), ensure_ascii=False)
 for c in cx: print(c['name'], c['region'], c['P'], c['T'], c['C'], c['conf'], c['cn'], c['pattern'], c['rec'] and round(c['rec'],2), c['J'], c['jn'], c['ratio'] and round(c['ratio']), c['band'], c['n12'])
