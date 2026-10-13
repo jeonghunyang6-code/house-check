@@ -24,5 +24,6 @@ def test_anchors_peak_trough_hist_p20():
 def test_region_months():
     rows = [_r("2020-01-05", 100), _r("2020-01-06", 300, area="85.0"), _r("2020-01-07", 900, area="59.9"),
             _r("2020-01-08", 50, t="직거래"), _r("2020-01-09", 70, c="1")]
-    (m,) = region_months(rows)
+    sido, m = region_months(rows)
+    assert sido["region_code"] == "11" and sido["n_all"] == 5
     assert (m["n_all"], m["n_broker"], m["n_direct"], m["n_cancelled"], m["p84_median_10k"]) == (5, 3, 1, 1, 200)

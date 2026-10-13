@@ -5,7 +5,7 @@ sql/metrics.sql 의 정의와 같게 계산한다 (중개·비해제, area_group
 - hist_high: 보관 구간의 최고가(같으면 이른 계약일) → 전고점(prev_high)·역대 최고(high_10k)에 DB 구간과 합친다
 - peak / trough: 월별 기준 시세(그 달 포함 3개월 중앙값) 2021-01~2022-06 최고, 2022-07~2023-06 최저 (B2)
 - p20: 2020년 1분기 중앙값 (A6)
-deal_region_month: 시군구 × 계약월 거래 수, 전용 84~85㎡(area_group) 중개 중앙값 (시안 월별 차트용, extract.py 와 같은 정의)
+deal_region_month: 시군구(와 시도 2자리 합계) × 계약월 거래 수, 전용 84~85㎡(area_group) 중개 중앙값 (시안 월별 차트용, extract.py 와 같은 정의)
 """
 
 from __future__ import annotations
@@ -78,17 +78,18 @@ def anchors(rows: list[dict]) -> list[dict]:
 def region_months(rows: list[dict]) -> list[dict]:
     g: dict[tuple[str, str], dict] = defaultdict(lambda: {"n_all": 0, "n_broker": 0, "n_direct": 0, "n_cancelled": 0, "p84": []})
     for r in rows:
-        x = g[(r["region_code"], r["contract_month"])]
-        x["n_all"] += 1
-        if r["is_cancelled"] in ("1", "True", "true", "t"):
-            x["n_cancelled"] += 1
-            continue
-        if r["deal_type"] == "중개":
-            x["n_broker"] += 1
-            if math.floor(float(r["area_m2"])) in (84, 85):
-                x["p84"].append(int(r["price_10k"]))
-        else:
-            x["n_direct"] += 1
+        for rc in (r["region_code"], r["region_code"][:2]):   # 시군구 + 시도(2자리) 합계: 중앙값은 시군구끼리 합칠 수 없다
+            x = g[(rc, r["contract_month"])]
+            x["n_all"] += 1
+            if r["is_cancelled"] in ("1", "True", "true", "t"):
+                x["n_cancelled"] += 1
+                continue
+            if r["deal_type"] == "중개":
+                x["n_broker"] += 1
+                if math.floor(float(r["area_m2"])) in (84, 85):
+                    x["p84"].append(int(r["price_10k"]))
+            else:
+                x["n_direct"] += 1
     return [dict(region_code=k[0], contract_month=k[1], n_all=v["n_all"], n_broker=v["n_broker"], n_direct=v["n_direct"],
                  n_cancelled=v["n_cancelled"], p84_median_10k=round(median(v["p84"])) if v["p84"] else None)
             for k, v in sorted(g.items())]

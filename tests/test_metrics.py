@@ -13,8 +13,11 @@ TODAY = date(2026, 10, 12)
 
 def _db():
     db = PsqlDb(URL)
-    db.query("DROP TABLE IF EXISTS deal_events, deals, rent_events, rents, snapshot_runs, rent_monthly, archive_cells, complex_metrics CASCADE;")
-    for m in ("0001_deals.sql", "0005_snapshot_runs.sql", "0006_rents.sql", "0007_rent_archive.sql", "0010_metrics.sql"):
+    db.query("DROP TABLE IF EXISTS deal_events, deals, rent_events, rents, snapshot_runs, rent_monthly, archive_cells, complex_metrics, "
+             "macro_monthly, deal_anchor, deal_region_month, region_phase, market_signals, rone_weekly, rone_regions CASCADE;")
+    for m in ("0001_deals.sql", "0005_snapshot_runs.sql", "0006_rents.sql", "0007_rent_archive.sql", "0010_metrics.sql",
+              "0009_rone_weekly.sql", "0011_market.sql", "0012_macro.sql", "0013_macro_annual.sql", "0014_complex_phase.sql", "0015_quadrant_strength.sql",
+              "0016_reverse_real.sql", "0019_deal_anchor.sql"):
         db.query((ROOT / "db" / "migrations" / m).read_text(encoding="utf-8"))
     return db
 
@@ -60,3 +63,19 @@ def test_metrics_end_to_end():
     # 전고점: 18억 거래 직전 최고가는 17억 (직거래 999,999 와 해제 990,000 은 제외)
     ph = {r["price_10k"]: r["prev_high_10k"] for r in select(db, "SELECT price_10k, prev_high_10k FROM deals WHERE apt_seq = 'A'")}
     assert ph[180000] == 170000 and ph[160000] == 150000 and ph[150000] in (None, 150000)
+
+
+def test_metrics_with_deal_anchor():
+    """저장 구조 C: 2년 전 거래는 DB 에 없고 deal_anchor 에 고정값만 있다."""
+    if not URL:
+        return
+    db = _db()
+    db.query("INSERT INTO deal_anchor VALUES ('D', 84, 200000, '2021-08-01', 190000, '202108', 120000, '202212', 90000);")
+    _deal(db, "D", "2026-09-01", 150000); _deal(db, "D", "2026-09-10", 160000); _deal(db, "D", "2026-10-01", 170000)
+    db.query(render(TODAY, 4000))
+    d = select(db, "SELECT * FROM complex_metrics WHERE apt_seq = 'D'")[0]
+    assert (d["ref_10k"], d["peak_10k"], d["peak_month"], d["trough_10k"], d["trough_month"]) == (160000, 190000, "202108", 120000, "202212")
+    assert d["pattern"] == "회복 지연" and float(d["recovery"]) == 0.571
+    assert d["high_10k"] == 200000 and str(d["high_date"]) == "2021-08-01" and d["base2020_10k"] == 90000
+    prev = {r["price_10k"]: r["prev_high_10k"] for r in select(db, "SELECT price_10k, prev_high_10k FROM deals WHERE apt_seq = 'D'")}
+    assert prev == {150000: 200000, 160000: 200000, 170000: 200000}   # 보관 구간 최고가가 전고점

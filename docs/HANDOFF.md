@@ -98,6 +98,14 @@ curl -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
 - 단지 연결은 이 작업 환경에서 실행: K-apt 목록 10,211개(83곳) 완료, complexes·info·match는 백그라운드(`/tmp/claude-0/kapt_*.log`)
 - 확인할 것: 오늘 밤 daily-snapshot(20:47 UTC)이 러너에서 공공데이터포털에 접속되는지
 
+### 저장 구조 C: 매매 원본 2년만 DB (2026-10-14, 진행 중)
+
+- 원인: Supabase 무료 플랜 DB 크기 905MB / 500MB → 프로젝트 읽기 전용, 디스크도 꽉 참(WAL 940MB). 사용자: 무료 유지, C 선택
+- 방식: 2024-10 이전 매매 원본은 Releases `raw-data` 의 `deals_YYYYMM.csv.gz`(전월세와 같은 방식). 과거가 필요한 값은 `deal_anchor`(역대 최고·B2 고점/저점·A6 2020년 1분기), 시안 월별 차트는 `deal_region_month`(시군구 + 시도 2자리 합계) (0019)
+- `sql/metrics.sql`: 전고점·역대 최고는 DB 구간과 deal_anchor 를 합치고, B2·A6 은 deal_anchor 우선. 로컬 Postgres 16 으로 tests/test_metrics.py 두 개 통과(HC_TEST_PG_URL)
+- 순서: ① `deal-archive` 워크플로 export,anchor (DB 읽기만) ② 0019 적용 + `load` ③ `prune --before 202410`(보조 색인 삭제 → 남길 행만 새 표로 바꿔 끼우기 → 색인 재생성, 지우기 전 달마다 DB 행 수 = 보관 파일 행 수 확인) — ②③은 `SET SESSION CHARACTERISTICS AS TRANSACTION READ WRITE` 로 세션만 쓰기 허용(관리 API 에서 되는지 미확인), **사용자 확인 뒤**
+- 남은 것: 매달 2년이 지난 달을 보관·삭제하고 deal_anchor 역대 최고를 갱신하는 `roll` 단계(daily), 시안 단지 차트는 2년만 보임
+
 ### 예산 계산기 I1·I4 (2026-10-13 작성, 시안 ⑥)
 
 - 입력 4개(네이버 대출 계산기처럼 단순하게, 사용자 요청): 종잣돈, 은행 대출 가능액(LTV·DSR은 은행·정책마다 달라 직접 입력, **입력값 그대로 대출로 씀**), 금리(기본값 = market_signals.g3 주담대 금리), 상환 기간. 초기화 버튼
