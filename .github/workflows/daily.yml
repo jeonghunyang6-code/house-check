@@ -59,6 +59,15 @@ jobs:
           GH_REPO: ${{ github.repository }}
           PYTHONUNBUFFERED: "1"
         run: python -m jobs.rent_archive daily
+      - name: 매매 원본 보관 (2년 지난 달)
+        if: ${{ !cancelled() && !inputs.dry_run }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          HC_DB_BACKEND: psql
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PYTHONUNBUFFERED: "1"
+        run: python -m jobs.deal_archive roll --archive gh   # 저장 구조 C: DB 에는 최근 25개월만
       - name: 단지 지표 계산
         if: ${{ !cancelled() && !inputs.dry_run }}
         env:

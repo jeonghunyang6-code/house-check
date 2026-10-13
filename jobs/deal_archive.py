@@ -5,6 +5,7 @@
     python -m jobs.deal_archive anchor --months 202001-202409 --archive gh   # 파일 → 과거 고정값 파일 (DB 안 씀)
     python -m jobs.deal_archive load --archive gh                            # 고정값 파일 → deal_anchor·deal_region_month (DB 씀)
     python -m jobs.deal_archive prune --before 202410                        # DB 에서 보관한 달을 지운다 (사용자 확인 뒤)
+    python -m jobs.deal_archive roll --archive gh                            # 매일: 2년 지난 달을 보관 → 고정값 갱신 → DB 에서 뺀다
 
 파일 하나 = 계약월 1개 × 수도권 전체 시군구. 올린 뒤 다시 내려받아 행 수를 DB 와 맞춰 본다.
 DB 에서 지우는 단계는 따로(사용자 확인 뒤) 둔다. 종료 코드: 0 정상, 1 불일치·실패.
@@ -15,7 +16,7 @@ from __future__ import annotations
 import argparse
 import sys
 import time
-from datetime import datetime
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from collector.archive import asset_name, decode, encode, open_store
@@ -149,9 +150,62 @@ def run_prune(db: Db, store, before: str) -> int:
     return 0
 
 
+KEEP_MONTHS = 24   # DB 에 남기는 기간: 이번 달 포함 25개월 (2026-10 → 202410~)
+
+
+def cutoff(today: date) -> str:
+    """이 계약월보다 이전은 DB 밖(보관 파일)."""
+    y, m = today.year - KEEP_MONTHS // 12, today.month - KEEP_MONTHS % 12
+    if m < 1:
+        y, m = y - 1, m + 12
+    return f"{y}{m:02d}"
+
+
+def roll_sql(month: str, region_rows: list[dict]) -> str:
+    """보관 파일을 올린 뒤 한 트랜잭션: 역대 최고 갱신, 월별 거래 수 추가, DB 에서 삭제."""
+    m = lit(month)
+    vals = ",\n".join("(" + ", ".join("NULL" if r[c] == "" else lit(r[c]) for c in REGION_MONTH_COLUMNS) + ")" for r in region_rows)
+    return "\n".join([READ_WRITE, "BEGIN;", f"""
+INSERT INTO deal_anchor (apt_seq, area_group, hist_high_10k, hist_high_date)
+SELECT DISTINCT ON (apt_seq, area_group) apt_seq, area_group, price_10k, contract_date FROM deals
+WHERE contract_month = {m} AND NOT is_cancelled AND deal_type = '중개'
+ORDER BY apt_seq, area_group, price_10k DESC, contract_date
+ON CONFLICT (apt_seq, area_group) DO UPDATE SET hist_high_10k = EXCLUDED.hist_high_10k, hist_high_date = EXCLUDED.hist_high_date
+WHERE EXCLUDED.hist_high_10k > deal_anchor.hist_high_10k;""",
+        (f"INSERT INTO deal_region_month ({', '.join(REGION_MONTH_COLUMNS)}) VALUES\n{vals}\n"
+         "ON CONFLICT (region_code, contract_month) DO UPDATE SET " +
+         ", ".join(f"{c} = EXCLUDED.{c}" for c in REGION_MONTH_COLUMNS[2:]) + ";") if region_rows else "",
+        f"DELETE FROM deal_events e USING deals d WHERE e.deal_key = d.deal_key AND d.contract_month = {m};",
+        f"DELETE FROM deals WHERE contract_month = {m};",
+        "COMMIT;"])
+
+
+def run_roll(db: Db, store, regions: list[str], today: date) -> int:
+    if not select(db, "SELECT to_regclass('deal_anchor') IS NOT NULL AND EXISTS (SELECT 1 FROM deal_anchor) AS ok")[0]["ok"]:
+        print("  deal_anchor 가 비어 있음: 저장 구조 C 설정(load·prune) 전이라 건너뜀")
+        return 0
+    cut = cutoff(today)
+    months = sorted(r["m"] for r in select(db, f"SELECT DISTINCT contract_month AS m FROM deals WHERE contract_month < {lit(cut)}"))
+    if not months:
+        print(f"  {cut} 이전 달 없음")
+        return 0
+    for m in months:
+        rows = month_rows(db, m, regions)
+        name = asset_name("deal", m)
+        store.put(name, encode(rows, DEAL_COLUMNS))
+        back = store.get(name)
+        back_rows = decode(back) if back else []
+        if len(back_rows) != len(rows):
+            print(f"  {name}: DB {len(rows):,}행 ≠ 파일 {len(back_rows):,}행 → DB 는 그대로 둠", file=sys.stderr)
+            return 1
+        db.query(roll_sql(m, region_months(back_rows)))
+        print(f"  {m}: {len(rows):,}행 보관 → 역대 최고·월별 거래 수 갱신 → DB 에서 뺌")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("step", choices=["export", "anchor", "load", "prune"])
+    ap.add_argument("step", choices=["export", "anchor", "load", "prune", "roll"])
     ap.add_argument("--months")
     ap.add_argument("--before", help="prune: 이 계약월 이전을 지운다 (YYYYMM)")
     ap.add_argument("--regions", default="sudogwon")
@@ -164,6 +218,8 @@ def main(argv: list[str] | None = None) -> int:
             return run_anchor(open_store(a.archive), parse_months(a.months))
         if a.step == "load":
             return run_load(connect(a.db), open_store(a.archive))
+        if a.step == "roll":
+            return run_roll(connect(a.db), open_store(a.archive), select_regions(a.regions), datetime.now(KST).date())
         if a.step == "prune":
             return run_prune(connect(a.db), open_store(a.archive), a.before)
         return run_export(connect(a.db), open_store(a.archive), parse_months(a.months), select_regions(a.regions))
