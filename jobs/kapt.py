@@ -26,6 +26,10 @@ from collector.sources.molit import ApiError, QuotaExceeded, fetch_trades
 from jobs.daily import parse_months
 
 KST = ZoneInfo("Asia/Seoul")
+# 2026-10-13: 서버가 "HTTP_ERROR" 본문만 3,377번 연달아 돌려줬는데 작업은 끝까지 호출을 계속했다(한 시간 가까이 헛호출).
+# 연속 실패가 FAIL_STREAK 번이면 PAUSES 초씩 쉬고 같은 단지부터 다시 부른다. 쉬고 나서도 계속 실패하면 멈춘다(rc 2, 다음 실행이 이어서 한다)
+FAIL_STREAK = 20
+PAUSES = (60, 300, 900)
 INFO_COLS = ("addr", "road_addr", "households", "use_date", "dong_cnt", "top_floor", "builder", "heat_type",
              "sale_type", "hh_lt60", "hh_60_85", "hh_85_135", "hh_gt135")
 
@@ -76,13 +80,13 @@ def run_list(db: Db, regions: list[str], today: date) -> int:
     return rc
 
 
-def run_info(db: Db, limit: int, today: date) -> int:
+def run_info(db: Db, limit: int, today: date, sleep=time.sleep) -> int:
     # 하루 호출 한도(2026-10-13 확인: K-apt 기본정보는 하루 약 1,300건에서 429)가 작아서,
     # 실거래 단지와 이미 연결된 단지 → 실거래가 있는 시군구 순으로 먼저 받는다 (세대수가 급지·회전율에 바로 쓰인다)
     todo = [r["kapt_code"] for r in select(db, "SELECT k.kapt_code FROM kapt_complexes k WHERE k.info_at IS NULL "
                                               "ORDER BY EXISTS (SELECT 1 FROM complexes c WHERE c.kapt_code = k.kapt_code) DESC, "
                                               f"k.region_code, k.kapt_code LIMIT {int(limit)}")]
-    done = fail = 0
+    done = fail = streak = pauses = 0
     batch: list[str] = []
 
     def flush() -> None:
@@ -90,7 +94,12 @@ def run_info(db: Db, limit: int, today: date) -> int:
             db.query("BEGIN;\n" + "\n".join(batch) + "\nCOMMIT;")
             batch.clear()
 
-    for code in todo:
+    def left() -> int:
+        return select(db, "SELECT count(*) AS n FROM kapt_complexes WHERE info_at IS NULL")[0]["n"]
+
+    i = 0
+    while i < len(todo):
+        code = todo[i]
         try:
             item = fetch_info(code)
         except QuotaExceeded as e:
@@ -99,16 +108,32 @@ def run_info(db: Db, limit: int, today: date) -> int:
             return 2
         except ApiError as e:
             fail += 1
+            streak += 1
             print(f"  {code}: 실패 {e}", file=sys.stderr)
+            if streak >= FAIL_STREAK:
+                flush()
+                if pauses >= len(PAUSES):
+                    print(f"  기본 정보 {done}개 받음, 실패가 {streak}번 연달아 이어져 중단 (남은 단지 {left()}개)", file=sys.stderr)
+                    return 2
+                print(f"  실패 {streak}번 연속 → {PAUSES[pauses]}초 쉬고 {code}부터 다시", file=sys.stderr)
+                sleep(PAUSES[pauses])
+                pauses += 1
+                streak = 0
+                i -= FAIL_STREAK - 1          # 연속 실패한 단지들을 다시 부른다
+            else:
+                i += 1
             continue
+        streak = 0
+        pauses = 0
         row = info_row(item) if item else {}
         sets = ", ".join(f"{c} = {lit(row.get(c))}" for c in INFO_COLS)
         batch.append(f"UPDATE kapt_complexes SET {sets}, info_at = {lit(today)} WHERE kapt_code = {lit(code)};")
         done += 1
+        i += 1
         if len(batch) >= 200:
             flush()
     flush()
-    print(f"  기본 정보 {done}개 받음, 실패 {fail}, 남은 단지 {select(db, 'SELECT count(*) AS n FROM kapt_complexes WHERE info_at IS NULL')[0]['n']}개")
+    print(f"  기본 정보 {done}개 받음, 실패 {fail}, 남은 단지 {left()}개")
     return 1 if fail else 0
 
 

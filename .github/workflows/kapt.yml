@@ -56,6 +56,6 @@ jobs:
               *) echo "알 수 없는 단계: $s"; exit 1 ;;
             esac
             python -m jobs.kapt "$s" --regions "$REGIONS" --months "$MONTHS" || rc=$?
-            [ "$rc" -eq 2 ] && break   # 호출 한도 초과, 또는 공공데이터포털 연속 접속 실패(Unreachable)
+            [ "$rc" -eq 2 ] && break   # 호출 한도 초과, 공공데이터포털 연속 접속 실패(Unreachable), 또는 info 연속 실패가 쉬어도 안 풀림
           done
           exit $rc
