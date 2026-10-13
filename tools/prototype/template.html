@@ -261,6 +261,23 @@ footer.foot { color: var(--ink-3); font-size: 12px; max-width: 90ch; display: gr
         <div class="sec" id="calcNotes"></div>
       </div>
     </section>
+
+    <section class="col" aria-label="후보 단지 찾기">
+      <div class="label"><span>⑦ 후보 단지 찾기</span><span>수도권</span></div>
+      <div class="screen">
+        <div class="appbar"><h2>예산 안 후보 단지</h2><span class="sub num" id="candCount"></span></div>
+        <form class="calc" id="candForm" autocomplete="off">
+          <label class="calc-row" for="f_budget"><span>볼 수 있는 집값</span><span class="calc-in"><input id="f_budget" inputmode="numeric"><span class="unit">만원</span></span></label>
+          <div class="calc-foot"><button type="button" class="chip" id="f_fromCalc">⑥ 계산기 값 쓰기</button><span class="muted">기준 시세가 예산의 80~100%인 단지</span></div>
+        </form>
+        <div class="chips" role="group" aria-label="지역" id="f_region"></div>
+        <div class="chips" role="group" aria-label="면적" id="f_area"></div>
+        <div class="chips" role="group" aria-label="국면" id="f_phase"></div>
+        <div class="chips" role="group" aria-label="단지 규모" id="f_size"></div>
+        <div class="list" id="candList"></div>
+        <p class="src" id="candSrc"></p>
+      </div>
+    </section>
   </div>
 
   <footer class="foot">
@@ -274,6 +291,16 @@ footer.foot { color: var(--ink-3); font-size: 12px; max-width: 90ch; display: gr
 const D = /*DATA*/null;
 const $ = (s) => document.querySelector(s);
 const eok = (v) => v == null ? '–' : (v / 10000).toFixed(v >= 100000 ? 1 : 2).replace(/\.?0+$/, '') + '억';
+// 수도권·규제지역 주담대 상한(10·15 대책, 블로그로 확인): 15억 이하 6억, 25억 이하 4억, 초과 2억. 실제 한도는 LTV·DSR 과 중 작은 값
+const loanCap = (p) => p == null ? null : p <= 150000 ? 6 : p <= 250000 ? 4 : 2;
+const GRADE_CUTS = [30, 25, 20, 15, 12, 9, 6];
+function gradeFlags(g) {
+  const f = [];
+  if (g.flag_rebuild) f.push('<span class="pill acc">재건축 기대</span>');
+  if (g.new_big_name) f.push(`<span class="pill acc">신축 대단지</span>`);
+  if (g.flag_gap) f.push('<span class="pill warn">동 안 격차 큼</span>');
+  return f;
+}
 const pct = (v, d = 0) => v == null ? '–' : (v).toFixed(d) + '%';
 const md = (m) => m.slice(2, 4) + '.' + m.slice(4);
 const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
@@ -626,6 +653,7 @@ const Calc = {
     const seed = $v('#c_seed'), loan = $v('#c_limit'), rate = $v('#c_rate'), yrs = Math.max(1, $v('#c_years'));
     try { localStorage.setItem(KEY, JSON.stringify(Object.fromEntries(IDS.map(k => [k, $('#' + k).value])))); } catch (e) {}
     const price = Calc.priceFor(seed + loan);
+    window.calcPrice = price; window.dispatchEvent(new CustomEvent('calcprice', { detail: price }));   // ⑦ 후보 단지 찾기가 쓴다
     const pay = Calc.payment(loan * 10000, rate, yrs);
     const interest = pay * yrs * 12 - loan * 10000;
     const tax = Calc.acqTax(price), fee = Calc.brokerFee(price), legal = Calc.legalFee(price), mv = Calc.MOVING;
@@ -646,6 +674,47 @@ const Calc = {
   $('#calc').addEventListener('submit', (e) => e.preventDefault());
   $('#calcReset').addEventListener('click', () => { for (const k of IDS) $('#' + k).value = defaults[k]; draw(); });
   draw();
+})();
+
+/* ⑦ 후보 단지 찾기: 예산(⑥) 안의 단지를 급지 순으로. 같은 급지 안에서는 미래가치 표시(신축 대단지·재건축 기대)가 있는 곳 먼저, 그다음 기준 시세 높은 순 */
+(function () {
+  const rows = (D.cand || []).map(r => ({ name: r[0], rc: r[1], umd: r[2], ag: r[3], ref: r[4], conf: r[5], phase: r[6], grade: r[7], rebuild: r[8], gap: r[9], newbig: r[10], hh: r[11], by: r[12] }));
+  const state = { region: '전체', area: '84형', phase: '전체', size: '300세대 이상' };
+  const AREA = { '전체': () => true, '59형': (a) => a >= 55 && a < 66, '84형': (a) => a >= 80 && a < 90, '중대형': (a) => a >= 90, '소형': (a) => a < 55 };
+  const REG = { '전체': () => true, '서울': (c) => c.startsWith('11'), '경기': (c) => c.startsWith('41'), '인천': (c) => c.startsWith('28') };
+  const PHASES = ['전체', '상승장', '보합장', '하락장'];
+  const chips = (id, list, key) => {
+    $(id).innerHTML = list.map(v => `<button type="button" class="chip" data-v="${v}" aria-pressed="${v === state[key]}">${v}</button>`).join('');
+    $(id).addEventListener('click', (e) => { const b = e.target.closest('.chip'); if (!b) return; state[key] = b.dataset.v; [...$(id).children].forEach(x => x.setAttribute('aria-pressed', x === b)); draw(); });
+  };
+  const SIZE = { '300세대 이상': (h) => h >= 300, '전체 규모': () => true };   // 급지 계산과 같이 소단지는 뒤로 (K-apt 세대수 없는 단지는 300세대 이상에서 빠진다)
+  chips('#f_region', Object.keys(REG), 'region'); chips('#f_area', Object.keys(AREA), 'area'); chips('#f_phase', PHASES, 'phase'); chips('#f_size', Object.keys(SIZE), 'size');
+  const fromCalc = () => { if (window.calcPrice) $('#f_budget').value = Math.round(window.calcPrice); draw(); };
+  $('#f_fromCalc').addEventListener('click', fromCalc);
+  $('#f_budget').addEventListener('input', () => draw());
+  $('#candForm').addEventListener('submit', (e) => e.preventDefault());
+  window.addEventListener('calcprice', () => { if (!$('#f_budget').dataset.touched) fromCalc(); });
+  $('#f_budget').addEventListener('keydown', () => { $('#f_budget').dataset.touched = '1'; });
+  const PH = { '상승장': 'acc', '하락장': 'bad', '보합장': 'none', '일시 반등': 'acc', '일시 조정': 'warn', '추세 불명확': 'none' };
+  function draw() {
+    const budget = parseFloat(String($('#f_budget').value).replace(/,/g, '')) || 0;
+    const list = rows.filter(r => r.ref <= budget && r.ref >= budget * 0.8 && REG[state.region](r.rc) && AREA[state.area](r.ag)
+      && (state.phase === '전체' || r.phase === state.phase) && SIZE[state.size](r.hh || 0))
+      .sort((a, b) => (a.grade || 9) - (b.grade || 9) || ((b.newbig || b.rebuild) - (a.newbig || a.rebuild)) || b.ref - a.ref);
+    $('#candCount').textContent = budget ? `${list.length.toLocaleString()}곳` : '';
+    $('#candList').innerHTML = !budget ? '<p class="muted" style="padding:10px 2px">예산을 넣거나 ⑥ 계산기 값을 쓰세요.</p>'
+      : list.length ? list.slice(0, 60).map(r => {
+        const flags = [r.newbig ? '<span class="pill acc">신축 대단지</span>' : '', r.rebuild ? '<span class="pill acc">재건축 기대</span>' : '', r.gap ? '<span class="pill warn">동 안 격차</span>' : ''].join(' ');
+        return `<div class="row"><span class="name">${r.name}</span><span class="price">${eok(r.ref)}</span>
+          <span class="meta">${(D.region_names[r.rc] || '').replace(/^(서울|경기|인천) /, '')} ${r.umd} · ${r.ag}㎡ · ${r.by ? (2026 - r.by) + '년차' : ''}${r.hh ? ' · ' + Number(r.hh).toLocaleString() + '세대' : ''} · 주담대 최대 ${loanCap(r.ref)}억</span>
+          <span class="st">${r.grade ? `<span class="pill none">${r.grade}급지</span>` : ''} ${r.phase ? `<span class="pill ${PH[r.phase] || 'none'}">${r.phase}</span>` : ''}</span>
+          ${flags.trim() ? `<span class="meta" style="grid-column:1/3">${flags}</span>` : ''}</div>`;
+      }).join('') + (list.length > 60 ? `<p class="muted" style="padding:8px 2px">위 60곳만 보여줍니다 (전체 ${list.length.toLocaleString()}곳).</p>` : '')
+      : '<p class="muted" style="padding:10px 2px">조건에 맞는 단지가 없습니다.</p>';
+    $('#candSrc').textContent = '기준 시세(A1) = 같은 단지·면적 최근 60~180일 중개 거래 중앙값. 급지 = 동 84㎡ 환산 실거래 대표가 8단계(30/25/20/15/12/9/6억). '
+      + '같은 급지 안에서는 신축 대단지·재건축 기대 표시가 있는 곳을 먼저 보여줍니다(미래가치는 급지를 바꾸지 않는다). 주담대 상한은 수도권·규제지역 기준이고 실제 한도는 LTV·DSR 과 중 작은 값입니다.';
+  }
+  if (window.calcPrice) fromCalc(); else draw();
 })();
 
 /* ② 오늘의 실거래 */
@@ -697,7 +766,9 @@ function drawCx(c) {
     <div class="kpi"><span class="k">기준 시세</span><span class="v">${eok(c.C)}</span><span class="d">${c.C ? `최근 거래 ${c.cn}건 · 신뢰도 ${c.conf}` : '최근 180일 거래 3건 미만'}</span></div>
     <div class="kpi"><span class="k">${c.C && c.C >= c.P ? '전고점 대비' : '전고점 회복률'}</span><span class="v">${recLabel(c)}</span><span class="d"><span class="pill ${pc}">${pl}</span></span></div>
     <div class="kpi"><span class="k">전세가율</span><span class="v">${c.ratio == null ? '–' : pct(c.ratio)}</span><span class="d"><span class="pill ${rc}">${rl}</span>${c.band ? ` 정상 ${c.band[0]}~${c.band[1]}%` : ''}</span></div>
-    <div class="kpi"><span class="k">최근 1년 거래</span><span class="v">${c.n12}건</span><span class="d">회전율은 세대수 연결 후</span></div>`;
+    <div class="kpi"><span class="k">최근 1년 거래</span><span class="v">${c.n12}건</span><span class="d">84㎡형${c.hh ? ` · 단지 ${Number(c.hh).toLocaleString()}세대` : ''}</span></div>
+    <div class="kpi"><span class="k">급지 (${c.grade ? c.grade.umd_name : '동'})</span><span class="v">${c.grade ? c.grade.grade + '급지' : '–'}</span><span class="d">${c.grade ? `동 대표가 ${eok(c.grade.value_10k)} · ${gradeFlags(c.grade).join(' ') || '표시 없음'}` : '급지 계산 안 된 동'}</span></div>
+    <div class="kpi"><span class="k">주담대 상한 구간</span><span class="v">${c.C ? '최대 ' + loanCap(c.C) + '억' : '–'}</span><span class="d">${c.C ? `기준 시세 ${eok(c.C)} → ${c.C <= 150000 ? '15억 이하' : c.C <= 250000 ? '15~25억' : '25억 초과'}` : ''}</span></div>`;
   const svg = $('#cxChart'); svg.innerHTML = '';
   const W = 340, H = 210, L = 34, R = 8, T = 10, B = 22;
   const t0 = Date.parse('2020-01-01'), t1 = Date.parse('2026-11-01');
@@ -734,6 +805,15 @@ function drawCx(c) {
   notes.push(c.phase && c.phase.rel_strength != null
     ? `상대강도(B6): 같은 구 단지들의 12개월 중앙값 ${(+c.phase.region_chg_12m).toFixed(1)}% 대비 ${(+c.phase.rel_strength > 0 ? '+' : '') + (+c.phase.rel_strength).toFixed(1)}%p. ${+c.phase.rel_strength < 0 ? '지역보다 덜 오른 "약한 파도"' : '지역보다 더 오름'}(📖 상승의 차이 p.420~421). 바로 위 급지 비교(E3)는 급지 계산 뒤에 붙입니다.`
     : '상대강도(B6)는 국면을 판정한 단지만 계산합니다.');
+  if (c.grade) {
+    const g = c.grade, i = g.grade - 1;
+    const rng = i === 0 ? `${GRADE_CUTS[0]}억 이상` : i === 7 ? `${GRADE_CUTS[6]}억 미만` : `${GRADE_CUTS[i]}~${GRADE_CUTS[i - 1]}억`;
+    const extra = [];
+    if (g.new_big_name) extra.push(`신축 대단지 ${g.new_big_name} ${eok(g.new_big_10k)}`);
+    if (g.flag_rebuild) extra.push(`30년 넘은 단지 거래 ${Math.round(g.old_share * 100)}%`);
+    if (g.flag_gap) extra.push(`동 안 가격 폭 ${eok(g.q1_10k)}~${eok(g.q3_10k)}`);
+    notes.push(`급지(E1): ${g.umd_name} 84㎡ 환산 실거래 대표가 ${eok(g.value_10k)} → ${g.grade}급지(${rng}, 단지 ${g.n_complex}곳, ${g.asof} 계산)${extra.length ? '. ' + extra.join(' · ') : ''}. 경계 15억·25억은 주담대 상한 경계, 나머지는 🔧.`);
+  }
   $('#cxNotes').innerHTML = notes.map(n => `<p class="muted" style="margin:0">${n}</p>`).join('');
 }
 drawCx(cxs[initial]);
