@@ -22,7 +22,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: daily-snapshot  # DB 를 쓰는 다른 작업과 겹치지 않게
+  # kapt_complexes·complexes(속성 upsert)만 쓴다. 매일 수집·백필과 같은 줄에 서면 몇 시간씩 밀려서(2026-10-13) 따로 줄을 선다.
+  # complexes 는 매일 수집도 upsert 하지만 같은 값(단지 속성)을 COALESCE 로 덮어써 겹쳐도 안전하다
+  group: kapt
   cancel-in-progress: false
 
 jobs:
