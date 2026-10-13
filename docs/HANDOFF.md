@@ -104,7 +104,9 @@ curl -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
 - 방식: 2024-10 이전 매매 원본은 Releases `raw-data` 의 `deals_YYYYMM.csv.gz`(전월세와 같은 방식). 과거가 필요한 값은 `deal_anchor`(역대 최고·B2 고점/저점·A6 2020년 1분기), 시안 월별 차트는 `deal_region_month`(시군구 + 시도 2자리 합계) (0019)
 - `sql/metrics.sql`: 전고점·역대 최고는 DB 구간과 deal_anchor 를 합치고, B2·A6 은 deal_anchor 우선. 로컬 Postgres 16 으로 tests/test_metrics.py 두 개 통과(HC_TEST_PG_URL)
 - 순서: ① `deal-archive` 워크플로 export,anchor (DB 읽기만) ② 0019 적용 + `load` ③ `prune --before 202410`(보조 색인 삭제 → 남길 행만 새 표로 바꿔 끼우기 → 색인 재생성, 지우기 전 달마다 DB 행 수 = 보관 파일 행 수 확인) — ②③은 `SET SESSION CHARACTERISTICS AS TRANSACTION READ WRITE` 로 세션만 쓰기 허용(관리 API 에서 되는지 미확인), **사용자 확인 뒤**
-- 남은 것: 매달 2년이 지난 달을 보관·삭제하고 deal_anchor 역대 최고를 갱신하는 `roll` 단계(daily), 시안 단지 차트는 2년만 보임
+- `roll`(daily.yml, 전월세 보관 다음): 이번 달 포함 25개월 이전 달을 보관 파일로 올리고 행 수 확인 → 한 트랜잭션으로 deal_anchor 역대 최고 갱신·deal_region_month 추가·DB 삭제. deal_anchor 가 없거나 비어 있으면(설정 전) 건너뜀. 로컬 Postgres 로 전 과정 테스트(tests/test_deal_archive_pg.py)
+- 단지 차트용 **시군구별 과거 파일** `deals_hist_<시군구>.csv.gz`(`hist` 단계, roll 이 매달 덧붙임). 시안 extract.py 는 DB 에 없는 옛 거래를 HC_ARCHIVE(기본 dir:data/archive) 의 이 파일에서 읽는다. 이 클라우드 환경은 gh 로그인이 안 돼 Releases 를 못 받으므로, 2026-10-14 정리 전에 시안 단지 8개 시군구만 DB 에서 data/archive 로 만들어 둠(git 제외)
+- 관리 API 에서 읽기 전용 중 쓰기: `BEGIN READ WRITE; ... COMMIT;` 는 되고 `SET SESSION CHARACTERISTICS ...` 는 안 됨(2026-10-14). 0019 는 이 방법으로 적용함
 
 ### 예산 계산기 I1·I4 (2026-10-13 작성, 시안 ⑥)
 

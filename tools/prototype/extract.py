@@ -35,6 +35,22 @@ SEQS = ['11710-8865','11740-4628','11200-3120','11590-3954','11410-4479','11230-
 sl = ",".join(f"'{s}'" for s in SEQS)
 out['cx_deals'] = select(db, f"""SELECT apt_seq, apt_name, contract_date::text cd, area_group, floor, price_10k, deal_type, is_cancelled
  FROM deals WHERE apt_seq IN ({sl}) AND area_group IN (84,85) ORDER BY contract_date""")
+# 저장 구조 C: DB 에 없는 옛 거래는 시군구별 과거 파일(deals_hist_<시군구>.csv.gz)에서. HC_ARCHIVE(기본 dir:data/archive)
+import math
+from collector.archive import decode, open_store
+_store = open_store()
+_first = min((r['cd'] for r in out['cx_deals']), default='9999')
+for _rc in sorted({s.split('-')[0] for s in SEQS}):
+    _data = _store.get(f'deals_hist_{_rc}.csv.gz')
+    if _data is None:
+        print(f'  과거 파일 없음: deals_hist_{_rc}.csv.gz (단지 차트는 DB 구간만)')
+        continue
+    for r in decode(_data):
+        ag = math.floor(float(r['area_m2']))
+        if r['apt_seq'] in SEQS and ag in (84, 85) and r['contract_date'] < _first:
+            out['cx_deals'].append(dict(apt_seq=r['apt_seq'], apt_name=r['apt_name'], cd=r['contract_date'], area_group=ag, floor=int(r['floor']),
+                                        price_10k=int(r['price_10k']), deal_type=r['deal_type'], is_cancelled=r['is_cancelled'] in ('1', 'True', 'true')))
+out['cx_deals'].sort(key=lambda r: r['cd'])
 out['cx_rent'] = select(db, f"""SELECT apt_seq, contract_month m, area_group, n_jeonse, jeonse_median_10k, n_jeonse_new, jeonse_new_median_10k, n_jeonse_renew
  FROM rent_monthly WHERE apt_seq IN ({sl}) AND area_group IN (84,85) ORDER BY contract_month""")
 out['cx_phase'] = select(db, f"""SELECT apt_seq, area_group, phase, chg_12m, up_months, down_months, last3, region_chg_12m, rel_strength,

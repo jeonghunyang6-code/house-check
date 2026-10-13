@@ -9,7 +9,7 @@ on:
         description: "보관할 계약월 (YYYYMM-YYYYMM)"
         default: "202001-202409"
       steps:
-        description: "export,anchor (DB 읽기만) | load | prune — load·prune 은 DB 를 바꾼다"
+        description: "export,anchor,hist (DB 읽기만) | load | prune — load·prune 은 DB 를 바꾼다"
         default: "export,anchor"
       before:
         description: "prune: 이 계약월 이전을 DB 에서 지운다"
@@ -46,7 +46,7 @@ jobs:
         run: |
           for s in ${STEPS//,/ }; do
             case "$s" in
-              export|anchor) python -m jobs.deal_archive "$s" --months "$MONTHS" --archive gh || exit $? ;;
+              export|anchor|hist) python -m jobs.deal_archive "$s" --months "$MONTHS" --archive gh || exit $? ;;
               load)          python -m jobs.deal_archive load --archive gh || exit $? ;;
               prune)         python -m jobs.deal_archive prune --before "$BEFORE" --archive gh || exit $? ;;
               *) echo "알 수 없는 단계: $s"; exit 1 ;;
