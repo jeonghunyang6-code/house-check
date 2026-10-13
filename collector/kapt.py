@@ -51,7 +51,14 @@ def _get_json(url: str, params: dict, retries: int = 5) -> dict:
             if "LIMITED_NUMBER_OF_SERVICE_REQUESTS" in body:
                 raise QuotaExceeded("daily quota")
             raise ApiError(re.sub(r"\s+", " ", body)[:200])
-        j = json.loads(body)
+        try:
+            j = json.loads(body)
+        except json.JSONDecodeError:
+            raise ApiError("invalid json: " + re.sub(r"\s+", " ", body)[:120]) from None
+        if not isinstance(j, dict) or "response" not in j:  # 2026-10-13 info 800건째에 이런 응답 1건으로 작업 전체가 KeyError 로 죽었다
+            if "LIMITED_NUMBER_OF_SERVICE_REQUESTS" in body:
+                raise QuotaExceeded("daily quota")
+            raise ApiError("unexpected body: " + re.sub(r"\s+", " ", body)[:120])
         code = j.get("response", {}).get("header", {}).get("resultCode")
         if code not in ("00", "000", None):
             msg = j["response"]["header"].get("resultMsg", "")
