@@ -77,7 +77,11 @@ def run_list(db: Db, regions: list[str], today: date) -> int:
 
 
 def run_info(db: Db, limit: int, today: date) -> int:
-    todo = [r["kapt_code"] for r in select(db, f"SELECT kapt_code FROM kapt_complexes WHERE info_at IS NULL ORDER BY region_code, kapt_code LIMIT {int(limit)}")]
+    # 하루 호출 한도(2026-10-13 확인: K-apt 기본정보는 하루 약 1,300건에서 429)가 작아서,
+    # 실거래 단지와 이미 연결된 단지 → 실거래가 있는 시군구 순으로 먼저 받는다 (세대수가 급지·회전율에 바로 쓰인다)
+    todo = [r["kapt_code"] for r in select(db, "SELECT k.kapt_code FROM kapt_complexes k WHERE k.info_at IS NULL "
+                                              "ORDER BY EXISTS (SELECT 1 FROM complexes c WHERE c.kapt_code = k.kapt_code) DESC, "
+                                              f"k.region_code, k.kapt_code LIMIT {int(limit)}")]
     done = fail = 0
     batch: list[str] = []
 

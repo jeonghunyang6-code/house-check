@@ -98,6 +98,13 @@ curl -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
 - 단지 연결은 이 작업 환경에서 실행: K-apt 목록 10,211개(83곳) 완료, complexes·info·match는 백그라운드(`/tmp/claude-0/kapt_*.log`)
 - 확인할 것: 오늘 밤 daily-snapshot(20:47 UTC)이 러너에서 공공데이터포털에 접속되는지
 
+### K-apt 기본 정보 하루 한도 (2026-10-13 확인)
+
+- K-apt 공동주택 기본정보(`AptBasisInfoServiceV5`)는 개발계정 하루 한도가 작다: 10/13(KST) 하루에 약 1,340건 받고 **HTTP 429 "일일 서비스 요청제한 횟수 초과"**. 한도 직전에는 `OpenAPI_ServiceResponse` "HTTP_ERROR" 본문이 섞여 온다
+- 남은 8,871건(실거래 연결된 단지 5,487건)이면 하루 1,300건 기준 약 7일. `jobs/kapt.py info`는 실거래와 연결된 단지부터 받도록 순서를 바꿨다
+- 한도를 늘리려면 공공데이터포털에서 사용자가 **운영계정(트래픽 증가) 신청**을 해야 한다. 우회하지 않는다
+- 한도는 자정(KST)에 초기화. kapt.yml 은 별도 동시성 그룹(kapt)이라 백필과 같이 돌 수 있다
+
 ### 역전세 D3·실질 가격 A6 (2026-10-13 작성)
 
 - `0016_reverse_real.sql`(Supabase 적용) + `sql/metrics.sql`: `complex_metrics`에 jeonse_24m_10k·jeonse_24m_n·reverse_risk·reserve_10k·real_ref_10k·base2020_10k·real_chg_2020
