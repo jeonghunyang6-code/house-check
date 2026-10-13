@@ -6,6 +6,9 @@
     python -m jobs.deal_archive load --archive gh                            # 고정값 파일 → deal_anchor·deal_region_month (DB 씀)
     python -m jobs.deal_archive prune --before 202410                        # DB 에서 보관한 달을 지운다 (사용자 확인 뒤)
     python -m jobs.deal_archive roll --archive gh                            # 매일: 2년 지난 달을 보관 → 고정값 갱신 → DB 에서 뺀다
+    python -m jobs.deal_archive hist --months 202001-202409 --archive gh     # 월별 파일 → 시군구별 과거 파일(deals_hist_<시군구>.csv.gz)
+
+시군구별 과거 파일은 단지 차트용이다: 최근 2년은 DB, 그 이전은 그 단지가 있는 시군구 파일 하나(수백 KB)만 받으면 된다.
 
 파일 하나 = 계약월 1개 × 수도권 전체 시군구. 올린 뒤 다시 내려받아 행 수를 DB 와 맞춰 본다.
 DB 에서 지우는 단계는 따로(사용자 확인 뒤) 둔다. 종료 코드: 0 정상, 1 불일치·실패.
@@ -71,7 +74,9 @@ def run_anchor(store, months: list[str]) -> int:
     return 0
 
 
-READ_WRITE = "SET SESSION CHARACTERISTICS AS TRANSACTION READ WRITE;"   # Supabase 읽기 전용(용량 초과) 중 정리용, 세션 한정
+# Supabase 가 용량 초과로 읽기 전용(default_transaction_read_only)일 때도 트랜잭션 단위로 쓰기를 연다 (2026-10-14 관리 API 로 확인).
+# SET SESSION CHARACTERISTICS 는 관리 API 에서 안 됐다
+BEGIN_RW = "BEGIN READ WRITE;"
 
 
 def load_sql(anchor_rows: list[dict], region_rows: list[dict]) -> str:
@@ -81,7 +86,7 @@ def load_sql(anchor_rows: list[dict], region_rows: list[dict]) -> str:
             vals = ",\n".join("(" + ", ".join("NULL" if r[c] == "" else lit(r[c]) for c in cols) + ")" for r in rows[i:i + 1000])
             out.append(f"INSERT INTO {table} ({', '.join(cols)}) VALUES\n{vals};")
         return out
-    return "\n".join([READ_WRITE, "BEGIN;", "TRUNCATE deal_anchor, deal_region_month;",
+    return "\n".join([BEGIN_RW, "TRUNCATE deal_anchor, deal_region_month;",
                       *ins("deal_anchor", ANCHOR_COLUMNS, anchor_rows),
                       *ins("deal_region_month", REGION_MONTH_COLUMNS, region_rows), "COMMIT;"])
 
@@ -93,10 +98,9 @@ def prune_sql(before: str) -> list[str]:
     b = lit(before)
     return [
         # 1) 보조 색인부터 지워 공간을 비운다 (다시 만든다)
-        READ_WRITE + "\nDROP INDEX IF EXISTS deals_complex_idx, deals_region_month_idx, deals_first_seen_idx;",
+        BEGIN_RW + "\nDROP INDEX IF EXISTS deals_complex_idx, deals_region_month_idx, deals_first_seen_idx;\nCOMMIT;",
         # 2) 남길 행만 새 표로, 바꿔 끼우기
-        READ_WRITE + f"""
-BEGIN;
+        BEGIN_RW + f"""
 CREATE TABLE deals_keep (LIKE deals INCLUDING DEFAULTS INCLUDING GENERATED INCLUDING CONSTRAINTS);
 INSERT INTO deals_keep ({cols}) SELECT {cols} FROM deals WHERE contract_month >= {b};
 ALTER TABLE deal_events DROP CONSTRAINT IF EXISTS deal_events_deal_key_fkey;
@@ -108,10 +112,11 @@ ALTER TABLE deals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE deal_events ADD CONSTRAINT deal_events_deal_key_fkey FOREIGN KEY (deal_key) REFERENCES deals (deal_key);
 COMMIT;""",
         # 3) 색인 다시 (0001)
-        READ_WRITE + """
+        BEGIN_RW + """
 CREATE INDEX IF NOT EXISTS deals_complex_idx ON deals (apt_seq, area_group, contract_date);
 CREATE INDEX IF NOT EXISTS deals_region_month_idx ON deals (region_code, contract_month);
-CREATE INDEX IF NOT EXISTS deals_first_seen_idx ON deals (first_seen_date);""",
+CREATE INDEX IF NOT EXISTS deals_first_seen_idx ON deals (first_seen_date);
+COMMIT;""",
     ]
 
 
@@ -165,7 +170,7 @@ def roll_sql(month: str, region_rows: list[dict]) -> str:
     """보관 파일을 올린 뒤 한 트랜잭션: 역대 최고 갱신, 월별 거래 수 추가, DB 에서 삭제."""
     m = lit(month)
     vals = ",\n".join("(" + ", ".join("NULL" if r[c] == "" else lit(r[c]) for c in REGION_MONTH_COLUMNS) + ")" for r in region_rows)
-    return "\n".join([READ_WRITE, "BEGIN;", f"""
+    return "\n".join([BEGIN_RW, f"""
 INSERT INTO deal_anchor (apt_seq, area_group, hist_high_10k, hist_high_date)
 SELECT DISTINCT ON (apt_seq, area_group) apt_seq, area_group, price_10k, contract_date FROM deals
 WHERE contract_month = {m} AND NOT is_cancelled AND deal_type = '중개'
@@ -178,6 +183,37 @@ WHERE EXCLUDED.hist_high_10k > deal_anchor.hist_high_10k;""",
         f"DELETE FROM deal_events e USING deals d WHERE e.deal_key = d.deal_key AND d.contract_month = {m};",
         f"DELETE FROM deals WHERE contract_month = {m};",
         "COMMIT;"])
+
+
+def hist_name(region: str) -> str:
+    return f"deals_hist_{region}.csv.gz"
+
+
+def run_hist(store, months: list[str]) -> int:
+    by: dict[str, list[dict]] = {}
+    for m in months:
+        data = store.get(asset_name("deal", m))
+        if data is None:
+            print(f"  {asset_name('deal', m)} 없음", file=sys.stderr)
+            return 1
+        for r in decode(data):
+            by.setdefault(r["region_code"], []).append(r)
+    for rc, rows in sorted(by.items()):
+        store.put(hist_name(rc), encode(sorted(rows, key=lambda r: (r["contract_date"], r["deal_key"])), DEAL_COLUMNS))
+    print(f"  시군구 {len(by)}개 과거 파일 ({months[0]}~{months[-1]}, {sum(map(len, by.values())):,}행)")
+    return 0
+
+
+def append_hist(store, rows: list[dict]) -> None:
+    """roll 이 DB 에서 빼는 달을 시군구 과거 파일에 덧붙인다(같은 deal_key 는 바꿔 끼운다)."""
+    by: dict[str, list[dict]] = {}
+    for r in rows:
+        by.setdefault(r["region_code"], []).append(r)
+    for rc, new in by.items():
+        old = store.get(hist_name(rc))
+        keys = {r["deal_key"] for r in new}
+        merged = [r for r in (decode(old) if old else []) if r["deal_key"] not in keys] + new
+        store.put(hist_name(rc), encode(sorted(merged, key=lambda r: (r["contract_date"], r["deal_key"])), DEAL_COLUMNS))
 
 
 def run_roll(db: Db, store, regions: list[str], today: date) -> int:
@@ -198,6 +234,7 @@ def run_roll(db: Db, store, regions: list[str], today: date) -> int:
         if len(back_rows) != len(rows):
             print(f"  {name}: DB {len(rows):,}행 ≠ 파일 {len(back_rows):,}행 → DB 는 그대로 둠", file=sys.stderr)
             return 1
+        append_hist(store, back_rows)
         db.query(roll_sql(m, region_months(back_rows)))
         print(f"  {m}: {len(rows):,}행 보관 → 역대 최고·월별 거래 수 갱신 → DB 에서 뺌")
     return 0
@@ -205,7 +242,7 @@ def run_roll(db: Db, store, regions: list[str], today: date) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("step", choices=["export", "anchor", "load", "prune", "roll"])
+    ap.add_argument("step", choices=["export", "anchor", "load", "prune", "roll", "hist"])
     ap.add_argument("--months")
     ap.add_argument("--before", help="prune: 이 계약월 이전을 지운다 (YYYYMM)")
     ap.add_argument("--regions", default="sudogwon")
@@ -218,6 +255,8 @@ def main(argv: list[str] | None = None) -> int:
             return run_anchor(open_store(a.archive), parse_months(a.months))
         if a.step == "load":
             return run_load(connect(a.db), open_store(a.archive))
+        if a.step == "hist":
+            return run_hist(open_store(a.archive), parse_months(a.months))
         if a.step == "roll":
             return run_roll(connect(a.db), open_store(a.archive), select_regions(a.regions), datetime.now(KST).date())
         if a.step == "prune":

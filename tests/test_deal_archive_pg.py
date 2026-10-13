@@ -34,6 +34,9 @@ def test_archive_prune_roll_pg():
         ms = da.parse_months("202001-202410")
         assert da.run_export(db, st, ms, ["11680"]) == 0
         assert da.run_anchor(st, ms) == 0
+        assert da.run_hist(st, ms) == 0
+        from collector.archive import decode
+        assert [r["deal_key"] for r in decode(st.get("deals_hist_11680.csv.gz"))] == ["k1", "k2", "k3"]
         assert da.run_load(db, st) == 0
         a = select(db, "select * from deal_anchor")
         assert len(a) == 1 and (a[0]["peak_10k"], a[0]["trough_10k"], a[0]["p20_10k"], a[0]["hist_high_10k"]) == (120000, 90000, 50000, 120000)
@@ -50,7 +53,7 @@ def test_archive_prune_roll_pg():
     with tempfile.TemporaryDirectory() as t:
         st = LocalDirStore(t)
         assert da.run_roll(db, st, ["11680"], date(2026, 11, 5)) == 0
-        assert os.listdir(t) == ["deals_202410.csv.gz"]
+        assert sorted(os.listdir(t)) == ["deals_202410.csv.gz", "deals_hist_11680.csv.gz"]
     a = {r["apt_seq"]: r for r in select(db, "select apt_seq, hist_high_10k, peak_10k from deal_anchor")}
     assert (a["A"]["hist_high_10k"], a["A"]["peak_10k"], a["B"]["hist_high_10k"]) == (150000, 120000, 70000)
     assert {r["region_code"] for r in select(db, "select region_code from deal_region_month where contract_month='202410'")} == {"11", "11680"}
