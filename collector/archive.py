@@ -19,6 +19,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 from typing import Iterable, Protocol
 
@@ -94,11 +95,14 @@ class GhReleaseStore:
         self.tag = tag
         self._assets: set[str] | None = None
 
-    def _gh(self, *args: str, check: bool = True) -> subprocess.CompletedProcess:
-        p = subprocess.run(["gh", *args], capture_output=True, text=True, timeout=600)
-        if check and p.returncode != 0:
-            raise ArchiveError(f"gh {args[0]} {args[1] if len(args) > 1 else ''} 실패: {p.stderr.strip()[:300]}")
-        return p
+    def _gh(self, *args: str, check: bool = True, tries: int = 1) -> subprocess.CompletedProcess:
+        for i in range(tries):
+            p = subprocess.run(["gh", *args], capture_output=True, text=True, timeout=600)
+            if p.returncode == 0 or not check:
+                return p
+            if i < tries - 1:
+                time.sleep(5 * 3 ** i)   # 2026-10-14 다운로드 중 "stream error ... PROTOCOL_ERROR" 1건 → 다시 받으면 된다
+        raise ArchiveError(f"gh {args[0]} {args[1] if len(args) > 1 else ''} 실패: {p.stderr.strip()[:300]}")
 
     def _ensure(self) -> set[str]:
         if self._assets is None:
@@ -118,7 +122,7 @@ class GhReleaseStore:
             return None
         d = tempfile.mkdtemp()
         try:
-            self._gh("release", "download", self.tag, "--pattern", name, "--dir", d)
+            self._gh("release", "download", self.tag, "--pattern", name, "--dir", d, "--clobber", tries=3)
             return (Path(d) / name).read_bytes()
         finally:
             shutil.rmtree(d, ignore_errors=True)
@@ -128,7 +132,7 @@ class GhReleaseStore:
         d = tempfile.mkdtemp()
         try:
             (Path(d) / name).write_bytes(data)
-            self._gh("release", "upload", self.tag, str(Path(d) / name), "--clobber")
+            self._gh("release", "upload", self.tag, str(Path(d) / name), "--clobber", tries=3)
             self._assets.add(name)
         finally:
             shutil.rmtree(d, ignore_errors=True)
