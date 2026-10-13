@@ -1,0 +1,54 @@
+# 매매 원본 보관 (jobs/deal_archive.py, 저장 구조 C): 오래된 달을 GitHub Releases(raw-data) 의 deals_YYYYMM.csv.gz 로 올린다.
+# 이어서 보관 파일로 과거 고정값(deal_anchor·deal_region_month CSV)을 만든다. DB 는 읽기만 한다(읽기 전용 상태에서도 돈다). 수동 실행.
+name: deal-archive
+
+on:
+  workflow_dispatch:
+    inputs:
+      months:
+        description: "보관할 계약월 (YYYYMM-YYYYMM)"
+        default: "202001-202409"
+      steps:
+        description: "export,anchor (DB 읽기만) | load | prune — load·prune 은 DB 를 바꾼다"
+        default: "export,anchor"
+      before:
+        description: "prune: 이 계약월 이전을 DB 에서 지운다"
+        default: "202410"
+
+permissions:
+  contents: write  # 릴리스 자산 업로드
+
+concurrency:
+  group: deal-archive
+  cancel-in-progress: false
+
+jobs:
+  archive:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: psql 확인
+        run: command -v psql || (sudo apt-get update -q && sudo apt-get install -y -q postgresql-client)
+      - name: 실행
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          HC_DB_BACKEND: psql
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PYTHONUNBUFFERED: "1"
+          MONTHS: ${{ inputs.months || '202001-202409' }}
+          STEPS: ${{ inputs.steps || 'export,anchor' }}
+          BEFORE: ${{ inputs.before || '202410' }}
+        run: |
+          for s in ${STEPS//,/ }; do
+            case "$s" in
+              export|anchor) python -m jobs.deal_archive "$s" --months "$MONTHS" --archive gh || exit $? ;;
+              load)          python -m jobs.deal_archive load --archive gh || exit $? ;;
+              prune)         python -m jobs.deal_archive prune --before "$BEFORE" --archive gh || exit $? ;;
+              *) echo "알 수 없는 단계: $s"; exit 1 ;;
+            esac
+          done

@@ -9,7 +9,11 @@ from collector.regions import REGIONS
 db = connect('api')
 out = {}
 # A. 서울 월별 거래량(해제 제외)과 84㎡ 중위 가격
+#    DB 에 없는 옛 달(저장 구조 C: 2년 이전은 보관 파일)은 deal_region_month 의 서울 합계('11')로 채운다
 out['monthly'] = select(db, """
+ SELECT contract_month m, n_all - n_cancelled n, p84_median_10k p84 FROM deal_region_month
+ WHERE region_code = '11' AND contract_month < (SELECT min(contract_month) FROM deals)
+ UNION ALL
  SELECT contract_month m, count(*) FILTER (WHERE NOT is_cancelled) n,
   percentile_cont(0.5) WITHIN GROUP (ORDER BY price_10k) FILTER (WHERE NOT is_cancelled AND deal_type='중개' AND area_group IN (84,85)) p84
  FROM deals WHERE region_code LIKE '11%' GROUP BY 1 ORDER BY 1""")

@@ -98,6 +98,14 @@ curl -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
 - 단지 연결은 이 작업 환경에서 실행: K-apt 목록 10,211개(83곳) 완료, complexes·info·match는 백그라운드(`/tmp/claude-0/kapt_*.log`)
 - 확인할 것: 오늘 밤 daily-snapshot(20:47 UTC)이 러너에서 공공데이터포털에 접속되는지
 
+### 저장 구조 C: 매매 원본 2년만 DB (2026-10-14, 진행 중)
+
+- 원인: Supabase 무료 플랜 DB 크기 905MB / 500MB → 프로젝트 읽기 전용, 디스크도 꽉 참(WAL 940MB). 사용자: 무료 유지, C 선택
+- 방식: 2024-10 이전 매매 원본은 Releases `raw-data` 의 `deals_YYYYMM.csv.gz`(전월세와 같은 방식). 과거가 필요한 값은 `deal_anchor`(역대 최고·B2 고점/저점·A6 2020년 1분기), 시안 월별 차트는 `deal_region_month`(시군구 + 시도 2자리 합계) (0019)
+- `sql/metrics.sql`: 전고점·역대 최고는 DB 구간과 deal_anchor 를 합치고, B2·A6 은 deal_anchor 우선. 로컬 Postgres 16 으로 tests/test_metrics.py 두 개 통과(HC_TEST_PG_URL)
+- 순서: ① `deal-archive` 워크플로 export,anchor (DB 읽기만) ② 0019 적용 + `load` ③ `prune --before 202410`(보조 색인 삭제 → 남길 행만 새 표로 바꿔 끼우기 → 색인 재생성, 지우기 전 달마다 DB 행 수 = 보관 파일 행 수 확인) — ②③은 `SET SESSION CHARACTERISTICS AS TRANSACTION READ WRITE` 로 세션만 쓰기 허용(관리 API 에서 되는지 미확인), **사용자 확인 뒤**
+- 남은 것: 매달 2년이 지난 달을 보관·삭제하고 deal_anchor 역대 최고를 갱신하는 `roll` 단계(daily), 시안 단지 차트는 2년만 보임
+
 ### 예산 계산기 I1·I4 (2026-10-13 작성, 시안 ⑥)
 
 - 입력 4개(네이버 대출 계산기처럼 단순하게, 사용자 요청): 종잣돈, 은행 대출 가능액(LTV·DSR은 은행·정책마다 달라 직접 입력, **입력값 그대로 대출로 씀**), 금리(기본값 = market_signals.g3 주담대 금리), 상환 기간. 초기화 버튼
@@ -136,6 +144,7 @@ curl -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
 - 분석 스크립트: `tools/analysis/grade_e1.py` (입력 SQL 은 파일 머리에)
 - **구현(2026-10-14)**: `dong_grade` 표(0017), `collector/grade.py`, `jobs/grade.py`(rone.yml 에서 jobs.market 앞에 돌고 85일 안이면 건너뜀, `--force` 로 즉시). 첫 계산 680개 동(asof 2026-10-14)
   - 표시 3개: `flag_rebuild`(30년+ 거래 50%+, 102개 동), `flag_gap`(가중 상위 25% ÷ 하위 25% ≥ 2배, 28개 동), `new_big_name/new_big_10k`(준공 5년 이내 1,000세대+ 중 가장 큰 단지, 104개 동 — 둔촌 올림픽파크포레온 27.7억, 철산 롯데캐슬&SKVIEW 18.2억, 전농 SKY-L65 19.0억)
+- **B5 과거 시계열(2026-10-14 시도, 중단)**: `jobs/b5_history.py`·`b5_history.yml`·0018(b5_history 표, 적용됨). `prev` 단계(2020~ 거래 전고점 재계산)를 API로 83개 중 78개 시군구까지 돌리다 **Supabase 가 읽기 전용으로 바뀜**(DB 848MB, WAL 923MB, deals 죽은 행 30만). 대량 UPDATE 가 WAL·죽은 행을 만든 탓으로 보임. 무료 플랜 DB 500MB 한도도 이미 넘음. 사용자 결정(Pro 또는 데이터 줄이기) 전까지 쓰기 작업 금지. 남은 시군구: 41650 이후 5곳, `agg` 미실행
 - **B5 ②·③ 구현**(jobs/market.py, market_signals `b5_low_highs`·`b5_spread`): 수도권 최근 4주 중개 거래 중 전고점 있는 것, 하위(6~8급) 신고가 비율과 그 전 4주, 구축·소단지 보조, 상위(1~3급) 대비 비. 2026-10-14: 15.5%(전 4주 12.7%), 구축·소단지 19.2%, 상위 20.8% → 0.75배. 경고선은 🔧 백테스트 전(전고점이 최근 120일 거래에만 계산돼 있어 과거 시계열을 만들려면 metrics 를 넓게 다시 돌려야 함)
 - 외부와 크게 어긋나는 곳(한남, 신정동, 청량리, 둔촌, 노량진, 철산)과 보완 방안은 2026-10-13 대화 참고 — 생활권 묶기(E0), 동 안 격차 표시, 신축 대단지 표시, 재개발 데이터
 

@@ -2,10 +2,12 @@
 BEGIN;
 
 -- 1) 최근 계약 거래의 전고점 (ARCHITECTURE 4.3: 이전 계약일의 중개·비해제 최고가)
-UPDATE deals d SET prev_high_10k = (
+--    DB 밖으로 보관한 과거 거래의 최고가(deal_anchor)와 합친다 (저장 구조 C, GREATEST 는 NULL 을 무시)
+UPDATE deals d SET prev_high_10k = GREATEST((
   SELECT max(p.price_10k) FROM deals p
   WHERE p.apt_seq = d.apt_seq AND p.area_group = d.area_group AND p.contract_date < d.contract_date
-    AND NOT p.is_cancelled AND p.deal_type = '중개')
+    AND NOT p.is_cancelled AND p.deal_type = '중개'),
+  (SELECT a.hist_high_10k FROM deal_anchor a WHERE a.apt_seq = d.apt_seq AND a.area_group = d.area_group))
 WHERE d.contract_date >= {TODAY} - {PREV_DAYS};
 
 -- 2) 단지 × 면적군 지표
@@ -26,9 +28,11 @@ a1 AS (
     max(contract_date) AS last_date
   FROM base GROUP BY 1, 2
 ),
-hi AS (
-  SELECT DISTINCT ON (apt_seq, area_group) apt_seq, area_group, price_10k AS high_10k, contract_date AS high_date
-  FROM base ORDER BY apt_seq, area_group, price_10k DESC, contract_date
+hi AS (  -- 역대 최고 = DB 구간 + 보관 구간(deal_anchor)
+  SELECT DISTINCT ON (apt_seq, area_group) apt_seq, area_group, high_10k, high_date FROM (
+    SELECT apt_seq, area_group, price_10k AS high_10k, contract_date AS high_date FROM base
+    UNION ALL SELECT apt_seq, area_group, hist_high_10k, hist_high_date FROM deal_anchor) x
+  ORDER BY apt_seq, area_group, high_10k DESC, high_date
 ),
 months AS (SELECT generate_series(DATE '2021-01-01', DATE '2023-06-01', INTERVAL '1 month')::date AS m),
 ref AS (  -- 월별 기준 시세 = 그 달 포함 3개월 이동 중앙값 (B1·B2)
@@ -53,12 +57,16 @@ js AS (  -- 당월·전월 전세 (rent_monthly 는 월별 중앙값이라 건�
   FROM rent_monthly WHERE contract_month IN ({CUR_M}, {PREV_M}) GROUP BY 1, 2
 ),
 c AS (
-  SELECT a1.*, hi.high_10k, hi.high_date, pk.peak, pk.peak_m, tr.trough, tr.trough_m, js.jnew, js.nnew, js.jall, js.nall,
+  -- B2 고점·저점: 보관 파일에서 계산한 값(deal_anchor)이 있으면 그것, 없으면 DB 의 거래로 계산한 값
+  SELECT a1.*, hi.high_10k, hi.high_date, coalesce(an.peak_10k, pk.peak) AS peak, coalesce(an.peak_m, to_char(pk.peak_m, 'YYYYMM')) AS peak_m,
+    coalesce(an.trough_10k, tr.trough) AS trough, coalesce(an.trough_m, to_char(tr.trough_m, 'YYYYMM')) AS trough_m, an.p20_10k,
+    js.jnew, js.nnew, js.jall, js.nall,
     CASE WHEN n60 >= 3 THEN m60 WHEN n90 >= 3 THEN m90 WHEN n180 >= 3 THEN m180 END AS cur,
     CASE WHEN n60 >= 3 THEN n60 WHEN n90 >= 3 THEN n90 WHEN n180 >= 3 THEN n180 END AS cur_n,
     CASE WHEN n60 >= 3 THEN 60 WHEN n90 >= 3 THEN 90 WHEN n180 >= 3 THEN 180 END AS cur_days
   FROM a1 JOIN hi USING (apt_seq, area_group)
   LEFT JOIN pk USING (apt_seq, area_group) LEFT JOIN tr USING (apt_seq, area_group) LEFT JOIN js USING (apt_seq, area_group)
+  LEFT JOIN deal_anchor an USING (apt_seq, area_group)
 ),
 ph_months AS (  -- B1: 지난달까지 13개월 (월별 기준 시세 13개 = 변화 12개)
   SELECT generate_series(date_trunc('month', {TODAY}::date) - INTERVAL '13 month',
@@ -112,7 +120,7 @@ cpi AS (
          (SELECT avg(value) FROM macro_monthly WHERE series = 'cpi' AND period BETWEEN '202001' AND '202003') AS q120
 ),
 d AS (
-  SELECT c.*, ph.phase, j24.j24, j24.n24, b20.p20, cpi.now_ AS cpi_now, cpi.q120 AS cpi_20, ph.chg, ph.up, ph.down, ph.last3,
+  SELECT c.*, ph.phase, j24.j24, j24.n24, coalesce(c.p20_10k, b20.p20) AS p20, cpi.now_ AS cpi_now, cpi.q120 AS cpi_20, ph.chg, ph.up, ph.down, ph.last3,
     -- 🔧 판정 단지 5개 이상인 시군구만
     CASE WHEN ph.chg IS NOT NULL AND rs.region_n >= 5 THEN rs.region_chg END AS region_chg,
     round(cur)::int AS ref,
@@ -127,7 +135,7 @@ d AS (
 SELECT apt_seq, area_group, {TODAY},
   ref, cur_n, cur_days,
   CASE cur_days WHEN 60 THEN '높음' WHEN 90 THEN '보통' WHEN 180 THEN '낮음' END,
-  round(peak)::int, to_char(peak_m, 'YYYYMM'), round(trough)::int, to_char(trough_m, 'YYYYMM'),
+  round(peak)::int, peak_m, round(trough)::int, trough_m,
   round(rec::numeric, 3),
   CASE WHEN ref IS NULL OR peak IS NULL THEN NULL
        WHEN ref >= peak THEN '신고가 돌파'
