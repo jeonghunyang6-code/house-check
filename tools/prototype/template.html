@@ -475,7 +475,8 @@ $('#notice').innerHTML = `<b>데이터 범위</b><span>서울 실거래는 2020�
     row('하락 초입', '서울 역전세 위험 단지 비율 (D3)', S.d3_reverse_share, S.d3_reverse_share && S.d3_reverse_share.value != null ? ` <span class="muted num">${num(S.d3_reverse_share.value)}%</span>` : ''),
     row('하락 초입', '서울 직거래 비중 (C5, 보조)', S.c5_direct, S.c5_direct && S.c5_direct.value != null ? ` <span class="muted num">${num(S.c5_direct.value)}%</span>` : ''),
     row('과열 신호', '상승 지역 비율 (B5 ①)', S.b5_up_cap, S.b5_up_cap ? ` <span class="muted num">수도권 ${num(S.b5_up_cap.value)}% · 전국 ${num(S.b5_up_nat && S.b5_up_nat.value)}%</span>` : ''),
-    todo('과열 신호', '하위 급지 신고가 비중 (B5 ②)', '급지(E1) 확정 후 (세대수 수집 중)'),
+    row('과열 신호', '하위 급지 신고가 비중 (B5 ②)', S.b5_low_highs, S.b5_low_highs && S.b5_low_highs.value != null ? ` <span class="muted num">${num(S.b5_low_highs.value)}%</span>` : ''),
+    row('과열 신호', '상위 대비 하위 급지 신고가 (B5 ③)', S.b5_spread, S.b5_spread && S.b5_spread.value != null ? ` <span class="muted num">${num(S.b5_spread.value, 2)}배</span>` : ''),
     row('기회', '매매↓·전세↑ 지역 (D2)', S.d2_ladder, S.d2_ladder && S.d2_ladder.value != null ? ` <span class="muted num">${num(S.d2_ladder.value, 0)}곳</span>` : ''),
     row('반등 신호', '서울 급매 체결 비중 (A4)', S.a4_quick_sale, S.a4_quick_sale && S.a4_quick_sale.value != null ? ` <span class="muted num">${num(S.a4_quick_sale.value)}%</span>` : ''),
     row('반등 신호', '매매수급지수 상승 전환 · 서울', S.supply_seoul),
@@ -576,7 +577,8 @@ $('#notice').innerHTML = `<b>데이터 범위</b><span>서울 실거래는 2020�
 
 /* ⑥ 예산 계산기 (I1, I4): 📖 종잣돈 + 대출 = 볼 금액대 p.295~298, 인테리어 ≤ 5% p.241
    대출은 입력한 은행 가능액을 그대로 쓴다. 작가의 "원리금 ≤ 세후 소득 30%"(📖 p.474)는 상황마다 달라 계산에서 빼고 안내 문구로만 둔다(사용자 결정 2026-10-13).
-   세율·중개보수는 법정 기준(2026-10 확인 못 함, 바뀌었을 수 있음). 법무사·이사 비용은 🔧 일반적인 표본 값 */
+   세율·중개보수: 지방세법 제11조 유상거래 주택 세율, 중개보수는 2021-10 개정 상한요율(수도권 조례 동일). 2026-10-13 검색으로 바뀐 근거 없음을 확인
+   (법령 원문 사이트는 이 환경에서 열리지 않아 지자체·세무 2차 자료로 대조). 법무사·이사 비용은 🔧 일반적인 표본 값 */
 const Calc = {
   // 원리금균등 월 상환액 (원 단위 입력·출력). 검증: 3억·4.5%·30년 = 1,520,056원 (📖 p.40)
   payment(principal, ratePct, years) {
@@ -636,7 +638,7 @@ const Calc = {
       `참고: 송희구 작가는 월 원리금을 세후 소득의 30% 이내로 두라고 합니다(📖 p.474). 이 원리금이면 세후 월소득 ${man(pay / 0.3 / 10000)} 이상일 때 그 기준에 맞습니다. 계산에는 넣지 않았습니다.`,
       `볼 금액대 = 종잣돈 + 대출(📖 p.295~298). 사고 싶은 집을 살 돈이 있을 때가 매수 시점(📖 p.106~108).`,
       `인테리어는 집값의 최대 5% = ${man(price * 0.05)}(📖 p.241). 이 금액은 위 계산에 넣지 않았습니다.`,
-      `금리 기본값은 이번 달 예금은행 주담대 신규취급 금리(한국은행)입니다. 취득세(1주택·85㎡ 이하, 지방교육세 포함)와 중개보수 상한은 법정 요율로 계산했고 최신 개정 여부는 확인하지 못했습니다. 법무사·등기(집값의 0.15%, 최소 60만)와 이사(200만)는 일반적인 표본 값입니다. 입력값은 이 브라우저에만 저장됩니다.`,
+      `금리 기본값은 이번 달 예금은행 주담대 신규취급 금리(한국은행)입니다. 취득세(1주택·85㎡ 이하, 지방교육세 포함)와 중개보수 상한은 법정 요율로 계산했습니다(2026년 10월 기준 개정 없음 확인). 생애최초 감면(최대 200만)은 넣지 않았습니다. 법무사·등기(집값의 0.15%, 최소 60만)와 이사(200만)는 일반적인 표본 값입니다. 입력값은 이 브라우저에만 저장됩니다.`,
     ];
     $('#calcNotes').innerHTML = notes.map(n => `<p class="muted" style="margin:0">${n}</p>`).join('');
   }

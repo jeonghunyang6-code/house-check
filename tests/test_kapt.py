@@ -66,3 +66,53 @@ def test_get_json_unexpected_body_is_api_error():
             kapt._get_json("https://example.invalid", {})
     finally:
         urllib.request.urlopen = orig
+
+
+class _FakeDb:
+    def __init__(self, codes):
+        self.codes, self.sql = codes, []
+
+    def query(self, sql):
+        self.sql.append(sql)
+        if sql.lstrip().startswith("SELECT k.kapt_code"):
+            return [{"kapt_code": c} for c in self.codes]
+        if "count(*)" in sql:
+            return [{"n": 0}]
+        return []
+
+
+def _run_info(monkeypatch, codes, fail_until):
+    """fail_until 번째 호출까지는 ApiError, 그 뒤로는 정상."""
+    import jobs.kapt as jk
+    from collector.sources.molit import ApiError
+    calls, slept = [], []
+
+    def fake(code):
+        calls.append(code)
+        if len(calls) <= fail_until:
+            raise ApiError("unexpected body: HTTP_ERROR")
+        return {"kaptCode": code, "kaptdaCnt": 100}
+
+    monkeypatch.setattr(jk, "fetch_info", fake)
+    monkeypatch.setattr(jk, "select", lambda db, sql: db.query(sql))
+    db = _FakeDb(codes)
+    rc = jk.run_info(db, 100, date(2026, 10, 13), sleep=slept.append)
+    saved = [c for c in codes if any(f"kapt_code = '{c}'" in s for s in db.sql)]
+    return rc, calls, slept, saved
+
+
+def test_run_info_pauses_and_retries_after_fail_streak(monkeypatch):
+    import jobs.kapt as jk
+    codes = [f"A{i:03d}" for i in range(30)]
+    rc, calls, slept, saved = _run_info(monkeypatch, codes, jk.FAIL_STREAK)
+    assert slept == [jk.PAUSES[0]]
+    assert calls[jk.FAIL_STREAK] == codes[0]      # 쉬고 나서 처음 실패한 단지부터 다시
+    assert saved == codes and rc == 1             # 다 받았지만 중간 실패가 있었다
+
+
+def test_run_info_stops_when_failures_persist(monkeypatch):
+    import jobs.kapt as jk
+    codes = [f"A{i:03d}" for i in range(200)]
+    rc, calls, slept, saved = _run_info(monkeypatch, codes, 10**6)
+    assert rc == 2 and slept == list(jk.PAUSES) and saved == []
+    assert len(calls) == jk.FAIL_STREAK * (len(jk.PAUSES) + 1)

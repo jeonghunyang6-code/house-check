@@ -45,5 +45,6 @@ jobs:
           rc=0
           python -m jobs.rone "$MODE" || rc=$?
           python -m jobs.macro || rc=$?    # 거시 월별 지표 (macro_monthly: 실업률·주담대 금리·가계대출)
+          python -m jobs.grade || rc=$?    # 급지 E1 (dong_grade, 85일마다만 다시 계산)
           python -m jobs.market || rc=$?   # 국면·체크리스트 신호 (region_phase, market_signals)
           exit $rc
