@@ -1,0 +1,38 @@
+# 매매 원본 보관 (jobs/deal_archive.py, 저장 구조 C): 오래된 달을 GitHub Releases(raw-data) 의 deals_YYYYMM.csv.gz 로 올린다.
+# DB 는 읽기만 한다(무료 플랜 읽기 전용 상태에서도 돈다). 수동 실행.
+name: deal-archive
+
+on:
+  workflow_dispatch:
+    inputs:
+      months:
+        description: "보관할 계약월 (YYYYMM-YYYYMM)"
+        default: "202001-202409"
+
+permissions:
+  contents: write  # 릴리스 자산 업로드
+
+concurrency:
+  group: deal-archive
+  cancel-in-progress: false
+
+jobs:
+  archive:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: psql 확인
+        run: command -v psql || (sudo apt-get update -q && sudo apt-get install -y -q postgresql-client)
+      - name: 실행
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          HC_DB_BACKEND: psql
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PYTHONUNBUFFERED: "1"
+          MONTHS: ${{ inputs.months || '202001-202409' }}
+        run: python -m jobs.deal_archive export --months "$MONTHS" --archive gh
