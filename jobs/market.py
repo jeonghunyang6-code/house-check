@@ -222,6 +222,36 @@ def run(db: Db) -> dict[str, tuple]:
                        "ORDER BY week_date DESC LIMIT 1")
         sig[key] = ((round(r[0]["n_up"] * 100.0 / r[0]["n"], 1), "참고", f"{scope} 시군구 중 주간 상승 지역 비율 ({r[0]['d']} 주)")
                     if r else (None, "데이터 없음", f"{scope} 상승 지역 비율"))
+    # B5 ② 하위 급지 신고가 비중, ③ 상위 급지 대비 비 (📖 "범위의 문제", 립밤 아파트 p.111~114: 다 오르면 과열)
+    # 수도권 최근 4주 중개 거래(전고점이 있는 거래) 중 신고가 비율. 하위 = 급지 6~8(12억 미만), 상위 = 1~3(20억+), dong_grade 최신
+    yr = today.year
+    b5 = select(db, f"""WITH g AS (SELECT region_code, umd_name, grade FROM dong_grade WHERE asof = (SELECT max(asof) FROM dong_grade)),
+      r AS (SELECT d.price_10k > d.prev_high_10k AS hi, g.grade, x.build_year, k.households, d.contract_date > {lit(today)}::date - 28 AS cur
+        FROM deals d JOIN complexes x USING (apt_seq) JOIN g ON g.region_code = d.region_code AND g.umd_name = x.umd_name
+        LEFT JOIN kapt_complexes k ON k.kapt_code = x.kapt_code
+        WHERE NOT d.is_cancelled AND d.deal_type = '중개' AND d.prev_high_10k IS NOT NULL AND d.contract_date > {lit(today)}::date - 56)
+      SELECT cur, CASE WHEN grade <= 3 THEN 'top' WHEN grade >= 6 THEN 'low' ELSE 'mid' END AS band, count(*) AS n, count(*) FILTER (WHERE hi) AS h,
+        count(*) FILTER (WHERE grade >= 6 AND build_year <= {yr - 20} AND coalesce(households, 0) < 300) AS ln,
+        count(*) FILTER (WHERE hi AND grade >= 6 AND build_year <= {yr - 20} AND coalesce(households, 0) < 300) AS lh
+      FROM r GROUP BY 1, 2""")
+    bb = {(r["cur"], r["band"]): r for r in b5}
+    pct = lambda h, n: round(h * 100.0 / n, 1) if n else None
+    low, top, lowp = bb.get((True, "low")), bb.get((True, "top")), bb.get((False, "low"))
+    if low and low["n"] and top and top["n"]:
+        lr, tr = pct(low["h"], low["n"]), pct(top["h"], top["n"])
+        pr = pct(lowp["h"], lowp["n"]) if lowp else None
+        ln = sum(r["ln"] for k, r in bb.items() if k[0])
+        lh = sum(r["lh"] for k, r in bb.items() if k[0])
+        sig["b5_low_highs"] = (lr, "참고" if pr is None else "증가" if lr > pr else "감소" if lr < pr else "유지",
+                               f"수도권 최근 4주 하위 급지(6~8급, 12억 미만) 거래 {low['n']:,}건 중 신고가 {lr}%"
+                               + (f", 그 전 4주 {pr}%" if pr is not None else "")
+                               + (f". 그중 구축(20년+)·소단지(300세대 미만) {ln:,}건은 {pct(lh, ln)}%" if ln else "")
+                               + ". 약한 아파트까지 신고가면 과열(📖 p.111~114), 🔧 경고선은 백테스트 전")
+        sig["b5_spread"] = (round(lr / tr, 2) if tr else None, "참고",
+                            f"하위 급지 신고가 비중 {lr}% ÷ 상위 급지(1~3급, 20억+) {tr}% (상위 {top['n']:,}건). 1에 가까울수록 상승이 아래까지 번진 것(🔧 경고선 백테스트 전)")
+    else:
+        sig["b5_low_highs"] = (None, "데이터 없음", "하위 급지 신고가 비중")
+        sig["b5_spread"] = (None, "데이터 없음", "상위 대비 하위 급지 신고가 비중")
     # 반등 신호: 매매수급지수
     sup = series(db, "sale_supply", 6)
     for cid, nm in ((SEOUL, "seoul"), (CAPITAL, "sudo")):
