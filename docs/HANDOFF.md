@@ -98,13 +98,14 @@ curl -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
 - 단지 연결은 이 작업 환경에서 실행: K-apt 목록 10,211개(83곳) 완료, complexes·info·match는 백그라운드(`/tmp/claude-0/kapt_*.log`)
 - 확인할 것: 오늘 밤 daily-snapshot(20:47 UTC)이 러너에서 공공데이터포털에 접속되는지
 
-### 저장 구조 C: 매매 원본 2년만 DB (2026-10-14, 진행 중)
+### 저장 구조 C: 매매 원본 2년만 DB (2026-10-14 적용 완료)
 
 - 원인: Supabase 무료 플랜 DB 크기 905MB / 500MB → 프로젝트 읽기 전용, 디스크도 꽉 참(WAL 940MB). 사용자: 무료 유지, C 선택
 - 방식: 2024-10 이전 매매 원본은 Releases `raw-data` 의 `deals_YYYYMM.csv.gz`(전월세와 같은 방식). 과거가 필요한 값은 `deal_anchor`(역대 최고·B2 고점/저점·A6 2020년 1분기), 시안 월별 차트는 `deal_region_month`(시군구 + 시도 2자리 합계) (0019)
 - `sql/metrics.sql`: 전고점·역대 최고는 DB 구간과 deal_anchor 를 합치고, B2·A6 은 deal_anchor 우선. 로컬 Postgres 16 으로 tests/test_metrics.py 두 개 통과(HC_TEST_PG_URL)
 - 순서: ① `deal-archive` 워크플로 export,anchor (DB 읽기만) ② 0019 적용 + `load` ③ `prune --before 202410`(보조 색인 삭제 → 남길 행만 새 표로 바꿔 끼우기 → 색인 재생성, 지우기 전 달마다 DB 행 수 = 보관 파일 행 수 확인) — ②③은 `SET SESSION CHARACTERISTICS AS TRANSACTION READ WRITE` 로 세션만 쓰기 허용(관리 API 에서 되는지 미확인), **사용자 확인 뒤**
 - `roll`(daily.yml, 전월세 보관 다음): 이번 달 포함 25개월 이전 달을 보관 파일로 올리고 행 수 확인 → 한 트랜잭션으로 deal_anchor 역대 최고 갱신·deal_region_month 추가·DB 삭제. deal_anchor 가 없거나 비어 있으면(설정 전) 건너뜀. 로컬 Postgres 로 전 과정 테스트(tests/test_deal_archive_pg.py)
+- **적용 결과(2026-10-14)**: export 57개월 1,048,083행(행 수 전부 일치) → load(deal_anchor 42,797, deal_region_month 4,845; 지금 DB 로 계산한 B2 고점·저점·A6 와 27,300곳 모두 일치) → prune(첫 실행은 gh 다운로드 PROTOCOL_ERROR 로 확인 단계에서 멈춤, 재실행 성공). DB 889MB → 약 350MB, 매매 515,067행(202410~202610, 합계 1,563,150 = 이전과 같음), 읽기 전용 풀림(일반 쓰기 확인). jobs.metrics 가 관리 API 로 46초. complex_metrics 는 40,741 → 34,927행(최근 2년 거래 없는 단지·면적은 빠짐)
 - 단지 차트용 **시군구별 과거 파일** `deals_hist_<시군구>.csv.gz`(`hist` 단계, roll 이 매달 덧붙임). 시안 extract.py 는 DB 에 없는 옛 거래를 HC_ARCHIVE(기본 dir:data/archive) 의 이 파일에서 읽는다. 이 클라우드 환경은 gh 로그인이 안 돼 Releases 를 못 받으므로, 2026-10-14 정리 전에 시안 단지 8개 시군구만 DB 에서 data/archive 로 만들어 둠(git 제외)
 - 관리 API 에서 읽기 전용 중 쓰기: `BEGIN READ WRITE; ... COMMIT;` 는 되고 `SET SESSION CHARACTERISTICS ...` 는 안 됨(2026-10-14). 0019 는 이 방법으로 적용함
 
