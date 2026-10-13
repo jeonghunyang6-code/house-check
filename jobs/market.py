@@ -185,6 +185,14 @@ def run(db: Db) -> dict[str, tuple]:
                             "하락기에 늘어나는 보조 지표(📖 p.404, 🔧 평균의 1.2배 넘으면 늘어남)")
     else:
         sig["c5_direct"] = (None, "데이터 없음", "서울 직거래 비중")
+    # D3 역전세 위험 (📖 p.153): 서울 단지·면적 중 지금 전세 < 24개월 전 전세 비율 (complex_metrics, 매일 계산)
+    d3 = select(db, "SELECT count(*) FILTER (WHERE reverse_risk) AS r, count(reverse_risk) AS n FROM complex_metrics WHERE apt_seq LIKE '11%'")
+    if d3 and d3[0]["n"]:
+        share = round(d3[0]["r"] * 100.0 / d3[0]["n"], 1)
+        sig["d3_reverse_share"] = (share, "참고", f"서울 단지·면적 {d3[0]['n']:,}개 중 지금 전세가 2년 전 전세보다 낮은 곳 {d3[0]['r']:,}개 ({share}%). "
+                                   "대비금 = 전세가의 10%(📖 p.153). 전월세 이력이 서울만 있어 경기·인천은 아직 판정 못 함")
+    else:
+        sig["d3_reverse_share"] = (None, "데이터 없음", "역전세 위험 단지 비율")
     # G2 기준금리와 서울 아파트값 (동행/역행). 2006년부터 달마다 세고, 최신 달 관계를 신호로
     br, kb = macro(db, "base_rate", 400), macro(db, "apt_kb_seoul", 400)
     rel = [x for x in rate_price_relation(br, kb) if x[0] >= "200601"]

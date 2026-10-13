@@ -33,7 +33,8 @@ out['cx_deals'] = select(db, f"""SELECT apt_seq, apt_name, contract_date::text c
  FROM deals WHERE apt_seq IN ({sl}) AND area_group IN (84,85) ORDER BY contract_date""")
 out['cx_rent'] = select(db, f"""SELECT apt_seq, contract_month m, area_group, n_jeonse, jeonse_median_10k, n_jeonse_new, jeonse_new_median_10k, n_jeonse_renew
  FROM rent_monthly WHERE apt_seq IN ({sl}) AND area_group IN (84,85) ORDER BY contract_month""")
-out['cx_phase'] = select(db, f"""SELECT apt_seq, area_group, phase, chg_12m, up_months, down_months, last3, region_chg_12m, rel_strength
+out['cx_phase'] = select(db, f"""SELECT apt_seq, area_group, phase, chg_12m, up_months, down_months, last3, region_chg_12m, rel_strength,
+ jeonse_10k, jeonse_24m_10k, jeonse_24m_n, reverse_risk, reserve_10k, real_ref_10k, base2020_10k, real_chg_2020
  FROM complex_metrics WHERE apt_seq IN ({sl}) AND area_group IN (84,85)""")
 # E. R-ONE 주간 지수 (rone_weekly, jobs/rone.py)
 out['rone'] = select(db, """SELECT w.stat, w.cls_id, r.full_name, r.region_code, w.week_id, w.week_date::text d, w.value

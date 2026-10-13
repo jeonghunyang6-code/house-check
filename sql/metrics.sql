@@ -95,8 +95,24 @@ rs AS (  -- B6 상대강도 (📖 상승의 차이 p.420~421): 같은 시군구(
   SELECT x.region_code, percentile_cont(0.5) WITHIN GROUP (ORDER BY ph.chg) AS region_chg, count(*) AS region_n
   FROM ph JOIN (SELECT DISTINCT apt_seq, region_code FROM deals) x USING (apt_seq) GROUP BY 1
 ),
+j24 AS (  -- D3: 24개월 전 ±1개월 전세 계약 (건수 가중 근사)
+  SELECT apt_seq, area_group,
+    sum(n_jeonse * jeonse_median_10k)::numeric / nullif(sum(n_jeonse) FILTER (WHERE jeonse_median_10k IS NOT NULL), 0) AS j24,
+    sum(n_jeonse) FILTER (WHERE jeonse_median_10k IS NOT NULL) AS n24
+  FROM rent_monthly
+  WHERE contract_month BETWEEN to_char({TODAY}::date - INTERVAL '25 months', 'YYYYMM') AND to_char({TODAY}::date - INTERVAL '23 months', 'YYYYMM')
+  GROUP BY 1, 2
+),
+b20 AS (  -- A6: 2020년 1분기 중개 거래 중앙값 (수집 시작 시점)
+  SELECT apt_seq, area_group, percentile_cont(0.5) WITHIN GROUP (ORDER BY price_10k) AS p20
+  FROM base WHERE contract_date >= DATE '2020-01-01' AND contract_date < DATE '2020-04-01' GROUP BY 1, 2
+),
+cpi AS (
+  SELECT (SELECT value FROM macro_monthly WHERE series = 'cpi' ORDER BY period DESC LIMIT 1) AS now_,
+         (SELECT avg(value) FROM macro_monthly WHERE series = 'cpi' AND period BETWEEN '202001' AND '202003') AS q120
+),
 d AS (
-  SELECT c.*, ph.phase, ph.chg, ph.up, ph.down, ph.last3,
+  SELECT c.*, ph.phase, j24.j24, j24.n24, b20.p20, cpi.now_ AS cpi_now, cpi.q120 AS cpi_20, ph.chg, ph.up, ph.down, ph.last3,
     -- 🔧 판정 단지 5개 이상인 시군구만
     CASE WHEN ph.chg IS NOT NULL AND rs.region_n >= 5 THEN rs.region_chg END AS region_chg,
     round(cur)::int AS ref,
@@ -106,6 +122,7 @@ d AS (
   FROM c LEFT JOIN ph USING (apt_seq, area_group)
   LEFT JOIN (SELECT DISTINCT ON (apt_seq) apt_seq, region_code FROM deals ORDER BY apt_seq, contract_date DESC) rc USING (apt_seq)
   LEFT JOIN rs ON rs.region_code = rc.region_code
+  LEFT JOIN j24 USING (apt_seq, area_group) LEFT JOIN b20 USING (apt_seq, area_group) CROSS JOIN cpi
 )
 SELECT apt_seq, area_group, {TODAY},
   ref, cur_n, cur_days,
@@ -125,7 +142,15 @@ SELECT apt_seq, area_group, {TODAY},
        WHEN ref <= 150000 THEN 60 WHEN ref <= 200000 THEN 60 - 10 * (ref - 150000) / 50000.0 ELSE 50 END,
   n_365, high_10k, high_date, last_date,
   phase, round(chg::numeric, 2), up, down, last3,
-  round(region_chg::numeric, 2), round((chg - region_chg)::numeric, 2)
+  round(region_chg::numeric, 2), round((chg - region_chg)::numeric, 2),
+  -- D3 (📖 p.153): 24개월 전 전세 2건 이상일 때만 판정
+  CASE WHEN n24 >= 2 THEN round(j24)::int END, n24,
+  CASE WHEN j IS NOT NULL AND n24 >= 2 THEN j < j24 END,
+  CASE WHEN j IS NOT NULL THEN round(j * 0.1)::int END,
+  -- A6: 2020=100 원화 기준 실질 시세, 2020년 1분기 대비 실질 변화
+  CASE WHEN ref IS NOT NULL AND cpi_now > 0 THEN round(ref * 100.0 / cpi_now)::int END,
+  round(p20)::int,
+  CASE WHEN ref IS NOT NULL AND p20 > 0 AND cpi_now > 0 AND cpi_20 > 0 THEN round((((ref / cpi_now) / (p20 / cpi_20) - 1) * 100)::numeric, 1) END
 FROM d;
 
 COMMIT;

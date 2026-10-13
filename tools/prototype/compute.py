@@ -67,7 +67,10 @@ for seq in d['seqs']:
     n12 = sum(1 for r in ok if date.fromisoformat(r['cd']) > TODAY - timedelta(days=365))
     phs = [r for r in d.get('cx_phase', []) if r['apt_seq'] == seq and r['phase']]
     ph = max(phs, key=lambda r: r['area_group'] == 84) if phs else None  # 84 우선
-    cx.append({'phase': ph and {k: ph[k] for k in ('phase', 'chg_12m', 'up_months', 'down_months', 'last3', 'region_chg_12m', 'rel_strength')}, 'seq': seq, 'name': name, 'region': REG[seq[:5]], 'P': P, 'T': T, 'C': C, 'conf': conf, 'cn': cn if C else 0,
+    m84 = [r for r in d.get('cx_phase', []) if r['apt_seq'] == seq and r['area_group'] in (84, 85)]
+    m84 = max(m84, key=lambda r: r['area_group'] == 84) if m84 else None
+    cx.append({'m': m84 and {k: m84[k] for k in ('jeonse_24m_10k', 'jeonse_24m_n', 'reverse_risk', 'reserve_10k', 'real_ref_10k', 'base2020_10k', 'real_chg_2020')},
+               'phase': ph and {k: ph[k] for k in ('phase', 'chg_12m', 'up_months', 'down_months', 'last3', 'region_chg_12m', 'rel_strength')}, 'seq': seq, 'name': name, 'region': REG[seq[:5]], 'P': P, 'T': T, 'C': C, 'conf': conf, 'cn': cn if C else 0,
                'rec': rec, 'pattern': pattern, 'J': J, 'jn': jn, 'jsrc': '신규' if new else '전체', 'ratio': ratio, 'band': nb,
                'n12': n12, 'ref': ref,
                'pts': [[r['cd'], r['price_10k'], r['floor']] for r in ok],
