@@ -38,7 +38,8 @@ out['cx_deals'] = select(db, f"""SELECT apt_seq, apt_name, contract_date::text c
 # 저장 구조 C: DB 에 없는 옛 거래는 시군구별 과거 파일(deals_hist_<시군구>.csv.gz)에서. HC_ARCHIVE(기본 dir:data/archive)
 import math
 from collector.archive import decode, open_store
-_store = open_store()
+import os
+_store = open_store(os.environ.get('HC_ARCHIVE') or f'dir:{ROOT}/data/archive')
 _first = min((r['cd'] for r in out['cx_deals']), default='9999')
 for _rc in sorted({s.split('-')[0] for s in SEQS}):
     _data = _store.get(f'deals_hist_{_rc}.csv.gz')
@@ -56,6 +57,19 @@ out['cx_rent'] = select(db, f"""SELECT apt_seq, contract_month m, area_group, n_
 out['cx_phase'] = select(db, f"""SELECT apt_seq, area_group, phase, chg_12m, up_months, down_months, last3, region_chg_12m, rel_strength,
  jeonse_10k, jeonse_24m_10k, jeonse_24m_n, reverse_risk, reserve_10k, real_ref_10k, base2020_10k, real_chg_2020
  FROM complex_metrics WHERE apt_seq IN ({sl}) AND area_group IN (84,85)""")
+# D2. 급지 E1 (dong_grade 최신): 예시 단지의 동 급지·표시 3개
+G = "(SELECT * FROM dong_grade WHERE asof = (SELECT max(asof) FROM dong_grade))"
+out['cx_grade'] = select(db, f"""SELECT c.apt_seq, c.umd_name, g.grade, g.value_10k, g.q1_10k, g.q3_10k, g.n_complex, g.old_share,
+  g.flag_rebuild, g.flag_gap, g.new_big_name, g.new_big_10k, g.asof::text asof, k.households
+ FROM complexes c LEFT JOIN {G} g ON g.region_code = c.region_code AND g.umd_name = c.umd_name
+ LEFT JOIN kapt_complexes k ON k.kapt_code = c.kapt_code WHERE c.apt_seq IN ({sl})""")
+# D3. 후보 단지 찾기 (⑦): 기준 시세가 있는 단지·면적 전체 + 급지·표시
+out['cand'] = select(db, f"""SELECT m.apt_seq, m.area_group, m.ref_10k, m.confidence, m.phase, m.pattern, c.apt_name, c.region_code, c.umd_name,
+  c.build_year, k.households, g.grade, g.flag_rebuild, g.flag_gap, g.new_big_name
+ FROM complex_metrics m JOIN complexes c USING (apt_seq)
+ LEFT JOIN kapt_complexes k ON k.kapt_code = c.kapt_code
+ LEFT JOIN {G} g ON g.region_code = c.region_code AND g.umd_name = c.umd_name
+ WHERE m.ref_10k IS NOT NULL AND m.area_group BETWEEN 40 AND 135""")
 # E. R-ONE 주간 지수 (rone_weekly, jobs/rone.py)
 out['rone'] = select(db, """SELECT w.stat, w.cls_id, r.full_name, r.region_code, w.week_id, w.week_date::text d, w.value
  FROM rone_weekly w JOIN rone_regions r USING (cls_id)
