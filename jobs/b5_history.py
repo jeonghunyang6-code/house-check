@@ -1,76 +1,68 @@
-"""B5 ② 하위 급지 신고가 비중의 과거 월별 시계열 (0018 b5_history). 경고선 백테스트용, 수동 실행.
+"""B5 ② 하위 급지 신고가 비중의 과거 월별 시계열 (0018 b5_history, collector/b5.py). 경고선 백테스트용, 수동 실행.
 
-    python -m jobs.b5_history prev --regions sudogwon   # deals.prev_high_10k 를 2020년부터 다시 계산 (시군구별)
-    python -m jobs.b5_history agg                       # 월별 집계
+    python -m jobs.b5_history --archive gh
 
-sql/metrics.sql 은 최근 120일 거래의 전고점만 매일 다시 계산한다. 그 이전 거래는 이 작업이 채운다.
-과거에도 지금(최신 asof) 급지를 그대로 쓴다: 2021년 하위 급지 = 지금 기준 하위 급지인 동.
+2024-09 이전 거래는 보관 파일(deals_YYYYMM.csv.gz), 그 뒤는 DB 에서 읽어 파이썬으로 전고점을 계산한다.
+DB 에는 b5_history(월 80행 안팎)만 쓴다. (2026-10-14 전 버전은 deals.prev_high_10k 를 대량 UPDATE 하다
+Supabase 무료 플랜이 읽기 전용이 됐다 — 그 방식은 버렸다)
 """
 
 from __future__ import annotations
 
 import argparse
 import sys
-import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+from collector.archive import asset_name, decode, open_store
+from collector.b5 import monthly
 from collector.db import Db, DbError, connect, lit, select
-from collector.regions import select_regions
+from jobs.daily import parse_months
+from jobs.deal_archive import cutoff
 
 KST = ZoneInfo("Asia/Seoul")
-FROM = "2020-01-01"
-RECENT_DAYS = 120   # 이보다 최근 거래는 jobs.metrics 가 매일 계산한다
+COLS = "apt_seq, contract_date::text AS contract_date, area_m2, price_10k, deal_type, is_cancelled"
 
 
-def run_prev(db: Db, regions: list[str]) -> int:
-    for i, rc in enumerate(regions, 1):
-        t = time.time()
-        db.query(f"""UPDATE deals d SET prev_high_10k = (
-  SELECT max(p.price_10k) FROM deals p
-  WHERE p.apt_seq = d.apt_seq AND p.area_group = d.area_group AND p.contract_date < d.contract_date
-    AND NOT p.is_cancelled AND p.deal_type = '중개')
-WHERE d.region_code = {lit(rc)} AND d.contract_date >= DATE {lit(FROM)} AND d.contract_date < current_date - {RECENT_DAYS};""")
-        print(f"  [{i}/{len(regions)}] {rc} 전고점 {time.time() - t:.0f}초")
-    return 0
-
-
-def run_agg(db: Db) -> int:
+def run(db: Db, store, today) -> int:
+    cut = cutoff(today)
+    old = [m for m in parse_months(f"202001-{cut}") if m < cut]
+    rows: list[dict] = []
+    for m in old:
+        data = store.get(asset_name("deal", m))
+        if data is None:
+            print(f"  {asset_name('deal', m)} 없음", file=sys.stderr)
+            return 1
+        rows += decode(data)
+    n_old = len(rows)
+    for r in select(db, "SELECT DISTINCT contract_month AS m FROM deals ORDER BY 1"):
+        rows += select(db, f"SELECT {COLS} FROM deals WHERE contract_month = {lit(r['m'])}")
     asof = select(db, "SELECT max(asof)::text AS d FROM dong_grade")[0]["d"]
-    if not asof:
-        print("  dong_grade 가 비어 있음 (jobs.grade 먼저)", file=sys.stderr)
-        return 1
-    db.query(f"""BEGIN;
-DELETE FROM b5_history;
-INSERT INTO b5_history
-WITH g AS (SELECT region_code, umd_name, grade FROM dong_grade WHERE asof = DATE {lit(asof)}),
-r AS (SELECT d.contract_month AS m, d.price_10k > d.prev_high_10k AS hi, g.grade,
-        g.grade >= 6 AND x.build_year <= left(d.contract_month, 4)::int - 20 AND coalesce(k.households, 0) < 300 AS lip
-  FROM deals d JOIN complexes x USING (apt_seq) JOIN g ON g.region_code = d.region_code AND g.umd_name = x.umd_name
-  LEFT JOIN kapt_complexes k ON k.kapt_code = x.kapt_code
-  WHERE NOT d.is_cancelled AND d.deal_type = '중개' AND d.prev_high_10k IS NOT NULL AND d.contract_date >= DATE '2021-01-01')
-SELECT m, count(*) FILTER (WHERE grade >= 6), count(*) FILTER (WHERE grade >= 6 AND hi),
-  count(*) FILTER (WHERE grade <= 3), count(*) FILTER (WHERE grade <= 3 AND hi),
-  count(*) FILTER (WHERE lip), count(*) FILTER (WHERE lip AND hi), DATE {lit(asof)}
-FROM r GROUP BY m;
-COMMIT;""")
-    for r in select(db, "SELECT month, n_low, h_low, n_top, h_top, n_lip, h_lip FROM b5_history ORDER BY month"):
-        lo = r["h_low"] * 100 / r["n_low"] if r["n_low"] else 0
-        tp = r["h_top"] * 100 / r["n_top"] if r["n_top"] else 0
-        print(f"  {r['month']} 하위 {lo:5.1f}% ({r['n_low']:>6,}) 상위 {tp:5.1f}% ({r['n_top']:>5,}) 비 {lo / tp if tp else 0:.2f}")
+    cx = {r["apt_seq"]: r for r in select(db, f"""SELECT c.apt_seq, g.grade, c.build_year, k.households FROM complexes c
+        JOIN dong_grade g ON g.region_code = c.region_code AND g.umd_name = c.umd_name AND g.asof = DATE {lit(asof)}
+        LEFT JOIN kapt_complexes k ON k.kapt_code = c.kapt_code""")}
+    out = monthly(rows, cx)
+    vals = ", ".join(f"({lit(m)}, {o['n_low']}, {o['h_low']}, {o['n_top']}, {o['h_top']}, {o['n_lip']}, {o['h_lip']}, DATE {lit(asof)})"
+                     for m, o in out.items())
+    db.query(f"BEGIN; DELETE FROM b5_history; INSERT INTO b5_history VALUES {vals}; COMMIT;")
+    print(f"  거래 {len(rows):,}행 (보관 {n_old:,} + DB {len(rows) - n_old:,}), 급지 {asof}, {len(out)}개월")
+    for m, o in out.items():
+        lo = o["h_low"] * 100 / o["n_low"] if o["n_low"] else 0
+        tp = o["h_top"] * 100 / o["n_top"] if o["n_top"] else 0
+        lp = o["h_lip"] * 100 / o["n_lip"] if o["n_lip"] else 0
+        print(f"  {m} 하위 {lo:5.1f}% ({o['n_low']:>6,}) 립밤 {lp:5.1f}% ({o['n_lip']:>5,}) 상위 {tp:5.1f}% ({o['n_top']:>5,}) 비 {lo / tp if tp else 0:.2f}")
     return 0
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("step", choices=["prev", "agg"])
-    ap.add_argument("--regions", default="sudogwon")
+    ap.add_argument("--archive")
     ap.add_argument("--db", choices=["api", "psql"])
     a = ap.parse_args(argv)
-    print(f"[b5_history] {a.step} {datetime.now(KST):%Y-%m-%d %H:%M}")
+    now = datetime.now(KST)
+    print(f"[b5_history] {now:%Y-%m-%d %H:%M}")
     try:
-        db = connect(a.db)
-        return run_prev(db, select_regions(a.regions)) if a.step == "prev" else run_agg(db)
+        return run(connect(a.db), open_store(a.archive), now.date())
     except DbError as e:
         print(f"[b5_history] 실패: {e}", file=sys.stderr)
         return 1
