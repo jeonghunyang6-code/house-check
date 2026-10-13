@@ -44,3 +44,25 @@ def test_match_priority_and_ambiguity():
     m = match_complexes(cx, kapts)
     assert {k: (v.kapt_code, v.method) for k, v in m.items()} == {
         "s1": ("A1", "jibun"), "s2": ("A3", "jibun"), "s4": ("A4", "road"), "s5": ("A5", "name")}
+
+
+def test_get_json_unexpected_body_is_api_error():
+    import io, urllib.request
+    import pytest
+    from collector import kapt
+    from collector.sources.molit import ApiError, QuotaExceeded
+
+    class R(io.BytesIO):
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    orig = urllib.request.urlopen
+    try:
+        urllib.request.urlopen = lambda *a, **k: R(b'{"OpenAPI_ServiceResponse": {"x": 1}}')
+        with pytest.raises(ApiError):
+            kapt._get_json("https://example.invalid", {})
+        urllib.request.urlopen = lambda *a, **k: R(b'{"msg": "LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS_ERROR"}')
+        with pytest.raises(QuotaExceeded):
+            kapt._get_json("https://example.invalid", {})
+    finally:
+        urllib.request.urlopen = orig
