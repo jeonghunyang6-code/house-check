@@ -71,6 +71,11 @@ h3 { margin: 0; font-size: 13px; font-weight: 600; color: var(--ink-2); }
 .chip { font: inherit; font-size: 13px; border: 1px solid var(--line); background: var(--screen); color: var(--ink-2); padding: 4px 10px; border-radius: 999px; cursor: pointer; }
 .chip[aria-pressed="true"] { background: var(--ink); color: var(--screen); border-color: var(--ink); }
 .chip:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+input { font: inherit; font-size: 15px; color: var(--ink); background: var(--sunk); border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; width: 100%; min-width: 0; font-variant-numeric: tabular-nums; text-align: right; }
+input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.calc { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 9em); gap: 8px 10px; align-items: center; }
+.calc label { font-size: 13px; color: var(--ink-2); display: flex; justify-content: space-between; gap: 6px; }
+.calc .unit { color: var(--ink-3); font-size: 12px; }
 select { font: inherit; font-size: 14px; color: var(--ink); background: var(--sunk); border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; width: 100%; }
 .list { display: grid; gap: 0; max-height: 640px; overflow-y: auto; border-top: 1px solid var(--line); }
 .row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; padding: 10px 2px; border-bottom: 1px solid var(--line); }
@@ -233,6 +238,23 @@ footer.foot { color: var(--ink-3); font-size: 12px; max-width: 90ch; display: gr
         <p class="muted" style="margin:0">점수를 매기지 않고, 관점별 기준을 넘었는지만 나란히 봅니다.</p>
         <div class="tbl-wrap"><table id="cmp"></table></div>
         <div class="sec" id="cmpNotes"></div>
+      </div>
+    </section>
+
+    <section class="col" aria-label="예산 계산기">
+      <div class="label"><span>⑥ 예산 계산기</span><span>실거주 1주택</span></div>
+      <div class="screen">
+        <div class="appbar"><h2>얼마짜리 집을 볼 수 있나</h2></div>
+        <form class="calc" id="calc" autocomplete="off">
+          <label for="c_seed">종잣돈<span class="unit">만원</span></label><input id="c_seed" inputmode="numeric" value="40000">
+          <label for="c_income">세후 월소득<span class="unit">만원</span></label><input id="c_income" inputmode="numeric" value="600">
+          <label for="c_limit">은행 대출 가능액<span class="unit">만원</span></label><input id="c_limit" inputmode="numeric" value="50000">
+          <label for="c_rate">대출 금리<span class="unit">연 %</span></label><input id="c_rate" inputmode="decimal" value="">
+          <label for="c_years">상환 기간<span class="unit">년</span></label><input id="c_years" inputmode="numeric" value="30">
+          <label for="c_misc">법무사·이사 등<span class="unit">만원</span></label><input id="c_misc" inputmode="numeric" value="300">
+        </form>
+        <div class="kpis" id="calcOut"></div>
+        <div class="sec" id="calcNotes"></div>
       </div>
     </section>
   </div>
@@ -546,6 +568,75 @@ $('#notice').innerHTML = `<b>데이터 범위</b><span>서울 실거래는 2020�
   for (let yr = 2006; yr <= 2006 + last / 12; yr += 5) txt(svg, x((yr - 2006) * 12), 246, yr);
   const n = (k) => G.rel.filter(r => r[1] === k).length, cur = G.rel[G.rel.length - 1];
   $('#g2Src').textContent = `2006년 이후 ${G.rel.length}개월 중 금리와 집값이 같은 방향 ${n('동행')}개월, 반대 방향 ${n('역행')}개월, 금리 동결 ${n('금리 동결')}개월. 최근(${cur[0].slice(0, 4)}.${cur[0].slice(4)})은 ${cur[1]}. 📖 금리는 집값을 조절하지 않는다, 금리 인하는 경기가 나쁘다는 뜻일 수 있다(p.48~49). 동행 = 1년 전보다 금리가 오르며 집값도 오름, 또는 둘 다 내림. 출처: 한국은행 ECOS(기준금리, KB 아파트 매매가격지수).`;
+})();
+
+/* ⑥ 예산 계산기 (I1, I4): 📖 종잣돈 + 대출 = 볼 금액대 p.295~298, 원리금 ≤ 세후 소득 30% p.474, 인테리어 ≤ 5% p.241
+   세율·중개보수는 법정 기준(2026-10 확인 못 함, 바뀌었을 수 있음). 대출 가능액(LTV·DSR)은 은행마다 달라 직접 입력 */
+const Calc = {
+  // 원리금균등 월 상환액 (원 단위 입력·출력). 검증: 3억·4.5%·30년 = 1,520,056원 (📖 p.40)
+  payment(principal, ratePct, years) {
+    const r = ratePct / 100 / 12, n = years * 12;
+    return r === 0 ? principal / n : principal * r * Math.pow(1 + r, n) / (Math.pow(1 + r, n) - 1);
+  },
+  principalFor(pay, ratePct, years) { const one = Calc.payment(1, ratePct, years); return one > 0 ? pay / one : 0; },
+  // 1주택 취득세 + 지방교육세(취득세의 10%), 전용 85㎡ 이하 가정(농특세 없음). 가격 만원
+  acqTax(p) {
+    const rate = p <= 60000 ? 1 : p <= 90000 ? (p / 10000 * 2 / 3 - 3) : 3;   // %
+    return p * rate / 100 * 1.1;
+  },
+  // 매매 중개보수 상한 (만원)
+  brokerFee(p) {
+    if (p < 5000) return Math.min(p * 0.006, 25);
+    if (p < 20000) return Math.min(p * 0.005, 80);
+    if (p < 90000) return p * 0.004;
+    if (p < 120000) return p * 0.005;
+    if (p < 150000) return p * 0.006;
+    return p * 0.007;
+  },
+  // 쓸 수 있는 돈(만원) → 살 수 있는 집값: 집값 + 취득세 + 중개보수 + 기타 = 쓸 수 있는 돈
+  priceFor(cash, misc) {
+    let lo = 0, hi = cash;
+    for (let i = 0; i < 60; i++) { const m = (lo + hi) / 2; (m + Calc.acqTax(m) + Calc.brokerFee(m) + misc <= cash) ? lo = m : hi = m; }
+    return lo;
+  },
+};
+(function () {
+  const $v = (id) => { const x = parseFloat(String($(id).value).replace(/,/g, '')); return isFinite(x) ? x : 0; };
+  const rateSig = (D.signals || {}).g3_mortgage_rate;
+  if (rateSig && rateSig.value != null) $('#c_rate').value = Number(rateSig.value).toFixed(2);
+  else $('#c_rate').value = '4.5';
+  const KEY = 'hc-calc';
+  try { const saved = JSON.parse(localStorage.getItem(KEY) || 'null'); if (saved) for (const k in saved) if ($('#' + k)) $('#' + k).value = saved[k]; } catch (e) {}
+  const man = (v) => v >= 10000 ? (v / 10000).toFixed(2).replace(/\.?0+$/, '') + '억' : Math.round(v).toLocaleString() + '만';
+  const won = (v) => Math.round(v).toLocaleString() + '원';
+  function draw() {
+    const seed = $v('#c_seed'), inc = $v('#c_income'), limit = $v('#c_limit'), rate = $v('#c_rate'), yrs = Math.max(1, $v('#c_years')), misc = $v('#c_misc');
+    try { localStorage.setItem(KEY, JSON.stringify(Object.fromEntries(['c_seed', 'c_income', 'c_limit', 'c_rate', 'c_years', 'c_misc'].map(k => [k, $('#' + k).value])))); } catch (e) {}
+    const capPay = inc * 0.3 * 10000;                                   // 원
+    const loanBy30 = Calc.principalFor(capPay, rate, yrs) / 10000;      // 만원
+    const loan = Math.min(limit, loanBy30);
+    const price = Calc.priceFor(seed + loan, misc);
+    const pay = Calc.payment(loan * 10000, rate, yrs);
+    const share = inc > 0 ? pay / (inc * 10000) * 100 : 0;
+    const payFull = Calc.payment(limit * 10000, rate, yrs), shareFull = inc > 0 ? payFull / (inc * 10000) * 100 : 0;
+    const tax = Calc.acqTax(price), fee = Calc.brokerFee(price);
+    const bound = limit <= loanBy30 ? '은행 대출 가능액' : '소득 30% 기준';
+    $('#calcOut').innerHTML = `
+      <div class="kpi"><span class="k">볼 수 있는 집값</span><span class="v">${man(price)}</span><span class="d">종잣돈 ${man(seed)} + 대출 ${man(loan)} − 부대비용</span></div>
+      <div class="kpi"><span class="k">월 원리금</span><span class="v">${won(pay)}</span><span class="d"><span class="pill ${share > 30.05 ? 'bad' : 'good'}">세후 소득의 ${share.toFixed(1)}%</span></span></div>
+      <div class="kpi"><span class="k">대출을 정한 기준</span><span class="v" style="font-size:15px">${bound}</span><span class="d">소득 30%로 갚을 수 있는 대출 ${man(loanBy30)}</span></div>
+      <div class="kpi"><span class="k">부대비용</span><span class="v">${man(tax + fee + misc)}</span><span class="d">취득세 ${man(tax)} · 중개보수 ${man(fee)} · 기타 ${man(misc)}</span></div>`;
+    const notes = [
+      `원리금은 세후 소득의 30%가 마지노선(📖 p.474). 은행 가능액 ${man(limit)}을 다 빌리면 월 ${won(payFull)}, 소득의 ${shareFull.toFixed(1)}%${shareFull > 30.05 ? ' → <b>30% 초과라 대출을 줄여 계산했습니다</b>' : ''}.`,
+      `볼 금액대 = 종잣돈 + 최대 대출(📖 p.295~298). 사고 싶은 집을 살 돈이 있을 때가 매수 시점(📖 p.106~108).`,
+      `인테리어는 집값의 최대 5% = ${man(price * 0.05)}(📖 p.241). 이 금액은 위 계산에 넣지 않았습니다.`,
+      `금리 기본값은 이번 달 예금은행 주담대 신규취급 금리(한국은행)입니다. 대출 가능액(LTV·DSR)은 은행·정책마다 달라 직접 넣어 주세요. 취득세(1주택·85㎡ 이하, 지방교육세 포함)와 중개보수 상한은 법정 요율로 계산했고 최신 개정 여부는 확인하지 못했습니다. 입력값은 이 브라우저에만 저장됩니다.`,
+    ];
+    $('#calcNotes').innerHTML = notes.map(n => `<p class="muted" style="margin:0">${n}</p>`).join('');
+  }
+  $('#calc').addEventListener('input', draw);
+  $('#calc').addEventListener('submit', (e) => e.preventDefault());
+  draw();
 })();
 
 /* ② 오늘의 실거래 */
