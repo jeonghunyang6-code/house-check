@@ -23,22 +23,33 @@ def text(t):
 
 
 t = get("https://www.schoolinfo.go.kr/ng/go/pnnggo_a01_l0.do")
-for m in re.finditer(r"(\$\.ajax|\$\.post|url\s*:)", t):
-    print("ajax:", re.sub(r"\s+", " ", t[max(0, m.start() - 100):m.start() + 500]))
-for m in re.finditer(r"loadOpenApi\(([^)]*)\)[^<]{0,10}</?[^>]*>?\s*([^<]{0,40})", t):
-    print("api:", m.group(1), m.group(2).strip())
-print("### depthNo 필요한 항목")
-for at in (27, 28):
-    for depth, depth2 in (("1", "1"), ("2", "1"), ("3", "1"), ("3", "2"), ("1", "2")):
-        q = urllib.parse.urlencode({"apiKey": KEY, "apiType": at, "sidoCode": "11", "sggCode": "11680", "schulKndCode": "03",
-                                    "pbanYr": "2025", "depthNo": depth, "depthNo2": depth2})
-        body = get(f"https://www.schoolinfo.go.kr/openApi.do?{q}").replace(KEY, "***")
+apis = []
+for m in re.finditer(r"loadOpenApi\(\s*'?(\w+)'?\s*,\s*'?(\w+)'?\s*\)", t):
+    tail = re.sub(r"<[^>]+>", " ", t[m.end():m.end() + 300])
+    name = re.sub(r"\s+", " ", tail).strip()[:40]
+    apis.append((m.group(1), m.group(2), name))
+print("apis:", len(apis))
+for a_ in apis:
+    print("  ", a_)
+for go, grp, name in apis:
+    if not re.search(r"학업|성취|진로|진학|졸업", name):
+        continue
+    page = get("https://www.schoolinfo.go.kr/ng/go/pnnggo_a01_l0.do", {"goNo": go, "groupNo": grp})
+    tx = text(page)
+    i = tx.find("번호 항목명 항목 ID")
+    j = tx.find("Sample Url", i + 10)
+    print(f"=== {name} goNo={go} group={grp}")
+    print("   spec:", tx[i:i + 2500] if i >= 0 else "없음")
+    print("   apiType:", sorted(set(re.findall(r"apiType=(\d+)", page)))[:5], re.findall(r'name="apiType"[^>]*value="(\d+)"|value="(\d+)"[^>]*name="apiType"', page)[:3])
+print("### 연도별 성공 항목")
+for yr in ("2026", "2024"):
+    ok = []
+    for at in range(1, 80):
+        q = urllib.parse.urlencode({"apiKey": KEY, "apiType": at, "sidoCode": "11", "sggCode": "11680", "schulKndCode": "03", "pbanYr": yr})
         try:
-            d = json.loads(body)
-        except json.JSONDecodeError:
-            print(at, depth, depth2, body[:120]); continue
-        lst = d.get("list")
-        if lst:
-            print(at, depth, depth2, "rows", len(lst), json.dumps(lst[0], ensure_ascii=False)[:900])
-        else:
-            print(at, depth, depth2, json.dumps(d, ensure_ascii=False)[:160])
+            d = json.loads(get(f"https://www.schoolinfo.go.kr/openApi.do?{q}"))
+        except Exception:
+            continue
+        if d.get("list"):
+            ok.append(at)
+    print(yr, ok)
