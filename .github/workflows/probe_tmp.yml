@@ -10,6 +10,6 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
-      - run: python3 tools/probe/middle.py
+      - run: pip install -q pyshp && python3 tools/probe/middle.py
         env:
           PYTHONUNBUFFERED: "1"
