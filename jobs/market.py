@@ -13,7 +13,7 @@ import sys
 from datetime import date, timedelta
 
 from collector.db import Db, DbError, connect, lit, select
-from collector.market import (_shift, DOWN_RATIO, JEONSE_WEEKS, SUPPLY_WEEKS, UNEMP_JUMP, b4, loan_growth, new_jeonse, rate_price_relation, yoy_series, monthly, mortgage_band, phase, run_length,
+from collector.market import (_shift, B5_HOT, B5_SPREAD, B5_WATCH, b4_applies, b5_state, rebound_state, DOWN_RATIO, JEONSE_WEEKS, SUPPLY_WEEKS, UNEMP_JUMP, b4, loan_growth, new_jeonse, rate_price_relation, yoy_series, monthly, mortgage_band, phase, run_length,
                              unemployment)
 
 SEOUL, CAPITAL = 50008, 50002
@@ -79,12 +79,13 @@ def run(db: Db) -> dict[str, tuple]:
     # B4 ③ / G5 실업률 (jobs/macro.py)
     um = unemployment(macro(db, "unemployment_sa", 4))
     met, known, cls = b4(ratio4, jdown, um.b4_met if um else None)
-    sudo_phase = getattr(phases.get(("sale", CAPITAL)), "phase", None)
-    falling = sudo_phase in ("하락장", "일시 조정")
+    sudo_ph = phases.get(("sale", CAPITAL))
+    sudo_phase = getattr(sudo_ph, "phase", None)
+    falling = b4_applies(sudo_ph)
     sig["b4_down_ratio"] = (ratio4, "데이터 없음" if ratio4 is None else "충족" if ratio4 >= DOWN_RATIO else "미충족",
                             f"전국 시군구 중 주간 하락 지역 비율 최근 4주 평균 (기준 {DOWN_RATIO:.0f}%)")
     sig["b4_jeonse_8w"] = (jdown, "데이터 없음" if jdown is None else "충족" if jdown >= JEONSE_WEEKS else "미충족",
-                           f"수도권 전세지수 연속 하락 주 (기준 {JEONSE_WEEKS}주)")
+                           f"수도권 전세지수 연속 하락 주 (기준 {JEONSE_WEEKS}주). 2012년 이후 4번 켜짐: 2012-07·2018-12·2022-03 뒤 매매 하락, 2018-01 은 상승")
     if um:
         chg = f"{um.chg_3m:+.1f}%p" if um.chg_3m is not None else "비교 불가"
         sig["b4_unemployment"] = (um.rate, "충족" if um.b4_met else "미충족",
@@ -94,7 +95,7 @@ def run(db: Db) -> dict[str, tuple]:
         sig["b4_unemployment"] = (None, "데이터 없음", "실업률 4% 이상 또는 3개월 +0.5%p (macro_monthly 비어 있음)")
         sig["g5_unemployment"] = (None, "데이터 없음", "계절조정 실업률")
     sig["b4_class"] = (met, cls if falling else "해당 없음",
-                       f"수도권 국면 {sudo_phase}. 하락 국면일 때만 판정. 조건 {met}/{known}개 충족 (판단 가능 {known}/3)")
+                       f"수도권 국면 {sudo_phase}. 하락장·일시 조정 또는 최근 3개월 연속 하락일 때만 판정. 조건 {met}/{known}개 충족 (판단 가능 {known}/3)")
     # D5 서울 신규 전세 감소 + 전세가 상승 (rent_monthly 는 서울만 2020년~)
     last_complete = (date.today().replace(day=1) - timedelta(days=1)).replace(day=1) - timedelta(days=1)  # 지지난 달 말
     cnt = {r["m"]: (int(r["jn"]), int(r["jr"])) for r in select(
@@ -242,26 +243,33 @@ def run(db: Db) -> dict[str, tuple]:
         pr = pct(lowp["h"], lowp["n"]) if lowp else None
         ln = sum(r["ln"] for k, r in bb.items() if k[0])
         lh = sum(r["lh"] for k, r in bb.items() if k[0])
-        sig["b5_low_highs"] = (lr, "참고" if pr is None else "증가" if lr > pr else "감소" if lr < pr else "유지",
-                               f"수도권 최근 4주 하위 급지(6~8급, 12억 미만) 거래 {low['n']:,}건 중 신고가 {lr}%"
-                               + (f", 그 전 4주 {pr}%" if pr is not None else "")
+        sp = round(lr / tr, 2) if tr else None
+        trend = "" if pr is None else f", 그 전 4주 {pr}% ({'증가' if lr > pr else '감소' if lr < pr else '유지'})"
+        sig["b5_low_highs"] = (lr, b5_state(lr, sp),
+                               f"수도권 최근 4주 하위 급지(6~8급, 12억 미만) 거래 {low['n']:,}건 중 신고가 {lr}%{trend}"
                                + (f". 그중 구축(20년+)·소단지(300세대 미만) {ln:,}건은 {pct(lh, ln)}%" if ln else "")
-                               + ". 약한 아파트까지 신고가면 과열(📖 p.111~114), 🔧 경고선은 백테스트 전")
-        sig["b5_spread"] = (round(lr / tr, 2) if tr else None, "참고",
-                            f"하위 급지 신고가 비중 {lr}% ÷ 상위 급지(1~3급, 20억+) {tr}% (상위 {top['n']:,}건). 1에 가까울수록 상승이 아래까지 번진 것(🔧 경고선 백테스트 전)")
+                               + f". 약한 아파트까지 신고가면 과열(📖 p.111~114). 🔧 {B5_WATCH:.0f}% 이상 주의, {B5_HOT:.0f}% 이상 + 상위 대비 {B5_SPREAD}배 이상 과열"
+                               " (2021 불장 30~41%, 2023~25년 2~3%)")
+        sig["b5_spread"] = (sp, "데이터 없음" if sp is None else "충족" if sp >= B5_SPREAD else "미충족",
+                            f"하위 급지 신고가 비중 {lr}% ÷ 상위 급지(1~3급, 20억+) {tr}% (상위 {top['n']:,}건). 1에 가까울수록 상승이 아래까지 번진 것"
+                            f" (🔧 {B5_SPREAD}배, 2021 불장 0.62~0.79). 하위 비중이 낮을 때는 비가 흔들려 과열 판정은 ②와 함께 본다")
     else:
         sig["b5_low_highs"] = (None, "데이터 없음", "하위 급지 신고가 비중")
         sig["b5_spread"] = (None, "데이터 없음", "상위 대비 하위 급지 신고가 비중")
     # 반등 신호: 매매수급지수
-    sup = series(db, "sale_supply", 6)
+    sup, sale = series(db, "sale_supply", 6), series(db, "sale", 6)
     for cid, nm in ((SEOUL, "seoul"), (CAPITAL, "sudo")):
-        v = [x for _, x in sup.get(cid, [])]
+        sd = dict(sale.get(cid, []))
+        pts = [(d, x) for d, x in sup.get(cid, []) if d in sd]   # 같은 주끼리
+        v, s = [x for _, x in pts], [sd[d] for d, _ in pts]
         if len(v) < 2:
             sig[f"supply_{nm}"] = (None, "데이터 없음", "매매수급지수")
             continue
-        up = run_length(v, +1)
-        sig[f"supply_{nm}"] = (round(v[-1], 1), "상승 전환" if up >= SUPPLY_WEEKS else "아님",
-                               f"매매수급지수 {v[-1]:.1f} (100 초과 = 매수 우위), {up}주 연속 상승 (기준 {SUPPLY_WEEKS}주)")
+        up, st = rebound_state(v, s)
+        sig[f"supply_{nm}"] = (round(v[-1], 1), st,
+                               f"매매수급지수 {v[-1]:.1f} (100 초과 = 매수 우위), {up}주 연속 상승 (기준 {SUPPLY_WEEKS}주)"
+                               + (". 매매지수가 13주 전보다 낮지 않아 '전환'을 볼 때가 아님" if st == "하락 중 아님" else
+                                  ". 하락 중 4주 연속 상승: 2012년 이후 26주 뒤 평균 수도권 +0.2%(하락 중 아무 주 -1.5%), 2022-04처럼 틀린 적도 있음"))
 
     vals = ", ".join("(" + ", ".join(lit(x) for x in (k, asof, val, state, detail)) + ")" for k, (val, state, detail) in sig.items())
     stmts.append("INSERT INTO market_signals (key, asof, value, state, detail) VALUES " + vals +

@@ -48,3 +48,32 @@ def test_new_jeonse():
     assert nj.renew_share == 46.7 and nj.state == "충족"
     assert new_jeonse(cnt, "202608", -0.5).state == "미충족"
     assert new_jeonse(cnt, "202508", 1.0).state == "데이터 없음"   # 1년 전 자료 없음
+
+
+def test_b5_state():
+    from collector.market import b5_state
+    assert b5_state(None, None) == "데이터 없음"
+    assert b5_state(3.0, 0.1) == "보통"
+    assert b5_state(9.9, 0.3) == "보통"
+    assert b5_state(10.0, 0.3) == "주의"
+    assert b5_state(30.0, 0.5) == "주의"      # 비중은 높아도 상위가 더 많이 오르면 과열 아님
+    assert b5_state(25.0, 0.6) == "과열"
+    assert b5_state(30.0, None) == "주의"
+
+
+def test_rebound_state_only_when_falling():
+    from collector.market import rebound_state
+    up4 = [90, 91, 92, 93, 94]
+    assert rebound_state(up4, [100 + i for i in range(20)]) == (4, "하락 중 아님")
+    falling = [120 - i for i in range(20)]
+    assert rebound_state(up4, falling) == (4, "상승 전환")
+    assert rebound_state([90, 91, 92, 91.5, 92], falling) == (1, "아님")
+    assert rebound_state(up4, [100, 99]) == (4, "하락 중 아님")   # 13주 비교 불가
+
+
+def test_b4_applies():
+    from collector.market import Phase, b4_applies
+    assert not b4_applies(None)
+    assert b4_applies(Phase(-5, 2, 9, "하락", "하락장", 6))
+    assert b4_applies(Phase(2.9, 4, 8, "하락", "보합장", 1.4))   # 2022-08~11 수도권
+    assert not b4_applies(Phase(6.8, 12, 0, "상승", "상승장", 0))

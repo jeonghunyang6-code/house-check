@@ -416,7 +416,7 @@ $('#notice').innerHTML = `<b>데이터 범위</b><span>서울 실거래는 2020�
   const S = D.signals || {}, g = (k) => S[k] || null;
   const n1 = (v, d = 1) => v == null ? '–' : Number(v).toFixed(d);
   const P = { '상승장': 'acc', '하락장': 'bad', '보합장': 'none', '해당 없음': 'good', '대세 하락 의심': 'bad', '단기 조정': 'warn',
-              '충족': 'warn', '미충족': 'none', '있음': 'good', '없음': 'none', '증가': 'warn', '감소': 'good', '동행': 'none', '역행': 'none' };
+              '충족': 'warn', '미충족': 'none', '과열': 'bad', '주의': 'warn', '보통': 'none', '상승 전환': 'good', '아님': 'none', '있음': 'good', '없음': 'none', '증가': 'warn', '감소': 'good', '동행': 'none', '역행': 'none' };
   const pill = (t) => t ? `<span class="pill ${P[t] || 'none'}">${t}</span>` : '';
   const b1s = g('b1_seoul'), b1c = g('b1_sudo'), b4 = g('b4_class'), d5 = g('d5_new_jeonse'), d2 = g('d2_ladder'), br = g('g2_rate_price'), mr = g('g3_mortgage_rate'), f3 = g('f3_unsold'), a4 = g('a4_quick_sale');
   const met = [g('b4_down_ratio'), g('b4_jeonse_8w'), g('b4_unemployment')].filter(x => x && x.state === '충족').length;
