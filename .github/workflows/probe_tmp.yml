@@ -1,0 +1,15 @@
+name: probe-tmp
+# 임시 (브랜치에서만): 중학교 자료 출처 확인. PR 전에 지운다
+on:
+  push:
+    branches: [claude/brave-lamport-gkzeao]
+    paths: [.github/workflows/probe_tmp.yml, tools/probe/**]
+jobs:
+  run:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - run: python3 tools/probe/middle.py
+        env:
+          PYTHONUNBUFFERED: "1"
