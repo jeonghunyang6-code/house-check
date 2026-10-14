@@ -6,6 +6,9 @@
 - 기본 정보  GET apis.data.go.kr/1613000/AptBasisInfoServiceV5/getAphusBassInfoV5?kaptCode=
              → item: kaptdaCnt(세대수), kaptUsedate(YYYYMMDD), kaptAddr(지번 주소), doroJuso, kaptDongCnt,
                kaptTopFloor, kaptBcompany, codeHeatNm, codeSaleNm, kaptMparea60/85/135/136
+- 상세 정보  GET apis.data.go.kr/1613000/AptBasisInfoServiceV5/getAphusDtlInfoV5?kaptCode=   (2026-10-14 확인)
+             → item: subwayLine, subwayStation, kaptdWtimesub(역 도보 "5분이내"), kaptdWtimebus, kaptdPcnt/kaptdPcntu(지상/지하 주차),
+               groundElChargerCnt, undergroundElChargerCnt, kaptdCccnt(CCTV), welfareFacility
 
 실거래 aptSeq 와 kaptCode 사이에는 공통 키가 없다. 실거래의 법정동(sggCd+umdCd)·지번·도로명으로 맞춘다:
   1) 같은 법정동 + 같은 지번   2) 같은 도로명 주소   3) 같은 법정동 + 이름이 서로 포함
@@ -28,6 +31,7 @@ from collector.sources.molit import ApiError, QuotaExceeded, conn_failed, note_o
 
 LIST_URL = "https://apis.data.go.kr/1613000/AptListService4/getSigunguAptList4"
 INFO_URL = "https://apis.data.go.kr/1613000/AptBasisInfoServiceV5/getAphusBassInfoV5"
+DETAIL_URL = "https://apis.data.go.kr/1613000/AptBasisInfoServiceV5/getAphusDtlInfoV5"
 
 
 def _get_json(url: str, params: dict, retries: int = 5) -> dict:
@@ -85,6 +89,10 @@ def fetch_info(kapt_code: str) -> dict | None:
     return _get_json(INFO_URL, {"kaptCode": kapt_code})["response"]["body"].get("item")
 
 
+def fetch_detail(kapt_code: str) -> dict | None:
+    return _get_json(DETAIL_URL, {"kaptCode": kapt_code})["response"]["body"].get("item")
+
+
 def _int(v) -> int | None:
     try:
         return int(float(v))
@@ -110,6 +118,47 @@ def info_row(item: dict) -> dict:
         "hh_85_135": _int(item.get("kaptMparea135")),
         "hh_gt135": _int(item.get("kaptMparea136")),
     }
+
+
+def _txt(v) -> str | None:
+    v = re.sub(r"\s+", " ", str(v or "")).strip()
+    return v or None
+
+
+def detail_row(item: dict) -> dict:
+    """상세 정보 응답 → kapt_complexes 열 (0021)."""
+    ev = [_int(item.get(k)) for k in ("groundElChargerCnt", "undergroundElChargerCnt")]
+    return {
+        "subway_line": _txt(item.get("subwayLine")),
+        "subway_station": _txt(item.get("subwayStation")),
+        "walk_subway": _txt(item.get("kaptdWtimesub")),
+        "walk_bus": _txt(item.get("kaptdWtimebus")),
+        "parking_ground": _int(item.get("kaptdPcnt")),
+        "parking_under": _int(item.get("kaptdPcntu")),
+        "ev_charger": None if all(x is None for x in ev) else sum(x or 0 for x in ev),
+        "cctv": _int(item.get("kaptdCccnt")),
+        "welfare": _txt(item.get("welfareFacility")),
+    }
+
+
+def walk_minutes(s: str | None) -> int | None:
+    """도보 시간 구간 → 상한(분). '5분이내' 5, '5~10분이내' 10, '10~15분이내' 15, '20분초과' 99. 모르면 None."""
+    if not s:
+        return None
+    s = s.replace(" ", "")
+    if "초과" in s:
+        return 99
+    nums = re.findall(r"\d+", s)
+    return int(nums[-1]) if nums and "분" in s else None
+
+
+STATION_WALK_MIN = 10  # 📖 역까지 10분(700m) 이내 = 역세권 p.220
+
+
+def station_area(s: str | None) -> bool | None:
+    """H1 역세권: 도보 시간 상한이 10분 이하."""
+    m = walk_minutes(s)
+    return None if m is None else m <= STATION_WALK_MIN
 
 
 # ---------- 연결 (순수 함수) ----------

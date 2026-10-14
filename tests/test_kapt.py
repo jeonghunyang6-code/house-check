@@ -116,3 +116,15 @@ def test_run_info_stops_when_failures_persist(monkeypatch):
     rc, calls, slept, saved = _run_info(monkeypatch, codes, 10**6)
     assert rc == 2 and slept == list(jk.PAUSES) and saved == []
     assert len(calls) == jk.FAIL_STREAK * (len(jk.PAUSES) + 1)
+
+
+def test_detail_row_and_walk():
+    from collector.kapt import detail_row, station_area, walk_minutes
+    r = detail_row({"subwayLine": "3호선, 8호선, 9호선", "subwayStation": "송파역", "kaptdWtimesub": "5분이내", "kaptdWtimebus": "5분이내",
+                    "kaptdPcnt": "0", "kaptdPcntu": "12096", "groundElChargerCnt": 0, "undergroundElChargerCnt": 256,
+                    "kaptdCccnt": "2685", "welfareFacility": "관리사무소,  노인정"})
+    assert r["subway_station"] == "송파역" and r["parking_under"] == 12096 and r["ev_charger"] == 256 and r["welfare"] == "관리사무소, 노인정"
+    assert detail_row({"subwayStation": " ", "kaptdWtimesub": ""})["subway_station"] is None
+    assert detail_row({})["ev_charger"] is None
+    assert [walk_minutes(s) for s in ("5분이내", "5~10분이내", "10~15분이내", "20분초과", "", None, "해당없음")] == [5, 10, 15, 99, None, None, None]
+    assert [station_area(s) for s in ("5~10분이내", "10~15분이내", None)] == [True, False, None]
