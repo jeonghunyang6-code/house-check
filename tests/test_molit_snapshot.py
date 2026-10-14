@@ -96,3 +96,43 @@ def test_unreachable_after_consecutive_connection_failures():
     finally:
         urllib.request.urlopen, molit.time.sleep = orig, sleep
         molit.note_ok()
+
+
+def test_connection_pause_then_recover():
+    """연결 실패가 몰려 와도 1분·5분 쉬고 같은 호출을 다시 해 이어간다 (2026-10-14)."""
+    import urllib.request
+    from collector.sources import molit
+
+    calls, slept = [], []
+
+    class Resp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return b"<ok/>"
+
+    def flaky(*a, **k):
+        calls.append(1)
+        if len(calls) <= 5 * molit.UNREACHABLE_AFTER + 5:   # 3번째 호출에서 쉬고, 한 번 더 다 실패한 뒤 성공
+            raise ConnectionError("reset")
+        return Resp()
+
+    orig, sleep = urllib.request.urlopen, molit.time.sleep
+    urllib.request.urlopen, molit.time.sleep = flaky, slept.append
+    try:
+        molit.note_ok()
+        kinds = []
+        for _ in range(molit.UNREACHABLE_AFTER):
+            try:
+                kinds.append(molit._get("https://example.invalid", {}))
+            except molit.ApiError as e:
+                kinds.append(type(e).__name__)
+        assert kinds == ["ApiError"] * (molit.UNREACHABLE_AFTER - 1) + ["<ok/>"]
+        assert [s for s in slept if s >= 60] == list(molit.CONN_PAUSES[:2])
+    finally:
+        urllib.request.urlopen, molit.time.sleep = orig, sleep
+        molit.note_ok()

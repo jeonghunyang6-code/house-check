@@ -106,6 +106,7 @@ curl -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
 - **SGIS(통계청)** `SGIS_CONSUMER_KEY`/`SGIS_CONSUMER_SECRET` (GitHub 시크릿. 이 세션 환경 변수에는 아직 안 보임, 접속도 막힘 → Actions 에서만): `collector/sgis.py`, `jobs/geo.py`, `geo.yml`, 0022 (complexes.lat·lng·adm_cd·adm_nm·geo_method·geo_at)
   - 응답(러너에서 확인): geocodewgs84 → x(경도)·y(위도)·adm_cd(SGIS 행정동 8자리)·leg_cd(법정동 10자리)·sgg_nm. hadmarea.geojson → 행정동 경계(UTM-K, 송파 27개). SGIS 시군구 코드(송파 11240)는 법정동 코드(11710)와 다름
   - 법정동이 맞는 결과만 쓴다(`accept`: 코드 같음, 또는 동 이름 + 시군구 이름). 시험 300곳(서울 종로·중구·용산) 300곳 모두 지번 주소로 찾음, 같은 동 중심에서 최대 1.5km(신당동)
+  - **연결 끊김 분석 (2026-10-14)**: 상세·기본·실거래 API 가 똑같이 약 11초 뒤 TLS 연결 단계에서 끊겼다 되기를 반복(프록시 기록: CONNECT 성공, ClientHello 전송 후 서버 무응답). 이 세션·GitHub 러너 둘 다. 한도·키 문제 아님(그때는 오류 본문이 온다). 해외 클라우드 IP 를 공공데이터포털 쪽이 간헐적으로 거르는 것으로 추정(미확인). → `molit.conn_pause`: 연속 실패 3번이면 1분·5분·15분 쉬고 같은 호출을 다시, 그래도 안 되면 Unreachable 로 멈춤 (molit·kapt 공통)
   - 남은 것: 나머지 약 1만 8천 단지(1초에 1곳쯤, limit 5000 씩 수동 실행) → 행정동 경계·인접 → 생활권 묶음(E0), 주변 시세(E2)
 
 ### B5 경고선 확정, B4 ②·반등 신호 백테스트 (2026-10-14)

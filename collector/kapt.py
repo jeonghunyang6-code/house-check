@@ -27,7 +27,7 @@ import urllib.request
 from dataclasses import dataclass
 from datetime import date
 
-from collector.sources.molit import ApiError, QuotaExceeded, conn_failed, note_ok
+from collector.sources.molit import ApiError, QuotaExceeded, conn_failed, conn_pause, note_ok
 
 LIST_URL = "https://apis.data.go.kr/1613000/AptListService4/getSigunguAptList4"
 INFO_URL = "https://apis.data.go.kr/1613000/AptBasisInfoServiceV5/getAphusBassInfoV5"
@@ -37,40 +37,44 @@ DETAIL_URL = "https://apis.data.go.kr/1613000/AptBasisInfoServiceV5/getAphusDtlI
 def _get_json(url: str, params: dict, retries: int = 5) -> dict:
     key = os.environ["DATA_GO_KR_SERVICE_KEY"]
     full = url + "?" + urllib.parse.urlencode({"serviceKey": key, **params})
-    for attempt in range(retries):
-        try:
-            with urllib.request.urlopen(full, timeout=40) as r:
-                body = r.read().decode("utf-8")
-        except urllib.error.HTTPError as e:
-            if e.code == 429:
-                raise QuotaExceeded("HTTP 429") from None
-            raise ApiError(f"HTTP {e.code}") from None
-        except (urllib.error.URLError, ConnectionError, TimeoutError):
-            if attempt == retries - 1:
-                raise conn_failed() from None
-            time.sleep(2 * 2**attempt)
-            continue
-        note_ok()
-        if body.lstrip().startswith("<"):  # 게이트웨이 오류는 XML 로 온다
-            if "LIMITED_NUMBER_OF_SERVICE_REQUESTS" in body:
-                raise QuotaExceeded("daily quota")
-            raise ApiError(re.sub(r"\s+", " ", body)[:200])
-        try:
-            j = json.loads(body)
-        except json.JSONDecodeError:
-            raise ApiError("invalid json: " + re.sub(r"\s+", " ", body)[:120]) from None
-        if not isinstance(j, dict) or "response" not in j:  # 2026-10-13 info 800건째에 이런 응답 1건으로 작업 전체가 KeyError 로 죽었다
-            if "LIMITED_NUMBER_OF_SERVICE_REQUESTS" in body:
-                raise QuotaExceeded("daily quota")
-            raise ApiError("unexpected body: " + re.sub(r"\s+", " ", body)[:120])
-        code = j.get("response", {}).get("header", {}).get("resultCode")
-        if code not in ("00", "000", None):
-            msg = j["response"]["header"].get("resultMsg", "")
-            if code == "22":
-                raise QuotaExceeded(msg)
-            raise ApiError(f"resultCode={code} {msg}")
-        return j
-    raise AssertionError("unreachable")
+    while True:
+        body = None
+        for attempt in range(retries):
+            try:
+                with urllib.request.urlopen(full, timeout=40) as r:
+                    body = r.read().decode("utf-8")
+                break
+            except urllib.error.HTTPError as e:
+                if e.code == 429:
+                    raise QuotaExceeded("HTTP 429") from None
+                raise ApiError(f"HTTP {e.code}") from None
+            except (urllib.error.URLError, ConnectionError, TimeoutError):
+                if attempt < retries - 1:
+                    time.sleep(2 * 2**attempt)
+        if body is not None:
+            break
+        if not conn_pause():
+            raise conn_failed()
+    note_ok()
+    if body.lstrip().startswith("<"):  # 게이트웨이 오류는 XML 로 온다
+        if "LIMITED_NUMBER_OF_SERVICE_REQUESTS" in body:
+            raise QuotaExceeded("daily quota")
+        raise ApiError(re.sub(r"\s+", " ", body)[:200])
+    try:
+        j = json.loads(body)
+    except json.JSONDecodeError:
+        raise ApiError("invalid json: " + re.sub(r"\s+", " ", body)[:120]) from None
+    if not isinstance(j, dict) or "response" not in j:  # 2026-10-13 info 800건째에 이런 응답 1건으로 작업 전체가 KeyError 로 죽었다
+        if "LIMITED_NUMBER_OF_SERVICE_REQUESTS" in body:
+            raise QuotaExceeded("daily quota")
+        raise ApiError("unexpected body: " + re.sub(r"\s+", " ", body)[:120])
+    code = j.get("response", {}).get("header", {}).get("resultCode")
+    if code not in ("00", "000", None):
+        msg = j["response"]["header"].get("resultMsg", "")
+        if code == "22":
+            raise QuotaExceeded(msg)
+        raise ApiError(f"resultCode={code} {msg}")
+    return j
 
 
 def fetch_list(sigungu_code: str) -> list[dict]:
