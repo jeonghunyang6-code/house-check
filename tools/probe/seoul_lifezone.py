@@ -1,5 +1,5 @@
-"""서울 지역생활권(116개) 행정동 목록이 공개 데이터로 있는지 확인 (임시). 검색 페이지 몇 장만 읽는다."""
-import re, urllib.parse, urllib.request
+"""서울 생활권 데이터셋 후보의 제목·파일 확인 (임시)."""
+import re, urllib.request
 
 def fetch(u):
     try:
@@ -10,13 +10,18 @@ def fetch(u):
         return None, f"{type(e).__name__}: {e}"
 
 def text(b):
-    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", re.sub(r"<script.*?</script>", " ", b, flags=re.S)))
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", re.sub(r"<(script|style).*?</\1>", " ", b, flags=re.S)))
 
-for q in ["생활권", "지역생활권", "생활권계획"]:
-    for u in [f"https://data.seoul.go.kr/dataList/datasetList.do?searchValue={urllib.parse.quote(q)}",
-              f"https://www.data.go.kr/tcs/dss/selectDataSetList.do?keyword={urllib.parse.quote(q)}"]:
-        st, b = fetch(u)
-        t = text(b)
-        hits = sorted(set(re.findall(r"[^ ]{0,40}생활권[^ ]{0,40}", t)))[:40]
-        ids = sorted(set(re.findall(r"(OA-\d+|/data/\d{7,8}/\w+\.do)", b)))[:40]
-        print(f"=== {q} {u.split('/')[2]} -> {st} len={len(b)}\n hits={hits}\n ids={ids}")
+for oa in ["OA-15527", "OA-15528", "OA-15529", "OA-15530", "OA-15531", "OA-20286", "OA-21149", "OA-10756", "OA-10760"]:
+    st, b = fetch(f"https://data.seoul.go.kr/dataList/{oa}/S/1/datasetView.do")
+    t = re.search(r"<title>(.*?)</title>", b, re.S)
+    tx = text(b)
+    i = tx.find("데이터 설명") if "데이터 설명" in tx else tx.find("설명")
+    files = sorted(set(re.findall(r"[\w\-가-힣()_.]+\.(?:zip|shp|csv|xlsx|xls|json|geojson)", b)))[:10]
+    print(f"=== {oa} -> {st} {t.group(1).strip()[:80] if t else ''}\n  files={files}\n  {tx[max(0, i):i + 500]}")
+for pid in ["15071702/fileData.do", "15071707/fileData.do", "15064078/fileData.do", "15125737/fileData.do", "15134540/fileData.do"]:
+    st, b = fetch("https://www.data.go.kr/data/" + pid)
+    t = re.search(r"<title>(.*?)</title>", b, re.S)
+    tx = text(b)
+    i = tx.find("설명")
+    print(f"=== {pid} -> {st} {t.group(1).strip()[:80] if t else ''}\n  {tx[max(0, i):i + 400]}")
