@@ -45,3 +45,18 @@ def test_drop_shared_coords():
             {"src": "c", "name": "청산", "lat": 37.73873, "lng": 127.045891}]
     assert [(r["src"], r["name"]) for r in drop_shared_coords(rows)] == [
         ("a", "별내"), ("a", "금곡"), ("b", "별내"), ("c", "의정부"), ("c", "청산")]
+
+
+def test_hira_items_and_grid():
+    from collector import hira
+    body = {"response": {"body": {"totalCount": 2, "items": {"item": [
+        {"yadmNm": "서울아산병원", "clCd": "01", "clCdNm": "상급종합", "XPos": "127.1080", "YPos": "37.5268"},
+        {"yadmNm": "좌표없음의원", "clCd": "31", "clCdNm": "의원", "XPos": "", "YPos": ""}]}}}}
+    total, rows = hira.items(body)
+    assert total == 2 and len(rows) == 2
+    pts = [p for p in map(hira.normalize, rows) if p]
+    assert pts == [{"name": "서울아산병원", "kind": "01", "kind_nm": "상급종합", "lat": 37.5268, "lng": 127.108}]
+    one = {"response": {"body": {"totalCount": 1, "items": {"item": {"yadmNm": "a", "XPos": "127", "YPos": "37.5"}}}}}
+    assert len(hira.items(one)[1]) == 1
+    g = hira.Grid([{"lat": 37.5, "lng": 127.0}, {"lat": 37.5, "lng": 127.009}, {"lat": 37.5, "lng": 127.02}])
+    assert hira.count_within(g, 37.5, 127.0, 1000) == 2          # 0m, 약 795m 안 / 1.77km 밖

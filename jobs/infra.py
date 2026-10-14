@@ -14,12 +14,16 @@ import io
 import os
 import sys
 import time
+from collections import Counter
 
 from collector.datagokr_file import CaptchaRequired, DownloadError, download
 from collector.db import Db, DbError, connect, lit, select
+from collector import hira
 from collector.infra import drop_shared_coords, merge_stations, nearest, normalize_station
 from collector.neis import OFFICES, PAGE, NeisError, count_by_dong, fetch_page, match_dong
+from collector.kapt import _get_json
 from collector.regions import REGIONS
+from collector.sources.molit import ApiError, QuotaExceeded
 
 # 수도권 도시·광역철도 역 위치 (공공데이터포털 파일데이터 번호). 2026-10-14 확인한 것만.
 # 국가철도공단·코레일의 일반열차역 목록(15067652·15127532)은 KTX·일반역 위주라 넣지 않는다
@@ -175,9 +179,51 @@ def run_academy(db: Db) -> int:
     return 0
 
 
+def run_hospital(db: Db) -> int:
+    pts = []
+    for code, name in hira.SIDO.items():
+        page, total = 1, 0
+        while True:
+            try:
+                total, got = hira.items(_get_json(hira.URL, {"sidoCd": code, "pageNo": page, "numOfRows": hira.PAGE, "_type": "json"}))
+            except (ApiError, QuotaExceeded) as e:
+                print(f"  {name} {page}쪽: {e}", file=sys.stderr)
+                return 2
+            if page == 1 and got:
+                print(f"  {name} 첫 행 필드: {sorted(got[0])}", flush=True)
+            pts += [p for p in (hira.normalize(r) for r in got) if p]
+            if not got or page * hira.PAGE >= total:
+                break
+            page += 1
+        print(f"  {name}: {total}곳", flush=True)
+    big = [p for p in pts if p["kind"] in hira.BIG]
+    clinics = hira.Grid([p for p in pts if p["kind"] in hira.CLINIC])
+    print(f"  종별: {sorted(Counter(p['kind'] + ' ' + p['kind_nm'] for p in pts).items())}")
+    cx = select(db, "SELECT apt_seq, lat, lng FROM complexes WHERE lat IS NOT NULL")
+    vals = []
+    for c in cx:
+        la, lo = float(c["lat"]), float(c["lng"])
+        h, d = nearest(la, lo, big)
+        n = hira.count_within(clinics, la, lo, hira.CLINIC_M)
+        vals.append(f"({lit(c['apt_seq'])}, {lit(h['name'] if h else None)}, {lit(h['kind_nm'] if h else None)}, "
+                    f"{d if d is not None else 'NULL'}::int, {n})")
+    stmts = ["BEGIN;", "DELETE FROM hospital;"]
+    for i in range(0, len(big), 500):
+        stmts.append("INSERT INTO hospital (name, kind, lat, lng) VALUES " + ", ".join(
+            f"({lit(p['name'])}, {lit(p['kind_nm'])}, {p['lat']}, {p['lng']})" for p in big[i:i + 500]) + ";")
+    for i in range(0, len(vals), 1000):
+        stmts.append("UPDATE complexes AS c SET hosp_name = v.n, hosp_kind = v.k, hosp_m = v.d, clinic_1km = v.c "
+                     f"FROM (VALUES {', '.join(vals[i:i + 1000])}) AS v(a, n, k, d, c) WHERE c.apt_seq = v.a;")
+    stmts.append("COMMIT;")
+    db.query("\n".join(stmts))
+    near = sum(1 for v in vals if "NULL::int" not in v)
+    print(f"  병원 {len(pts)}곳 중 종합병원급 {len(big)}곳, 좌표 단지 {len(cx)}개 중 5km 안 종합병원 있는 단지 {near}개")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("mode", choices=["stations", "schoolzone", "academy"])
+    ap.add_argument("mode", choices=["stations", "schoolzone", "academy", "hospital"])
     ap.add_argument("--dir", help="stations: 미리 받아 둔 st_<번호>.csv 폴더")
     ap.add_argument("--db", choices=["api", "psql"])
     a = ap.parse_args(argv)
@@ -185,7 +231,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         db = connect(a.db)
         rc = {"stations": lambda: run_stations(db, a.dir), "schoolzone": lambda: run_schoolzone(db),
-              "academy": lambda: run_academy(db)}[a.mode]()
+              "academy": lambda: run_academy(db), "hospital": lambda: run_hospital(db)}[a.mode]()
     except DbError as e:
         print(f"[infra] DB 오류: {e}", file=sys.stderr)
         rc = 1
