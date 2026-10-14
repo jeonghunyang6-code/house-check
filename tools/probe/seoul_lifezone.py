@@ -1,5 +1,5 @@
-"""서울도시공간포털 지역생활권 페이지 구조 확인 (임시). 공개 페이지 몇 장만 읽는다."""
-import re, urllib.request
+"""서울 지역생활권(116개) 행정동 목록이 공개 데이터로 있는지 확인 (임시). 검색 페이지 몇 장만 읽는다."""
+import re, urllib.parse, urllib.request
 
 def fetch(u):
     try:
@@ -9,16 +9,14 @@ def fetch(u):
     except Exception as e:
         return None, f"{type(e).__name__}: {e}"
 
-for u in ["https://urban.seoul.go.kr/view/html/PMNU3040000001", "https://urban.seoul.go.kr/view/html/PMNU2030000000"]:
-    st, b = fetch(u)
-    print(f"=== {u} -> {st} len={len(b)}")
-    t = re.search(r"<title>(.*?)</title>", b, re.S)
-    print("title:", t.group(1).strip() if t else None)
-    links = sorted(set(re.findall(r'href="([^"]+)"', b)))
-    print("links with 생활권/PMNU304/download:", [l for l in links if re.search(r"PMNU304|PMNU203|download|\.zip|\.shp|\.xlsx|\.csv|\.pdf", l)][:60])
-    text = re.sub(r"<[^>]+>", " ", b)
-    text = re.sub(r"\s+", " ", text)
-    i = text.find("생활권")
-    print("text:", text[max(0, i - 200):i + 1500])
-    js = sorted(set(re.findall(r'(?:url|ajax|action)\s*[:=]\s*["\']([^"\']+)["\']', b)))
-    print("ajax/url:", js[:40])
+def text(b):
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", re.sub(r"<script.*?</script>", " ", b, flags=re.S)))
+
+for q in ["생활권", "지역생활권", "생활권계획"]:
+    for u in [f"https://data.seoul.go.kr/dataList/datasetList.do?searchValue={urllib.parse.quote(q)}",
+              f"https://www.data.go.kr/tcs/dss/selectDataSetList.do?keyword={urllib.parse.quote(q)}"]:
+        st, b = fetch(u)
+        t = text(b)
+        hits = sorted(set(re.findall(r"[^ ]{0,40}생활권[^ ]{0,40}", t)))[:40]
+        ids = sorted(set(re.findall(r"(OA-\d+|/data/\d{7,8}/\w+\.do)", b)))[:40]
+        print(f"=== {q} {u.split('/')[2]} -> {st} len={len(b)}\n hits={hits}\n ids={ids}")
