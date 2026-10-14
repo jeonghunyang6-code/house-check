@@ -55,8 +55,11 @@ out['cx_deals'].sort(key=lambda r: r['cd'])
 out['cx_rent'] = select(db, f"""SELECT apt_seq, contract_month m, area_group, n_jeonse, jeonse_median_10k, n_jeonse_new, jeonse_new_median_10k, n_jeonse_renew
  FROM rent_monthly WHERE apt_seq IN ({sl}) AND area_group IN (84,85) ORDER BY contract_month""")
 out['cx_phase'] = select(db, f"""SELECT apt_seq, area_group, phase, chg_12m, up_months, down_months, last3, region_chg_12m, rel_strength,
- jeonse_10k, jeonse_24m_10k, jeonse_24m_n, reverse_risk, reserve_10k, real_ref_10k, base2020_10k, real_chg_2020
+ jeonse_10k, jeonse_24m_10k, jeonse_24m_n, reverse_risk, reserve_10k, real_ref_10k, base2020_10k, real_chg_2020,
+ households, turnover_pct, turnover_state, e3_seqs, e3_target_10k, e3_chg_12m, rel_strength_e3
  FROM complex_metrics WHERE apt_seq IN ({sl}) AND area_group IN (84,85)""")
+out['e3_names'] = select(db, f"""SELECT apt_seq, apt_name FROM complexes WHERE apt_seq IN (
+ SELECT unnest(string_to_array(e3_seqs, ',')) FROM complex_metrics WHERE apt_seq IN ({sl}) AND area_group IN (84,85))""")
 # D2. 급지 E1 (dong_grade 최신): 예시 단지의 동 급지·표시 3개
 G = "(SELECT * FROM dong_grade WHERE asof = (SELECT max(asof) FROM dong_grade))"
 out['cx_grade'] = select(db, f"""SELECT c.apt_seq, c.umd_name, g.grade, g.value_10k, g.q1_10k, g.q3_10k, g.n_complex, g.old_share,
@@ -64,7 +67,7 @@ out['cx_grade'] = select(db, f"""SELECT c.apt_seq, c.umd_name, g.grade, g.value_
  FROM complexes c LEFT JOIN {G} g ON g.region_code = c.region_code AND g.umd_name = c.umd_name
  LEFT JOIN kapt_complexes k ON k.kapt_code = c.kapt_code WHERE c.apt_seq IN ({sl})""")
 # D3. 후보 단지 찾기 (⑦): 기준 시세가 있는 단지·면적 전체 + 급지·표시
-out['cand'] = select(db, f"""SELECT m.apt_seq, m.area_group, m.ref_10k, m.confidence, m.phase, m.pattern, c.apt_name, c.region_code, c.umd_name,
+out['cand'] = select(db, f"""SELECT m.apt_seq, m.area_group, m.ref_10k, m.confidence, m.phase, m.pattern, m.turnover_pct, c.apt_name, c.region_code, c.umd_name,
   c.build_year, k.households, g.grade, g.flag_rebuild, g.flag_gap, g.new_big_name
  FROM complex_metrics m JOIN complexes c USING (apt_seq)
  LEFT JOIN kapt_complexes k ON k.kapt_code = c.kapt_code

@@ -161,4 +161,42 @@ SELECT apt_seq, area_group, {TODAY},
   CASE WHEN ref IS NOT NULL AND p20 > 0 AND cpi_now > 0 AND cpi_20 > 0 THEN round((((ref / cpi_now) / (p20 / cpi_20) - 1) * 100)::numeric, 1) END
 FROM d;
 
+-- 3) C2 월 거래 회전율 (📖 0.5~0.8% = 꽤 괜찮은 거래량 p.137): 단지 단위라 모든 면적군에 같은 값.
+--    집계 끝난 달 = 지지난 달까지(신고 기한 30일), 최근 12개월 평균. 세대수는 K-apt (0008)
+WITH tv AS (
+  SELECT d.apt_seq, count(*) / 12.0 AS per_month FROM deals d
+  WHERE NOT d.is_cancelled
+    AND d.contract_month BETWEEN to_char(date_trunc('month', {TODAY}::date) - INTERVAL '13 month', 'YYYYMM')
+                             AND to_char(date_trunc('month', {TODAY}::date) - INTERVAL '2 month', 'YYYYMM')
+  GROUP BY 1
+), hh AS (
+  SELECT c.apt_seq, k.households FROM complexes c JOIN kapt_complexes k ON k.kapt_code = c.kapt_code WHERE k.households > 0
+)
+UPDATE complex_metrics m SET households = hh.households,
+  turnover_pct = round((coalesce(tv.per_month, 0) * 100.0 / hh.households)::numeric, 2),
+  turnover_state = CASE WHEN coalesce(tv.per_month, 0) * 100.0 / hh.households < 0.5 THEN '적음'
+                        WHEN coalesce(tv.per_month, 0) * 100.0 / hh.households <= 0.8 THEN '꽤 괜찮음' ELSE '많음' END
+FROM hh LEFT JOIN tv USING (apt_seq) WHERE m.apt_seq = hh.apt_seq;
+
+-- 4) E3 바로 위 급지 비교 단지 (📖 미래 시세 = 바로 위 급지 현재 시세 p.358~359, 과도한 비교 금지 p.362) + B6 위 급지 대비 상대강도.
+--    생활권(E0)·좌표가 아직 없어 🔧 같은 시군구 안에서, 같은 동을 먼저, ㎡당 기준 시세가 10~40% 높은 단지 중 가장 덜 비싼 3곳.
+--    면적군 차이 15㎡ 이내(비슷한 평형끼리)
+WITH b AS (
+  SELECT m.apt_seq, m.area_group, m.ref_10k::numeric / m.area_group AS ppm, m.chg_12m, x.region_code, x.umd_name
+  FROM complex_metrics m JOIN complexes x USING (apt_seq)
+  WHERE m.ref_10k IS NOT NULL AND m.area_group BETWEEN 40 AND 135
+), p AS (
+  SELECT a.apt_seq, a.area_group, o.apt_seq AS o_seq, o.ppm, o.chg_12m,
+    row_number() OVER (PARTITION BY a.apt_seq, a.area_group ORDER BY (o.umd_name = a.umd_name) DESC, o.ppm, o.apt_seq) AS rn
+  FROM b a JOIN b o ON o.region_code = a.region_code AND o.apt_seq <> a.apt_seq
+    AND o.ppm BETWEEN a.ppm * 1.1 AND a.ppm * 1.4 AND abs(o.area_group - a.area_group) <= 15
+), e AS (
+  SELECT apt_seq, area_group, percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm) AS e_ppm,
+    percentile_cont(0.5) WITHIN GROUP (ORDER BY chg_12m) AS e_chg, string_agg(DISTINCT o_seq, ',') AS seqs
+  FROM p WHERE rn <= 3 GROUP BY 1, 2
+)
+UPDATE complex_metrics m SET e3_seqs = e.seqs, e3_target_10k = round(e.e_ppm * m.area_group)::int,
+  e3_chg_12m = round(e.e_chg::numeric, 2), rel_strength_e3 = round((m.chg_12m - e.e_chg)::numeric, 2)
+FROM e WHERE m.apt_seq = e.apt_seq AND m.area_group = e.area_group;
+
 COMMIT;
