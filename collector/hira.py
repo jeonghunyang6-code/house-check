@@ -1,7 +1,6 @@
 """건강보험심사평가원 병원정보서비스 getHospBasisList (공공데이터포털 키 DATA_GO_KR_SERVICE_KEY, 활용 신청 필요).
 
-⚠ 2026-10-15 작성. 응답 필드명(yadmNm·clCd·clCdNm·XPos·YPos)은 기억과 공개 명세 기준이고, 실제 응답으로는
-아직 확인하지 못했다(활용 승인 전 403). 첫 실행 로그로 확인할 것.
+2026-10-15 실제 응답으로 필드 확인: yadmNm, clCd(01 상급종합·11 종합병원·31 의원 …), clCdNm, XPos(경도), YPos(위도).
 """
 
 from __future__ import annotations
