@@ -1,7 +1,8 @@
 """행정동 경계 → 면적·중심·인접 (순수 함수, jobs/geo.py boundary). 좌표는 SGIS 경계의 UTM-K(EPSG:5179, 미터).
 
-인접: 두 경계가 꼭짓점을 함께 쓰면(같은 지형 자료라 맞닿은 변의 꼭짓점이 겹친다) 붙어 있다고 본다.
-꼭짓점을 CELL_M 격자로 묶고, 같은 칸을 MIN_SHARED 개 이상 함께 쓰는 쌍을 인접으로 센다(점 하나로만 닿은 모서리는 제외).
+인접: 맞닿은 변은 두 경계의 꼭짓점이 가까이 모인다. 꼭짓점을 CELL_M 격자에 넣고, A 의 꼭짓점이 있는 칸 둘레(3×3)에
+B 의 꼭짓점이 있는 칸이 MIN_SHARED 개 이상이면 인접으로 센다(점 하나로만 닿은 모서리는 제외).
+2026-10-14 첫 실행(같은 칸만 셈): 꼭짓점이 몇 m 어긋난 곳을 놓침(강동구 성내3동 이웃 0, 잠실2동 이웃 일부 빠짐) → 3×3 이웃 칸까지.
 한강: 경계가 강 가운데서 맞닿아 성수동(성동구)·압구정동(강남구)처럼 강 건너도 인접으로 나온다.
      시군구별 강 남북(HAN_SIDE)이 서로 다르면 cross_river 로 표시만 하고, 묶을지는 생활권(E0) 단계에서 정한다.
 """
@@ -11,8 +12,8 @@ from __future__ import annotations
 from collections import defaultdict
 from itertools import combinations
 
-CELL_M = 20.0
-MIN_SHARED = 3
+CELL_M = 15.0
+MIN_SHARED = 4
 
 # 한강 남북 (시군구 이름). 서울은 어느 구도 강을 걸치지 않는다. 경기는 강에 닿는 곳만, 양평처럼 걸치는 곳은 넣지 않는다
 HAN_SIDE = {
@@ -70,11 +71,19 @@ def adjacency(features: list[dict]) -> list[tuple[str, str, int, bool]]:
         for r in rings(f["geometry"]):
             for x, y in r:
                 cells[(int(x // CELL_M), int(y // CELL_M))].add(cd)
-    shared: dict[tuple[str, str], int] = defaultdict(int)
-    for owners in cells.values():
-        if len(owners) > 1:
-            for a, b in combinations(sorted(owners), 2):
-                shared[(a, b)] += 1
+    hits: dict[tuple[str, str], set[tuple[int, int]]] = defaultdict(set)   # 쌍 → A 쪽 칸 (B 가 3×3 안에 있는)
+    for (i, j), owners in cells.items():
+        near = set()
+        for di in (-1, 0, 1):
+            for dj in (-1, 0, 1):
+                near |= cells.get((i + di, j + dj), set())
+        for a in owners:
+            for b in near:
+                if a < b:
+                    hits[(a, b)].add((i, j))
+                elif b < a:
+                    hits[(b, a)].add((i, j))
+    shared = {k: len(v) for k, v in hits.items()}
     out = []
     for (a, b), n in sorted(shared.items()):
         if n >= MIN_SHARED:
