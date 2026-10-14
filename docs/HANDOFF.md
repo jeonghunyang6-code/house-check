@@ -123,7 +123,8 @@ curl -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
 - **병원** (`python -m jobs.infra hospital`, 공공데이터포털 '건강보험심사평가원_병원정보서비스' 활용 승인 2026-10-15, 0027): getHospBasisList 수도권 42,070곳(XPos·YPos 필드 실제 응답으로 확인). 상급종합 23 · 종합병원 130 → `hospital` 153곳, 단지별 가장 가까운 곳 `hosp_name·hosp_kind·hosp_m`(직선 5km 안) · 1km 안 의원 수 `clinic_1km`. 중앙값 1,385m · 50곳. 은마 → 강남세브란스 1.8km, 고덕그라시움 → 강동경희대병원 0.7km
 - **중학교 학교군** (`python -m jobs.infra midzone`, 0028): 한국교육시설안전원 중학교학교군 SHP(15159264, 2026-09-20, 초등과 같은 필드·EPSG:5186) + 학구도 연계정보(15159266, 학구ID↔학교ID) + 초중등학교위치(15159184, 위도·경도). 수도권 학교군·중학구 427개, 운영 중 중학교 1,214곳 → `mid_school`. 단지마다 `mid_zone`(공동학구면 shared), 학교군 안 중학교 수, **학교군 안 직선으로 가장 가까운 중학교** `mid_school·mid_school_m`. 17,950개 중 17,949개 연결
   - 서울은 큰 학교군(예 강남서초2학교군 17개교) 안 근거리·추첨 배정이라 '가장 가까운 학교'는 실제 배정과 다를 수 있다(은마 → 단대부중 710m). 경기 신도시는 중학구가 작다(동탄2-1중학군 6개교)
-  - 다음: 학교알리미 공시(학업성취도·졸업생 진로 특목고·자사고 진학)를 학교별로 → 학교군·가장 가까운 학교에 붙이기. 학교알리미 OpenAPI 는 apiKey 필수(schoolinfo.go.kr, `openApi.do?apiKey=&apiType=&schulKndCode=03`), 최근 3년만
+  - **학교알리미(2026-10-15 확인, 시크릿 `SCHOOLINFO_API_KEY`)**: `openApi.do?apiKey=&apiType=&pbanYr=&schulKndCode=03&sidoCode=&sggCode=` JSON. OpenAPI·공개용 데이터 36개 항목에 **학업성취도(교과별 학업성취)·졸업생 진로(특목고·자사고 진학)는 없다** → 학교별 화면에서만 보이고, 대량은 에듀데이터서비스(EDSS) 신청·심사. 쓸 수 있는 것: apiType 10 전·출입 학생 수(MVIN_SUM 전입·MVT_SUM 전출 — 학군 수요 신호), 62 학교 현황(학급당 학생수 AVG_FGR_SUM), 63 성별 학생수, 51 입학생 현황, 0 학교기본정보(SCHUL_CODE S0…, 위도·경도 LTTUD·LGTUD). 학교 ID 는 학구도(B0…)와 달라 이름·좌표로 맞춰야 한다. 최근 3년만
+  - 서울은 학교 1곳짜리 학교군에 든 단지가 0, 인천 14, 경기 665 → 대부분 '배정 확정 학교'를 정할 수 없다(학교군 안 거리·추첨 배정)
 - **좌표가 다 모이면 schoolzone·midzone·stations·hospital 을 다시 실행** (academy 는 좌표와 무관)
 - 대형마트는 보류: 행안부 localdata(러너 접속 실패)·서울(외부 링크)·경기(경기데이터드림 키)·인천(2022년, 주소만)으로 흩어짐
 
