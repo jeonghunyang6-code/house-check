@@ -1,0 +1,22 @@
+name: probe-tmp
+# 임시 (브랜치에서만): infra schoolzone 첫 실행. PR 전에 지운다
+on:
+  push:
+    branches: [claude/brave-lamport-gkzeao]
+    paths: [.github/workflows/probe_tmp.yml]
+jobs:
+  run:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install -q pyproj pyshp shapely
+      - run: command -v psql || (sudo apt-get update -q && sudo apt-get install -y -q postgresql-client)
+      - run: python -m jobs.infra schoolzone
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          HC_DB_BACKEND: psql
+          PYTHONUNBUFFERED: "1"
