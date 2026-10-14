@@ -18,6 +18,8 @@ import time
 from collector.datagokr_file import CaptchaRequired, DownloadError, download
 from collector.db import Db, DbError, connect, lit, select
 from collector.infra import drop_shared_coords, merge_stations, nearest, normalize_station
+from collector.neis import OFFICES, PAGE, NeisError, count_by_dong, fetch_page, match_dong
+from collector.regions import REGIONS
 
 # 수도권 도시·광역철도 역 위치 (공공데이터포털 파일데이터 번호). 2026-10-14 확인한 것만.
 # 국가철도공단·코레일의 일반열차역 목록(15067652·15127532)은 KTX·일반역 위주라 넣지 않는다
@@ -127,16 +129,63 @@ def run_schoolzone(db: Db) -> int:
     return 0
 
 
+def run_academy(db: Db) -> int:
+    rows = []
+    for office, name in OFFICES.items():
+        total, page = None, 1
+        while True:
+            try:
+                total, got = fetch_page(office, page)
+            except NeisError as e:
+                print(f"  {name} {page}쪽: {e}", file=sys.stderr)
+                return 2
+            rows += got
+            if not got or page * PAGE >= total:
+                break
+            page += 1
+            time.sleep(0.5)
+        print(f"  {name}: {total}건", flush=True)
+    counts, miss = count_by_dong(rows)
+    cx = select(db, "SELECT apt_seq, region_code, umd_name FROM complexes")
+    vals = []
+    for c in cx:
+        reg = REGIONS.get(c["region_code"] or "")
+        if not reg:
+            continue
+        sido, sgg = reg.split(" ", 1)
+        k = match_dong(counts, sido, sgg, c["umd_name"])
+        if k:
+            vals.append(f"({lit(c['apt_seq'])}, {counts[k]['exam']}, {counts[k]['exam_hagwon']})")
+    today = time.strftime("%Y-%m-%d")
+    items = list(counts.items())
+    stmts = ["BEGIN;", "DELETE FROM academy_dong;"]
+    for i in range(0, len(items), 1000):
+        stmts.append("INSERT INTO academy_dong (sido, sgg, dong, n, exam, exam_hagwon, loaded_at) VALUES " + ", ".join(
+            f"({lit(k[0])}, {lit(k[1])}, {lit(k[2])}, {v['n']}, {v['exam']}, {v['exam_hagwon']}, {lit(today)})"
+            for k, v in items[i:i + 1000]) + ";")
+    stmts.append("UPDATE complexes SET academy_exam = NULL, academy_hagwon = NULL;")
+    for i in range(0, len(vals), 1000):
+        stmts.append("UPDATE complexes AS c SET academy_exam = v.e, academy_hagwon = v.h "
+                     f"FROM (VALUES {', '.join(vals[i:i + 1000])}) AS v(a, e, h) WHERE c.apt_seq = v.a;")
+    stmts.append("COMMIT;")
+    db.query("\n".join(stmts))
+    opened = sum(v["n"] for v in counts.values())
+    print(f"  받은 {len(rows)}건, 개원 {opened + miss}건 중 동 {len(counts)}개로 {opened}건 (동을 못 읽은 {miss}건), "
+          f"단지 {len(cx)}개 중 {len(vals)}개 연결")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("mode", choices=["stations", "schoolzone"])
+    ap.add_argument("mode", choices=["stations", "schoolzone", "academy"])
     ap.add_argument("--dir", help="stations: 미리 받아 둔 st_<번호>.csv 폴더")
     ap.add_argument("--db", choices=["api", "psql"])
     a = ap.parse_args(argv)
     t0 = time.monotonic()
     try:
         db = connect(a.db)
-        rc = run_stations(db, a.dir) if a.mode == "stations" else run_schoolzone(db)
+        rc = {"stations": lambda: run_stations(db, a.dir), "schoolzone": lambda: run_schoolzone(db),
+              "academy": lambda: run_academy(db)}[a.mode]()
     except DbError as e:
         print(f"[infra] DB 오류: {e}", file=sys.stderr)
         rc = 1

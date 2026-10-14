@@ -1,16 +1,22 @@
 name: probe-tmp
-# 임시 (브랜치에서만): 빠진 역 파일 재시도, 병원·학원 출처 확인. PR 전에 지운다
+# 임시 (브랜치에서만): 학원(나이스) 첫 실행. PR 전에 지운다
 on:
   push:
     branches: [claude/brave-lamport-gkzeao]
-    paths: [.github/workflows/probe_tmp.yml, tools/probe/**]
+    paths: [.github/workflows/probe_tmp.yml]
 jobs:
   run:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
-      - run: python3 tools/probe/infra4.py
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: command -v psql || (sudo apt-get update -q && sudo apt-get install -y -q postgresql-client)
+      - run: python -m jobs.infra academy
         env:
-          DATA_GO_KR_SERVICE_KEY: ${{ secrets.DATA_GO_KR_SERVICE_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          NEIS_API_KEY: ${{ secrets.NEIS_API_KEY }}
+          HC_DB_BACKEND: psql
           PYTHONUNBUFFERED: "1"
