@@ -35,3 +35,13 @@ def test_adjacency_tolerates_small_offsets():
     b = {"type": "Polygon", "coordinates": [[[1008, 3], [2000, 0], [2000, 1000], [1006, 1004]] + [[1000 + (i % 3) * 4, 1000 - i * 100 + 7] for i in range(1, 10)] + [[1008, 3]]]}
     got = adjacency([{"adm_cd": "A", "adm_nm": "", "geometry": a}, {"adm_cd": "B", "adm_nm": "", "geometry": b}])
     assert [(x, y) for x, y, *_ in got] == [("A", "B")]
+
+
+def test_adjacency_simplified_edges_without_shared_vertices():
+    """맞닿은 변의 꼭짓점이 서로 다른 위치에 있어도(동마다 따로 단순화) 인접."""
+    a = {"type": "Polygon", "coordinates": [[[0, 0], [1000, 0], [1000, 1000], [0, 1000], [0, 0]]]}
+    b = {"type": "Polygon", "coordinates": [[[1000, 0], [2000, 0], [2000, 1000], [1000, 1000], [1003, 640], [998, 310], [1000, 0]]]}
+    far = {"type": "Polygon", "coordinates": [[[1100, 1100], [1500, 1100], [1500, 1500], [1100, 1500], [1100, 1100]]]}
+    got = adjacency([{"adm_cd": "A", "adm_nm": "", "geometry": a}, {"adm_cd": "B", "adm_nm": "", "geometry": b},
+                     {"adm_cd": "F", "adm_nm": "", "geometry": far}])
+    assert [(x, y) for x, y, *_ in got] == [("A", "B")]   # F 는 100m 떨어져 인접 아님

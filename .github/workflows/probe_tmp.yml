@@ -1,0 +1,13 @@
+name: probe-tmp
+# 임시 (브랜치에서만). PR 전에 지운다
+on:
+  push:
+    branches: [claude/brave-lamport-gkzeao]
+    paths: [tools/probe/**, .github/workflows/probe_tmp.yml]
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - run: python3 tools/probe/seoul_lifezone.py
