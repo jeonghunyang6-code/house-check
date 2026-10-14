@@ -7,6 +7,9 @@ on:
     - cron: "17 19 * * 1"   # 화요일 04:17 KST
   workflow_dispatch:
     inputs:
+      mode:
+        description: "geocode(단지 좌표) | boundary(행정동 경계·인접)"
+        default: "geocode"
       limit:
         description: "한 번에 좌표를 받을 단지 수"
         default: "5000"
@@ -15,10 +18,10 @@ on:
         default: "false"
 
 permissions:
-  contents: read
+  contents: write   # boundary: 경계 원본을 Releases raw-data 에 올린다
 
 concurrency:
-  group: geo
+  group: geo-${{ inputs.mode || 'geocode' }}
   cancel-in-progress: false
 
 jobs:
@@ -32,14 +35,19 @@ jobs:
           python-version: "3.12"
       - name: psql 확인
         run: command -v psql || (sudo apt-get update -q && sudo apt-get install -y -q postgresql-client)
-      - name: 좌표
+      - name: 좌표 / 경계
         env:
           SGIS_CONSUMER_KEY: ${{ secrets.SGIS_CONSUMER_KEY }}
           SGIS_CONSUMER_SECRET: ${{ secrets.SGIS_CONSUMER_SECRET }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           HC_DB_BACKEND: psql
           PYTHONUNBUFFERED: "1"
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          HC_ARCHIVE: gh
+          MODE: ${{ inputs.mode || 'geocode' }}
           LIMIT: ${{ inputs.limit || '5000' }}
           RETRY: ${{ inputs.retry_none || 'false' }}
         run: |
+          if [ "$MODE" = "boundary" ]; then python -m jobs.geo boundary; exit $?; fi
           if [ "$RETRY" = "true" ]; then python -m jobs.geo geocode --limit "$LIMIT" --retry-none; else python -m jobs.geo geocode --limit "$LIMIT"; fi

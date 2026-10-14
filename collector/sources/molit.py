@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import time
 import urllib.error
 import urllib.parse
@@ -110,12 +111,29 @@ class Unreachable(QuotaExceeded):
 
 
 UNREACHABLE_AFTER = int(os.environ.get("HC_UNREACHABLE_AFTER", "3"))
+# 2026-10-14: 끊김은 대개 짧게 몰려 온다(같은 API 를 번갈아 부르면 끊김 2~5번 뒤 다시 정상). 바로 멈추지 않고
+# 1분 → 5분 → 15분 쉬고 같은 호출을 다시 한다. 그래도 안 되면 Unreachable 로 멈춘다(다음 실행이 이어서). 우회는 하지 않는다
+CONN_PAUSES = (60, 300, 900)
 _conn_fails = 0
+_pause_i = 0
 
 
 def note_ok() -> None:
-    global _conn_fails
+    global _conn_fails, _pause_i
     _conn_fails = 0
+    _pause_i = 0
+
+
+def conn_pause() -> bool:
+    """재시도를 다 쓴 연결 실패가 이번으로 UNREACHABLE_AFTER 번째면, 남은 휴식이 있을 때 쉬고 True(같은 호출을 다시 하라)."""
+    global _conn_fails, _pause_i
+    if _conn_fails + 1 >= UNREACHABLE_AFTER and _pause_i < len(CONN_PAUSES):
+        print(f"  공공데이터포털 연결 실패 {_conn_fails + 1}번 연속 → {CONN_PAUSES[_pause_i]}초 쉬고 다시", file=sys.stderr, flush=True)
+        time.sleep(CONN_PAUSES[_pause_i])
+        _pause_i += 1
+        _conn_fails = UNREACHABLE_AFTER - 1   # 쉬고 나서도 실패하면 바로 다음 휴식(또는 멈춤)
+        return True
+    return False
 
 
 def conn_failed() -> ApiError:
@@ -239,21 +257,22 @@ def parse_rent_page(xml_text: str) -> tuple[list[Rent], int]:
 def _get(url: str, params: dict[str, str | int], retries: int = 5) -> str:
     """429·403 은 재시도하지 않고 멈춘다. 터널 끊김 같은 연결 오류만 짧게 재시도한다."""
     full = url + "?" + urllib.parse.urlencode(params)
-    for attempt in range(retries):
-        try:
-            with urllib.request.urlopen(full, timeout=30) as r:
-                body = r.read().decode("utf-8")
-            note_ok()
-            return body
-        except urllib.error.HTTPError as e:
-            if e.code == 429:
-                raise QuotaExceeded("HTTP 429") from None
-            raise ApiError(f"HTTP {e.code}") from None  # URL(키 포함)을 예외에 싣지 않는다
-        except (urllib.error.URLError, ConnectionError, TimeoutError):
-            if attempt == retries - 1:
-                raise conn_failed() from None
-            time.sleep(2 * 2**attempt)
-    raise AssertionError("unreachable")
+    while True:
+        for attempt in range(retries):
+            try:
+                with urllib.request.urlopen(full, timeout=30) as r:
+                    body = r.read().decode("utf-8")
+                note_ok()
+                return body
+            except urllib.error.HTTPError as e:
+                if e.code == 429:
+                    raise QuotaExceeded("HTTP 429") from None
+                raise ApiError(f"HTTP {e.code}") from None  # URL(키 포함)을 예외에 싣지 않는다
+            except (urllib.error.URLError, ConnectionError, TimeoutError):
+                if attempt < retries - 1:
+                    time.sleep(2 * 2**attempt)
+        if not conn_pause():
+            raise conn_failed()
 
 
 def _fetch_all(url: str, parse, lawd_cd: str, deal_ymd: str, service_key: str | None) -> list:
