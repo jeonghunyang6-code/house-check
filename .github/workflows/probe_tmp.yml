@@ -1,5 +1,5 @@
 name: probe-tmp
-# 임시 (브랜치에서만): 학원(나이스) 첫 실행. PR 전에 지운다
+# 임시 (브랜치에서만): 병원(심평원) 첫 실행. PR 전에 지운다
 on:
   push:
     branches: [claude/brave-lamport-gkzeao]
@@ -14,9 +14,9 @@ jobs:
         with:
           python-version: "3.12"
       - run: command -v psql || (sudo apt-get update -q && sudo apt-get install -y -q postgresql-client)
-      - run: python -m jobs.infra academy
+      - run: python -m jobs.infra hospital
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          NEIS_API_KEY: ${{ secrets.NEIS_API_KEY }}
+          DATA_GO_KR_SERVICE_KEY: ${{ secrets.DATA_GO_KR_SERVICE_KEY }}
           HC_DB_BACKEND: psql
           PYTHONUNBUFFERED: "1"
