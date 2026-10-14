@@ -3,8 +3,10 @@
 - B1 국면: 월별 값 12개월 누적 변화와 월별 방향 일관성 (📖 추세 최소 1년, 단기 3개월 p.136 / 🔧 ±3%, 8개월)
 - B3 낙폭: 최근 24개월 최고 대비 현재 (📖 5~10% 단기 조정, 20% p.434·444)
 - B4 하락 분류: ① 전국 하락 지역 비율 4주 평균 ≥ 70% ② 수도권 전세 8주 연속 하락 ③ 실업률 (📖 p.435~436 / 🔧 70%, 8주)
-- B5 ① 상승 지역 비율
-- 반등 신호: 매매수급지수 상승 전환 (3절). 🔧 4주 연속 상승을 "전환"으로 본다
+- B5 ① 상승 지역 비율, ② 하위 급지 신고가 비중 ③ 상위 대비 비 (📖 "범위의 문제" p.111~114 / 🔧 주의 10%, 과열 25% + 0.6배:
+  2021~2026 월별 백테스트(b5_history)에서 2021 불장 30~41%·0.62~0.79, 2023~25 2~3%. 2026-10-14 사용자 확정)
+- 반등 신호: 매매수급지수 상승 전환 (3절). 🔧 4주 연속 상승을 "전환"으로 본다. 전환이므로 매매지수가 13주 전보다 낮을 때만 판정
+  (2012~ 백테스트 tools/analysis/backtest_b4_supply.py: 상승 중엔 4주 연속 상승이 수도권 32번 켜져 의미 없음)
 - D5 신규 전세 감소 + 전세가 상승 = 전세 부족 → 매매 상승 압력 (▶ J5 / 🔧 최근 신고 완료 3개월 신규 전세 건수 전년 같은 달 대비 감소, 전세지수 13주 상승)
 - G1 유동성·소득·집값: 2005 = 100 재기준화 (📖 p.50)
 - G2 금리와 집값: 기준금리 12개월 변화와 아파트값 전년비가 같은 방향이면 동행, 반대면 역행 (📖 p.48~49 "금리는 집값을 조절하지 않는다")
@@ -23,6 +25,10 @@ CONSIST = 8        # 🔧 12개월 중 8개월
 DOWN_RATIO = 70.0  # 🔧 하락 지역 비율 70%
 JEONSE_WEEKS = 8   # 🔧 전세 8주 연속 하락
 SUPPLY_WEEKS = 4   # 🔧 수급지수 4주 연속 상승 = 상승 전환
+B5_WATCH = 10.0   # 🔧 하위 급지 신고가 비중 10% 이상 = 주의
+B5_HOT = 25.0     # 🔧 25% 이상이면서
+B5_SPREAD = 0.6   # 🔧 상위 급지 대비 0.6배 이상 = 과열
+REBOUND_LOOKBACK = 13  # 🔧 매매지수가 13주 전보다 낮으면 '하락 중' (수급 상승 전환 판정 조건)
 UNEMP_RECESSION = 4.0  # 📖 실업률 4% 접근 = 경기침체 (p.143~144)
 UNEMP_CRISIS = 6.0     # 📖 6% 이상 = 경제 위기
 UNEMP_JUMP = 0.5       # 🔧 3개월 사이 +0.5%p 이상 오르면 B4 ③ 충족
@@ -115,6 +121,30 @@ def b4(down_ratio_4w: float | None, jeonse_down_weeks: int | None, unemployment_
     met = sum(c is True for c in conds)
     known = sum(c is not None for c in conds)
     return met, known, "대세 하락 의심" if met >= 2 else "단기 조정"
+
+
+def b5_state(low_pct: float | None, spread: float | None) -> str:
+    """B5 ②·③ → 과열 | 주의 | 보통 | 데이터 없음."""
+    if low_pct is None:
+        return "데이터 없음"
+    if low_pct >= B5_HOT and spread is not None and spread >= B5_SPREAD:
+        return "과열"
+    return "주의" if low_pct >= B5_WATCH else "보통"
+
+
+def rebound_state(supply: list[float], sale: list[float]) -> tuple[int, str]:
+    """매매수급지수·매매지수 주간 값(오래된 것부터, 같은 주) → (수급 연속 상승 주, 상승 전환 | 아님 | 하락 중 아님).
+    매매지수가 13주 전보다 낮지 않으면 "하락 중 아님" (전환을 볼 때가 아니다)."""
+    up = run_length(supply, +1)
+    if len(sale) <= REBOUND_LOOKBACK or sale[-1] >= sale[-1 - REBOUND_LOOKBACK]:
+        return up, "하락 중 아님"
+    return up, "상승 전환" if up >= SUPPLY_WEEKS else "아님"
+
+
+def b4_applies(ph: "Phase | None") -> bool:
+    """B4(대세 하락 vs 단기 조정)를 판정할 때인가: 하락장·일시 조정, 또는 최근 3개월 연속 하락.
+    2022-08-29 ~ 11-07 수도권은 12개월 누적이 아직 + 라 '보합장'이었지만 매달 내리고 있었다(백테스트)."""
+    return ph is not None and (ph.phase in ("하락장", "일시 조정") or ph.last3 == "하락")
 
 
 @dataclass(frozen=True)
