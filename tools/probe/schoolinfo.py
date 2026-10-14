@@ -17,18 +17,10 @@ def get(u):
     return raw.decode("utf-8", "replace")
 
 
-t = get("https://www.schoolinfo.go.kr/ng/go/pnnggo_a01_l0.do")
-links = sorted(set(re.findall(r"pnnggo_a01_l\d+\.do[^\"'<> ]*", t)))
-print("links:", links[:80])
-for m in re.finditer(r"apiType[^0-9]{0,40}(\d+)", t):
-    print("  apiType ctx:", re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", t[max(0, m.start() - 200):m.end() + 50])))
-# 안내 페이지의 메뉴 항목 (이름 ↔ 링크)
-for m in re.finditer(r'<a[^>]+href="([^"]*pnnggo[^"]*)"[^>]*>(.*?)</a>', t, re.S):
-    print("  menu:", m.group(1)[:80], re.sub(r"<[^>]+>|\s+", " ", m.group(2)).strip()[:40])
-
+COMMON = {"DGHT_SC_CODE","FOND_SC_CODE","SCHUL_RDNZC","USER_TELNO_GA","FOND_YMD","LGTUD","SCHUL_CRSE_SC_VALUE","SCHUL_RDNDA","SCHUL_FOND_TYP_CODE","SHL_IDF_CD","SCHUL_RDNMA","FOAS_MEMRD","BNHH_YN","ATPT_OFCDC_ORG_NM","ABSCH_YN","HMPG_ADRES","LTTUD","ATPT_OFCDC_ORG_CODE","LCTN_SC_CODE","ADRCD_CD","ADRCD_ID","SCHUL_CRSE_SC_VALUE_NM","JU_ORG_NM","COEDU_SC_CODE","PERC_FAXNO","DTLAD_BRKDN","ADRCD_NM","SCHUL_KND_SC_CODE","USER_TELNO","JU_ORG_CODE","CLOSE_YN","ZIP_CODE","ADRES_BRKDN","USER_TELNO_SW","SCHUL_NM"}
 print("### 호출 시험 (서울 강남구 중학교)")
-for at in list(range(0, 80)):
-    q = urllib.parse.urlencode({"apiKey": KEY, "apiType": at, "sidoCode": "11", "sggCode": "11680", "schulKndCode": "03"})
+for at in list(range(1, 80)):
+    q = urllib.parse.urlencode({"apiKey": KEY, "apiType": at, "sidoCode": "11", "sggCode": "11680", "schulKndCode": "03", "pbanYr": "2025"})
     try:
         body = get(f"https://www.schoolinfo.go.kr/openApi.do?{q}")
     except Exception as e:
@@ -40,7 +32,7 @@ for at in list(range(0, 80)):
         print(at, "non-json", body[:150].replace("\n", " ")); continue
     lst = d.get("list") if isinstance(d, dict) else None
     if lst:
-        print(at, d.get("resultCode"), d.get("resultMsg"), "rows", len(lst), "keys", list(lst[0])[:40])
-        print("    first:", json.dumps(lst[0], ensure_ascii=False)[:600])
+        print(at, "rows", len(lst), "keys", [k for k in lst[0] if k not in COMMON][:45])
+        print("    first:", json.dumps({k: v for k, v in lst[0].items() if k not in COMMON or k == "SCHUL_NM"}, ensure_ascii=False)[:700])
     else:
         print(at, json.dumps(d, ensure_ascii=False)[:200])
