@@ -17,7 +17,6 @@ from collector.infra import dist_m
 
 URL = "https://www.schoolinfo.go.kr/openApi.do"
 UA = {"User-Agent": "house-check (personal research)"}
-SIDO = {"11": "서울", "28": "인천", "41": "경기"}
 MATCH_M = 300          # 학구도 학교와 학교알리미 학교를 같은 학교로 볼 거리
 
 
@@ -25,11 +24,18 @@ class SchoolInfoError(RuntimeError):
     pass
 
 
-def fetch(api_type: int, sido: str, year: str, kind: str = "03", key: str | None = None, sleep=time.sleep) -> list[dict]:
+# 시군구 코드는 필수(시도만으로는 안 된다). 행정구역 개편 전 코드도 함께 시도하고 없으면 건너뛴다
+EXTRA_SGG = ["28110", "28140", "28260", "41590", "41190", "41110", "41130", "41170", "41270", "41280", "41460"]
+NO_DATA = "데이터가 존재하지 않습니다"
+
+
+def fetch(api_type: int, sgg: str, year: str, kind: str = "03", key: str | None = None, sleep=time.sleep) -> list[dict]:
+    """sgg: 5자리 시군구 코드. 데이터가 없는 코드면 빈 목록."""
     key = key or os.environ.get("SCHOOLINFO_API_KEY", "")
     if not key:
         raise SchoolInfoError("SCHOOLINFO_API_KEY 가 없다")
-    q = urllib.parse.urlencode({"apiKey": key, "apiType": api_type, "sidoCode": sido, "schulKndCode": kind, "pbanYr": year})
+    q = urllib.parse.urlencode({"apiKey": key, "apiType": api_type, "sidoCode": sgg[:2], "sggCode": sgg,
+                                "schulKndCode": kind, "pbanYr": year})
     last = None
     for i in range(4):
         try:
@@ -46,6 +52,8 @@ def fetch(api_type: int, sido: str, year: str, kind: str = "03", key: str | None
     else:
         raise SchoolInfoError(f"{type(last).__name__}: {last}")
     if d.get("resultCode") != "success":
+        if NO_DATA in str(d.get("resultMsg")):
+            return []
         raise SchoolInfoError(str(d.get("resultMsg")))
     return d.get("list") or []
 

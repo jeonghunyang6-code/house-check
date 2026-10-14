@@ -165,11 +165,16 @@ def _schoolinfo_moves(schools: dict[str, dict]) -> tuple[dict[str, dict], str | 
     """학구도 중학교 → 학교알리미 전·출입. 키가 없거나 실패하면 빈 값(학교군 연결은 그대로 한다)."""
     for year in (time.strftime("%Y"), str(int(time.strftime("%Y")) - 1)):
         try:
-            base, moves = [], {}
-            for sd in schoolinfo.SIDO:
-                base += schoolinfo.fetch(0, sd, year)
-                for r in schoolinfo.fetch(10, sd, year):
+            base, moves = {}, {}
+            for sgg in list(REGIONS) + schoolinfo.EXTRA_SGG:
+                for r in schoolinfo.fetch(0, sgg, year):
+                    base[r["SCHUL_CODE"]] = r
+                for r in schoolinfo.fetch(10, sgg, year):
                     moves[r["SCHUL_CODE"]] = r
+                time.sleep(0.3)
+            base = list(base.values())
+            if not moves:
+                raise schoolinfo.SchoolInfoError("전출입 공시 없음")
         except schoolinfo.SchoolInfoError as e:
             print(f"  학교알리미 {year}: {e}", file=sys.stderr)
             continue
