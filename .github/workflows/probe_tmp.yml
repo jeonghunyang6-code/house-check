@@ -1,5 +1,5 @@
 name: probe-tmp
-# 임시 (브랜치에서만): 중학교 학교군·배정 가능 학교·학교알리미 전출입 실행 (시군구별). PR 전에 지운다
+# 임시 (브랜치에서만): 중학교 학교군·배정 가능 학교·학교알리미 전출입, 좌표 다 모인 뒤 통학구역·병원 재실행. PR 전에 지운다
 on:
   push:
     branches: [claude/brave-lamport-gkzeao]
@@ -15,9 +15,10 @@ jobs:
           python-version: "3.12"
       - run: pip install -q pyproj pyshp shapely
       - run: command -v psql || (sudo apt-get update -q && sudo apt-get install -y -q postgresql-client)
-      - run: python -m jobs.infra midzone
+      - run: for m in midzone schoolzone hospital; do python -m jobs.infra $m || exit 1; done
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           SCHOOLINFO_API_KEY: ${{ secrets.SCHOOLINFO_API_KEY }}
+          DATA_GO_KR_SERVICE_KEY: ${{ secrets.DATA_GO_KR_SERVICE_KEY }}
           HC_DB_BACKEND: psql
           PYTHONUNBUFFERED: "1"
