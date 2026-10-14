@@ -15,6 +15,7 @@ LINE_KEYS = ("호선", "노선명", "선명", "관련노선", "노선")
 LAT_KEYS = ("위도", "역위도", "위도좌표", "Y좌표", "y좌표")
 LNG_KEYS = ("경도", "역경도", "경도좌표", "X좌표", "x좌표")
 MERGE_M = 500.0
+CONFLICT_M = 3000.0      # 같은 이름이 이 안에 따로 있으면 한쪽 좌표가 틀린 것 (2026-10-14 잠실새내: 한 출처가 1.8km 떨어진 좌표)
 STATION_AREA_M = 700.0   # 📖 p.220
 
 
@@ -54,19 +55,52 @@ def dist_m(la1: float, lo1: float, la2: float, lo2: float) -> float:
     return 2 * 6371000 * math.asin(math.sqrt(a))
 
 
+AGREE_M = 300.0   # 다른 출처의 같은 이름 역이 이 안에 있으면 '일치'
+
+
+def source_scores(rows: list[dict]) -> dict[str, float]:
+    """출처(src)별 신뢰도 = 같은 이름이 다른 출처에도 있는 점 중 AGREE_M 안에서 일치하는 비율.
+    2026-10-14: 6호선 역위치 파일이 환승역마다 700m~1.2km 어긋났고, 서울교통공사 파일의 잠실새내는 1.8km 어긋났다."""
+    by_name: dict[str, list[dict]] = {}
+    for r in rows:
+        by_name.setdefault(r["name"], []).append(r)
+    hit: dict[str, int] = {}
+    tot: dict[str, int] = {}
+    for r in rows:
+        others = [o for o in by_name[r["name"]] if o.get("src") != r.get("src")]
+        if not others:
+            continue
+        src = r.get("src", "")
+        tot[src] = tot.get(src, 0) + 1
+        hit[src] = hit.get(src, 0) + any(dist_m(r["lat"], r["lng"], o["lat"], o["lng"]) <= AGREE_M for o in others)
+    return {k: hit.get(k, 0) / v for k, v in tot.items()}
+
+
 def merge_stations(rows: list[dict]) -> list[dict]:
-    """같은 이름이 MERGE_M 안이면 한 역(노선 합침, 좌표 평균)."""
+    """같은 이름이 MERGE_M 안이면 한 역(노선 합침, 좌표 평균). 같은 이름이 CONFLICT_M 안에 따로 있으면(한쪽 좌표 오류)
+    출처 신뢰도 합이 큰 쪽 좌표만 남기고 노선은 합친다. 멀면(양평 5호선 vs 경의중앙) 다른 역."""
+    score = source_scores(rows)
     out: list[dict] = []
     for r in rows:
         hit = next((s for s in out if s["name"] == r["name"] and dist_m(s["lat"], s["lng"], r["lat"], r["lng"]) <= MERGE_M), None)
+        src = r.get("src", "")
         if hit:
             if r["line"] and r["line"] not in hit["lines"]:
                 hit["lines"].append(r["line"])
             n = hit["n"]
             hit["lat"], hit["lng"], hit["n"] = (hit["lat"] * n + r["lat"]) / (n + 1), (hit["lng"] * n + r["lng"]) / (n + 1), n + 1
+            hit["w"] += score.get(src, 0.5)
         else:
-            out.append({"name": r["name"], "lines": [r["line"]] if r["line"] else [], "lat": r["lat"], "lng": r["lng"], "n": 1})
-    return out
+            out.append({"name": r["name"], "lines": [r["line"]] if r["line"] else [], "lat": r["lat"], "lng": r["lng"], "n": 1,
+                        "w": score.get(src, 0.5)})
+    keep = []
+    for s in sorted(out, key=lambda x: (-x["w"], -x["n"])):
+        twin = next((k for k in keep if k["name"] == s["name"] and dist_m(k["lat"], k["lng"], s["lat"], s["lng"]) <= CONFLICT_M), None)
+        if twin:
+            twin["lines"] += [ln for ln in s["lines"] if ln not in twin["lines"]]
+        else:
+            keep.append(s)
+    return keep
 
 
 def nearest(lat: float, lng: float, stations: list[dict]) -> tuple[dict | None, float | None]:

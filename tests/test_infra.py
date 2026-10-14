@@ -18,3 +18,18 @@ def test_merge_and_nearest():
     st, d = nearest(37.4990, 127.0300, s)
     assert st["name"] == "강남" and 150 < d < 350
     assert 700 < dist_m(37.4979, 127.0276, 37.5006, 127.0364) < 950   # 강남~역삼 약 0.8km
+
+
+def test_merge_drops_conflicting_coordinate():
+    # 출처 B 는 다른 역(종합운동장)에서 A 와 맞고, 출처 C 는 어디서도 안 맞는다 → 잠실새내는 B 좌표
+    rows = [{"name": "잠실새내", "line": "2호선", "lat": 37.51165, "lng": 127.08622, "src": "B"},
+            {"name": "잠실새내", "line": "2호선", "lat": 37.52073, "lng": 127.10374, "src": "C"},      # 1.8km 떨어진 틀린 좌표
+            {"name": "종합운동장", "line": "2호선", "lat": 37.5110, "lng": 127.0748, "src": "A"},
+            {"name": "종합운동장", "line": "2호선", "lat": 37.5111, "lng": 127.0749, "src": "B"},
+            {"name": "종합운동장", "line": "2호선", "lat": 37.5200, "lng": 127.0900, "src": "C"},
+            {"name": "양평", "line": "5호선", "lat": 37.5258, "lng": 126.8856},
+            {"name": "양평", "line": "경의중앙선", "lat": 37.4926, "lng": 127.4917}]        # 다른 역
+    s = merge_stations(rows)
+    jam = [x for x in s if x["name"] == "잠실새내"]
+    assert len(jam) == 1 and abs(jam[0]["lat"] - 37.5117) < 0.001
+    assert len([x for x in s if x["name"] == "양평"]) == 2
