@@ -1,0 +1,15 @@
+name: vworld-probe
+on:
+  push:
+    branches: [claude/brave-lamport-gkzeao]
+    paths: [tools/probe/vworld_probe.py, .github/workflows/vworld_probe.yml]
+  workflow_dispatch:
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - run: python3 tools/probe/vworld_probe.py
+        env:
+          VWORLD_API_KEY: ${{ secrets.VWORLD_API_KEY }}
