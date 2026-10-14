@@ -28,28 +28,26 @@ def dbf(b, n=8):
         rows.append(out)
     return nrec, [f for f, _ in fields], rows
 
-st, page, _ = fetch("https://data.seoul.go.kr/dataList/OA-15527/S/1/datasetView.do")
-page = page.decode("utf-8", "replace")
-m = re.search(r"function downloadFile\s*\(.*?\{(.*?)\n\s*\}", page, re.S)
-print("downloadFile body:", re.sub(r"\s+", " ", m.group(1))[:900] if m else None)
-
-for oa, seq in [("OA-15527", "4"), ("OA-15531", None), ("OA-15528", None)]:
-    if seq is None:
-        _, pg, _ = fetch(f"https://data.seoul.go.kr/dataList/{oa}/S/1/datasetView.do")
-        mm = re.search(rb"downloadFile\('(\d+)'\)", pg)
-        seq = mm.group(1).decode() if mm else "1"
-    for data in [{"infId": oa, "seqNo": seq, "seq": seq, "infSeq": "1"}, {"infId": oa, "seqNo": seq}]:
-        st, b, h = fetch("https://data.seoul.go.kr/dataList/down2api.do", urllib.parse.urlencode(data).encode())
-        print(f"=== {oa} seq={seq} {list(data)} -> {st} {h.get('Content-Type')} {h.get('Content-Disposition')} len={len(b)}")
-        if b[:2] == b"PK":
-            z = zipfile.ZipFile(io.BytesIO(b))
-            print("  zip:", [(i.filename.encode('cp437').decode('cp949', 'replace'), i.file_size) for i in z.infolist()])
-            for i in z.infolist():
-                if i.filename.lower().endswith(".dbf"):
-                    n, f, rows = dbf(z.read(i))
-                    print("  dbf", n, "records, fields", f)
-                    for r in rows:
-                        print("   ", r)
-            break
-        else:
-            print("  body:", b[:300])
+for oa in ["OA-15527"]:
+    _, page, _ = fetch(f"https://data.seoul.go.kr/dataList/{oa}/S/1/datasetView.do")
+    page = page.decode("utf-8", "replace")
+    form = re.search(r'<form[^>]*name="frmFile".*?</form>', page, re.S)
+    fields = dict(re.findall(r'<input[^>]*name="(\w+)"[^>]*value="([^"]*)"', form.group(0))) if form else {}
+    seq = re.search(r"downloadFile\('(\d+)'\)", page).group(1)
+    fields["seq"] = seq
+    print("form fields:", fields)
+    st, b, h = fetch("https://datafile.seoul.go.kr/bigfile/iot/inf/nio_download.do?&useCache=false", urllib.parse.urlencode(fields).encode())
+    print(f"=== {oa} -> {st} {h.get('Content-Type')} len={len(b)} head={b[:4]}")
+    if b[:2] == b"PK":
+        z = zipfile.ZipFile(io.BytesIO(b))
+        print("  zip:", [(i.filename.encode('cp437').decode('cp949', 'replace'), i.file_size) for i in z.infolist()])
+        for i in z.infolist():
+            if i.filename.lower().endswith(".dbf"):
+                n, f, rows = dbf(z.read(i), 200)
+                print("  dbf", n, "records, fields", f)
+                for r in rows:
+                    print("   ", r)
+            if i.filename.lower().endswith(".prj"):
+                print("  prj:", z.read(i)[:300])
+    else:
+        print("  body:", b[:400])
