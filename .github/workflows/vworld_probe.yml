@@ -1,4 +1,5 @@
 name: vworld-probe
+# 임시: 위치 데이터 시험 (브랜치에서만). PR 전에 지운다
 on:
   push:
     branches: [claude/brave-lamport-gkzeao]
@@ -6,11 +7,18 @@ on:
   workflow_dispatch:
 jobs:
   probe:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
-      - run: python3 tools/probe/vworld_probe.py
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: command -v psql || (sudo apt-get update -q && sudo apt-get install -y -q postgresql-client)
+      - name: K-apt 상세 정보 시험 300곳
         env:
-          SGIS_CONSUMER_KEY: ${{ secrets.SGIS_CONSUMER_KEY }}
-          SGIS_CONSUMER_SECRET: ${{ secrets.SGIS_CONSUMER_SECRET }}
+          DATA_GO_KR_SERVICE_KEY: ${{ secrets.DATA_GO_KR_SERVICE_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          HC_DB_BACKEND: psql
+          PYTHONUNBUFFERED: "1"
+        run: python -m jobs.kapt detail --limit 300 || true
