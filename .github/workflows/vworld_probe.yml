@@ -15,10 +15,11 @@ jobs:
         with:
           python-version: "3.12"
       - run: command -v psql || (sudo apt-get update -q && sudo apt-get install -y -q postgresql-client)
-      - name: K-apt 상세 정보 시험 300곳
+      - name: SGIS 단지 좌표 시험 300곳
         env:
-          DATA_GO_KR_SERVICE_KEY: ${{ secrets.DATA_GO_KR_SERVICE_KEY }}
+          SGIS_CONSUMER_KEY: ${{ secrets.SGIS_CONSUMER_KEY }}
+          SGIS_CONSUMER_SECRET: ${{ secrets.SGIS_CONSUMER_SECRET }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           HC_DB_BACKEND: psql
           PYTHONUNBUFFERED: "1"
-        run: python -m jobs.kapt detail --limit 300 || true
+        run: python -m jobs.geo geocode --limit 300 || true

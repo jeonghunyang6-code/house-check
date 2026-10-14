@@ -119,7 +119,7 @@ def _run_calls(db: Db, todo: list[str], today: date, fetch, to_row, cols, at_col
             item = fetch(code)
         except QuotaExceeded as e:
             flush()
-            print(f"  {label} {done}개 받음, 호출 한도 초과로 중단: {e}", file=sys.stderr)
+            print(f"  {label} {done}개 받음, 중단(호출 한도 또는 연속 접속 실패): {e}", file=sys.stderr)
             return 2
         except ApiError as e:
             fail += 1
@@ -147,6 +147,7 @@ def _run_calls(db: Db, todo: list[str], today: date, fetch, to_row, cols, at_col
         i += 1
         if len(batch) >= 200:
             flush()
+            print(f"  {label} {done}/{len(todo)} 저장", flush=True)
     flush()
     print(f"  {label} {done}개 받음, 실패 {fail}, 남은 단지 {left()}개")
     return 1 if fail else 0
