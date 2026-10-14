@@ -3,6 +3,7 @@
     python -m jobs.kapt complexes --regions seoul --months 202001-202608  # 과거 실거래에서 단지 속성 채우기
     python -m jobs.kapt list --regions sudogwon                           # K-apt 단지 목록
     python -m jobs.kapt info --limit 3000                                 # 기본 정보 (아직 안 받은 단지만)
+    python -m jobs.kapt detail --limit 3000                               # 상세 정보: 역·도보 시간·주차 (실거래 연결 단지만, 0021)
     python -m jobs.kapt match --regions sudogwon                          # 연결
 
 매일 수집(jobs.daily)이 그날 받은 매매의 단지 속성을 complexes 에 넣으므로, complexes 모드는
@@ -19,7 +20,7 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from collector.db import Db, DbError, connect, lit, select
-from collector.kapt import fetch_info, fetch_list, info_row, match_complexes
+from collector.kapt import detail_row, fetch_detail, fetch_info, fetch_list, info_row, match_complexes
 from collector.pg_store import complexes_sql
 from collector.regions import REGIONS, select_regions
 from collector.sources.molit import ApiError, QuotaExceeded, fetch_trades
@@ -32,6 +33,8 @@ FAIL_STREAK = 20
 PAUSES = (60, 300, 900)
 INFO_COLS = ("addr", "road_addr", "households", "use_date", "dong_cnt", "top_floor", "builder", "heat_type",
              "sale_type", "hh_lt60", "hh_60_85", "hh_85_135", "hh_gt135")
+DETAIL_COLS = ("subway_line", "subway_station", "walk_subway", "walk_bus", "parking_ground", "parking_under", "ev_charger",
+               "cctv", "welfare")
 
 
 def run_complexes(db: Db, regions: list[str], months: list[str], today: date) -> int:
@@ -86,6 +89,18 @@ def run_info(db: Db, limit: int, today: date, sleep=time.sleep) -> int:
     todo = [r["kapt_code"] for r in select(db, "SELECT k.kapt_code FROM kapt_complexes k WHERE k.info_at IS NULL "
                                               "ORDER BY EXISTS (SELECT 1 FROM complexes c WHERE c.kapt_code = k.kapt_code) DESC, "
                                               f"k.region_code, k.kapt_code LIMIT {int(limit)}")]
+    return _run_calls(db, todo, today, lambda c: fetch_info(c), info_row, INFO_COLS, "info_at", "기본 정보", sleep)
+
+
+def run_detail(db: Db, limit: int, today: date, sleep=time.sleep) -> int:
+    # 상세 정보는 실거래와 연결된 단지만 받는다 (H1 역세권·주차는 단지 화면용). 서울 → 경기·인천 순
+    todo = [r["kapt_code"] for r in select(db, "SELECT k.kapt_code FROM kapt_complexes k WHERE k.detail_at IS NULL "
+                                              "AND EXISTS (SELECT 1 FROM complexes c WHERE c.kapt_code = k.kapt_code) "
+                                              f"ORDER BY k.region_code, k.kapt_code LIMIT {int(limit)}")]
+    return _run_calls(db, todo, today, lambda c: fetch_detail(c), detail_row, DETAIL_COLS, "detail_at", "상세 정보", sleep)
+
+
+def _run_calls(db: Db, todo: list[str], today: date, fetch, to_row, cols, at_col: str, label: str, sleep) -> int:
     done = fail = streak = pauses = 0
     batch: list[str] = []
 
@@ -95,16 +110,16 @@ def run_info(db: Db, limit: int, today: date, sleep=time.sleep) -> int:
             batch.clear()
 
     def left() -> int:
-        return select(db, "SELECT count(*) AS n FROM kapt_complexes WHERE info_at IS NULL")[0]["n"]
+        return select(db, f"SELECT count(*) AS n FROM kapt_complexes WHERE {at_col} IS NULL")[0]["n"]
 
     i = 0
     while i < len(todo):
         code = todo[i]
         try:
-            item = fetch_info(code)
+            item = fetch(code)
         except QuotaExceeded as e:
             flush()
-            print(f"  기본 정보 {done}개 받음, 호출 한도 초과로 중단: {e}", file=sys.stderr)
+            print(f"  {label} {done}개 받음, 중단(호출 한도 또는 연속 접속 실패): {e}", file=sys.stderr)
             return 2
         except ApiError as e:
             fail += 1
@@ -113,7 +128,7 @@ def run_info(db: Db, limit: int, today: date, sleep=time.sleep) -> int:
             if streak >= FAIL_STREAK:
                 flush()
                 if pauses >= len(PAUSES):
-                    print(f"  기본 정보 {done}개 받음, 실패가 {streak}번 연달아 이어져 중단 (남은 단지 {left()}개)", file=sys.stderr)
+                    print(f"  {label} {done}개 받음, 실패가 {streak}번 연달아 이어져 중단 (남은 단지 {left()}개)", file=sys.stderr)
                     return 2
                 print(f"  실패 {streak}번 연속 → {PAUSES[pauses]}초 쉬고 {code}부터 다시", file=sys.stderr)
                 sleep(PAUSES[pauses])
@@ -125,15 +140,16 @@ def run_info(db: Db, limit: int, today: date, sleep=time.sleep) -> int:
             continue
         streak = 0
         pauses = 0
-        row = info_row(item) if item else {}
-        sets = ", ".join(f"{c} = {lit(row.get(c))}" for c in INFO_COLS)
-        batch.append(f"UPDATE kapt_complexes SET {sets}, info_at = {lit(today)} WHERE kapt_code = {lit(code)};")
+        row = to_row(item) if item else {}
+        sets = ", ".join(f"{c} = {lit(row.get(c))}" for c in cols)
+        batch.append(f"UPDATE kapt_complexes SET {sets}, {at_col} = {lit(today)} WHERE kapt_code = {lit(code)};")
         done += 1
         i += 1
         if len(batch) >= 200:
             flush()
+            print(f"  {label} {done}/{len(todo)} 저장", flush=True)
     flush()
-    print(f"  기본 정보 {done}개 받음, 실패 {fail}, 남은 단지 {left()}개")
+    print(f"  {label} {done}개 받음, 실패 {fail}, 남은 단지 {left()}개")
     return 1 if fail else 0
 
 
@@ -161,10 +177,10 @@ def run_match(db: Db, regions: list[str]) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("mode", choices=["complexes", "list", "info", "match"])
+    ap.add_argument("mode", choices=["complexes", "list", "info", "detail", "match"])
     ap.add_argument("--regions", default="sudogwon")
     ap.add_argument("--months", default="202001-202608", help="complexes 모드용")
-    ap.add_argument("--limit", type=int, default=5000, help="info 모드: 한 번에 받을 단지 수")
+    ap.add_argument("--limit", type=int, default=5000, help="info·detail 모드: 한 번에 받을 단지 수")
     ap.add_argument("--db", choices=["api", "psql"])
     a = ap.parse_args(argv)
     today = datetime.now(KST).date()
@@ -178,6 +194,8 @@ def main(argv: list[str] | None = None) -> int:
             rc = run_list(db, regions, today)
         elif a.mode == "info":
             rc = run_info(db, a.limit, today)
+        elif a.mode == "detail":
+            rc = run_detail(db, a.limit, today)
         else:
             rc = run_match(db, regions)
     except DbError as e:

@@ -1,0 +1,45 @@
+# 단지 좌표 (jobs/geo.py, SGIS). 이 클라우드 세션에서는 SGIS 접속이 막혀 있어 Actions 에서만 돈다.
+# 처음 약 1만 9천 단지는 1초에 1곳쯤이라 몇 번에 나눠 수동 실행(limit 5000). 그 뒤로는 매주 새 단지만.
+name: geo
+
+on:
+  schedule:
+    - cron: "17 19 * * 1"   # 화요일 04:17 KST
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "한 번에 좌표를 받을 단지 수"
+        default: "5000"
+      retry_none:
+        description: "못 찾은 단지(geo_method=none)도 다시 (true/false)"
+        default: "false"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: geo
+  cancel-in-progress: false
+
+jobs:
+  geocode:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: psql 확인
+        run: command -v psql || (sudo apt-get update -q && sudo apt-get install -y -q postgresql-client)
+      - name: 좌표
+        env:
+          SGIS_CONSUMER_KEY: ${{ secrets.SGIS_CONSUMER_KEY }}
+          SGIS_CONSUMER_SECRET: ${{ secrets.SGIS_CONSUMER_SECRET }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          HC_DB_BACKEND: psql
+          PYTHONUNBUFFERED: "1"
+          LIMIT: ${{ inputs.limit || '5000' }}
+          RETRY: ${{ inputs.retry_none || 'false' }}
+        run: |
+          if [ "$RETRY" = "true" ]; then python -m jobs.geo geocode --limit "$LIMIT" --retry-none; else python -m jobs.geo geocode --limit "$LIMIT"; fi

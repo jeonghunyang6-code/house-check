@@ -98,6 +98,16 @@ curl -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
 - 단지 연결은 이 작업 환경에서 실행: K-apt 목록 10,211개(83곳) 완료, complexes·info·match는 백그라운드(`/tmp/claude-0/kapt_*.log`)
 - 확인할 것: 오늘 밤 daily-snapshot(20:47 UTC)이 러너에서 공공데이터포털에 접속되는지
 
+### 위치 데이터: K-apt 상세 정보(H1 역세권), SGIS 단지 좌표 (2026-10-14)
+
+- **VWorld 는 못 쓴다**: 키(`VWORLD_API_KEY`) 등록·허용 도메인 추가 후에도 이 세션과 GitHub 러너 모두 연결이 응답 없이 끊김(502·RemoteDisconnected). 해외 IP 차단으로 추정(공지 미확인). 우회하지 않음. 키는 사용자 PC(한국 IP)에서 쓸 일이 생길 때를 위해 남겨 둠(용도지역·정비구역 지도 등)
+- **K-apt 상세 정보** `getAphusDtlInfoV5` (지금 공공데이터포털 키로 됨, 0021): 역(subwayStation)·노선·역 도보 시간 구간(kaptdWtimesub "5분이내" 등)·버스·지상/지하 주차·전기차 충전기·CCTV·복리시설. 관리사무소 입력값이라 틀린 곳이 있음(헬리오시티 노선 "3·8·9호선", 역 "송파역"). `collector/kapt.py station_area`: 도보 상한 10분 이하 = 역세권(📖 p.220). `jobs.kapt detail`, kapt.yml 을 **매일**로 바꿔 밀린 약 1만 단지를 한도만큼씩 받음
+  - 2026-10-14 오후 공공데이터포털이 이 세션·러너 모두에서 연결을 자주 끊어 아직 0건 저장. 다음 kapt 실행이 이어서 받는다. 도보 시간 구간 값 목록은 실제 데이터로 아직 확인 못 함(walk_minutes 는 "N분이내", "N~M분이내", "N분초과" 가정)
+- **SGIS(통계청)** `SGIS_CONSUMER_KEY`/`SGIS_CONSUMER_SECRET` (GitHub 시크릿. 이 세션 환경 변수에는 아직 안 보임, 접속도 막힘 → Actions 에서만): `collector/sgis.py`, `jobs/geo.py`, `geo.yml`, 0022 (complexes.lat·lng·adm_cd·adm_nm·geo_method·geo_at)
+  - 응답(러너에서 확인): geocodewgs84 → x(경도)·y(위도)·adm_cd(SGIS 행정동 8자리)·leg_cd(법정동 10자리)·sgg_nm. hadmarea.geojson → 행정동 경계(UTM-K, 송파 27개). SGIS 시군구 코드(송파 11240)는 법정동 코드(11710)와 다름
+  - 법정동이 맞는 결과만 쓴다(`accept`: 코드 같음, 또는 동 이름 + 시군구 이름). 시험 300곳(서울 종로·중구·용산) 300곳 모두 지번 주소로 찾음, 같은 동 중심에서 최대 1.5km(신당동)
+  - 남은 것: 나머지 약 1만 8천 단지(1초에 1곳쯤, limit 5000 씩 수동 실행) → 행정동 경계·인접 → 생활권 묶음(E0), 주변 시세(E2)
+
 ### B5 경고선 확정, B4 ②·반등 신호 백테스트 (2026-10-14)
 
 - **B5 경고선(사용자 확정)**: `collector/market.py b5_state` — 하위 급지 신고가 비중 🔧 10% 이상 주의, 25% 이상이면서 상위 대비 0.6배 이상 과열. 작가는 숫자를 주지 않았다(📖 p.111~114). 근거는 b5_history: 2021 불장 30~41%·0.62~0.79, 2023~25년 2~3%. 과열 사례가 2021년 하나뿐이고, 과거 달도 2026년 급지로 나눴다는 한계. 2026-10-14 값 9.3% → 보통
