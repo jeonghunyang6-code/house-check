@@ -60,3 +60,18 @@ def test_hira_items_and_grid():
     assert len(hira.items(one)[1]) == 1
     g = hira.Grid([{"lat": 37.5, "lng": 127.0}, {"lat": 37.5, "lng": 127.009}, {"lat": 37.5, "lng": 127.02}])
     assert hira.count_within(g, 37.5, 127.0, 1000) == 2          # 0m, 약 795m 안 / 1.77km 밖
+
+
+def test_schoolinfo_match_and_rate():
+    from collector import schoolinfo
+    gudo = {"B1": {"name": "서울대치중학교", "lat": 37.4950, "lng": 127.0600},
+            "B2": {"name": "도곡중학교", "lat": 37.4900, "lng": 127.0500},
+            "B3": {"name": "없는중학교", "lat": 37.3000, "lng": 127.0000}}
+    info = [{"SCHUL_CODE": "S1", "SCHUL_NM": "대치중학교", "LTTUD": 37.4955, "LGTUD": 127.0602},
+            {"SCHUL_CODE": "S2", "SCHUL_NM": "도곡중학교(이전)", "LTTUD": 37.4903, "LGTUD": 127.0501}]
+    m = schoolinfo.match(gudo, info)
+    assert m["B1"]["SCHUL_CODE"] == "S1"            # 이름(서울 접두 뺌)·300m 안
+    assert m["B2"]["SCHUL_CODE"] == "S2"            # 이름은 달라도 100m 안 하나뿐
+    assert "B3" not in m
+    assert schoolinfo.net_in_rate({"STDNT_SUM": 886, "MVIN_SUM": 41, "MVT_SUM": 59}) == -2.0
+    assert schoolinfo.net_in_rate({"STDNT_SUM": 0, "MVIN_SUM": 1, "MVT_SUM": 0}) is None

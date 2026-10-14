@@ -1,16 +1,23 @@
 name: probe-tmp
-# 임시 (브랜치에서만): 학교알리미 API 확인. PR 전에 지운다
+# 임시 (브랜치에서만): 중학교 학교군·배정 가능 학교·학교알리미 전출입 실행. PR 전에 지운다
 on:
   push:
     branches: [claude/brave-lamport-gkzeao]
-    paths: [.github/workflows/probe_tmp.yml, tools/probe/**]
+    paths: [.github/workflows/probe_tmp.yml]
 jobs:
   run:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
-      - run: python3 tools/probe/schoolinfo.py
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install -q pyproj pyshp shapely
+      - run: command -v psql || (sudo apt-get update -q && sudo apt-get install -y -q postgresql-client)
+      - run: python -m jobs.infra midzone
         env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           SCHOOLINFO_API_KEY: ${{ secrets.SCHOOLINFO_API_KEY }}
+          HC_DB_BACKEND: psql
           PYTHONUNBUFFERED: "1"

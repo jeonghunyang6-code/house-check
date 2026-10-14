@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import csv
 import io
+import json
 import os
 import sys
 import time
@@ -18,8 +19,8 @@ from collections import Counter
 
 from collector.datagokr_file import CaptchaRequired, DownloadError, download
 from collector.db import Db, DbError, connect, lit, select
-from collector import hira
-from collector.infra import drop_shared_coords, merge_stations, nearest, normalize_station
+from collector import hira, schoolinfo
+from collector.infra import dist_m, drop_shared_coords, merge_stations, nearest, normalize_station
 from collector.neis import OFFICES, PAGE, NeisError, count_by_dong, fetch_page, match_dong
 from collector.kapt import _get_json
 from collector.regions import REGIONS
@@ -157,9 +158,37 @@ def _csv_file(pk: str) -> list[dict]:
     return list(csv.DictReader(io.StringIO(_decode(data))))
 
 
+MID_NEAR = 3   # 학교군에 학교가 여럿이면 가까운 순으로 이만큼 보여준다 (배정 확정 아님)
+
+
+def _schoolinfo_moves(schools: dict[str, dict]) -> tuple[dict[str, dict], str | None]:
+    """학구도 중학교 → 학교알리미 전·출입. 키가 없거나 실패하면 빈 값(학교군 연결은 그대로 한다)."""
+    for year in (time.strftime("%Y"), str(int(time.strftime("%Y")) - 1)):
+        try:
+            base, moves = [], {}
+            for sd in schoolinfo.SIDO:
+                base += schoolinfo.fetch(0, sd, year)
+                for r in schoolinfo.fetch(10, sd, year):
+                    moves[r["SCHUL_CODE"]] = r
+        except schoolinfo.SchoolInfoError as e:
+            print(f"  학교알리미 {year}: {e}", file=sys.stderr)
+            continue
+        linked = schoolinfo.match(schools, base)
+        out = {}
+        for sid, r in linked.items():
+            m = moves.get(r["SCHUL_CODE"])
+            if m:
+                out[sid] = {"si_code": r["SCHUL_CODE"], "students": int(m.get("STDNT_SUM") or 0),
+                            "mv_in": int(m.get("MVIN_SUM") or 0), "mv_out": int(m.get("MVT_SUM") or 0),
+                            "net_in": schoolinfo.net_in_rate(m)}
+        print(f"  학교알리미 {year} 공시: 기본정보 {len(base)}곳, 학구도 중학교 {len(schools)}곳 중 {len(linked)}곳 연결, 전출입 {len(out)}곳")
+        return out, year
+    return {}, None
+
+
 def run_midzone(db: Db) -> int:
-    """단지가 든 중학교 학교군(서울은 여러 학교를 묶은 학교군, 경기·인천은 중학구가 많다)과
-    그 학교군 안에서 직선으로 가장 가까운 중학교. 서울은 학교군 안 근거리 배정이 원칙이지만 실제 배정과 다를 수 있다."""
+    """단지가 든 중학교 학교군과 '배정 가능 학교들'. 학교군에 학교가 1곳이면 배정 확정, 여럿이면 학교군 안 거리·추첨
+    배정이라 확정할 수 없어 가까운 순 MID_NEAR 곳과 학교군 평균을 보여준다(서울은 1곳짜리 학교군에 든 단지가 없다)."""
     try:
         zones, tree, tf = _load_zones(MID_ZONE_FILE)
         links = _csv_file(ZONE_SCHOOL_FILE)
@@ -181,34 +210,48 @@ def run_midzone(db: Db) -> int:
     for r in links:
         if r.get("학구ID") in zone_ids and r.get("학교ID") in schools:
             in_zone.setdefault(r["학구ID"], []).append(schools[r["학교ID"]])
+    used = {s["id"]: s for v in in_zone.values() for s in v}
+    moves, year = _schoolinfo_moves(used)
+
+    def zone_net_in(zid: str) -> float | None:
+        ms = [moves[s["id"]] for s in in_zone.get(zid, []) if s["id"] in moves and moves[s["id"]]["students"] > 0]
+        n = sum(m["students"] for m in ms)
+        return round(sum(m["mv_in"] - m["mv_out"] for m in ms) / n * 100, 1) if n else None
+
     cx = select(db, "SELECT apt_seq, lat, lng FROM complexes WHERE lat IS NOT NULL")
-    vals, miss = [], 0
+    vals, miss, one = [], 0, 0
     for c in cx:
         la, lo = float(c["lat"]), float(c["lng"])
         main, hits = _zone_hits(zones, tree, tf, la, lo)
         if not main:
             miss += 1
             continue
-        cand = [s for h in hits for s in in_zone.get(h[0], [])]
-        best, d = nearest(la, lo, cand) if cand else (None, None)
+        cand = list({s["id"]: s for h in hits for s in in_zone.get(h[0], [])}.values())
+        one += len(cand) == 1
+        ranked = sorted(cand, key=lambda s: dist_m(la, lo, s["lat"], s["lng"]))[:MID_NEAR]
+        near = [{"id": s["id"], "name": s["name"], "m": round(dist_m(la, lo, s["lat"], s["lng"])),
+                 "net_in": moves.get(s["id"], {}).get("net_in")} for s in ranked]
         vals.append(f"({lit(c['apt_seq'])}, {lit(main[0][0])}, {lit(main[0][1])}, {lit(any(h[2] == '1' for h in hits))}, "
-                    f"{len({s['id'] for s in cand})}, {lit(best['id'] if best else None)}, {lit(best['name'] if best else None)}, "
-                    f"{d if d is not None else 'NULL'}::int)")
-    used = {s["id"] for v in in_zone.values() for s in v}
+                    f"{len(cand)}, {lit(len(cand) == 1)}, {lit(json.dumps(near, ensure_ascii=False))}::jsonb, "
+                    f"{lit(zone_net_in(main[0][0]))}::numeric)")
     stmts = ["BEGIN;", "DELETE FROM mid_school;"]
-    rows = [s for s in schools.values() if s["id"] in used]
+    rows = list(used.values())
     for i in range(0, len(rows), 500):
-        stmts.append("INSERT INTO mid_school (school_id, name, est_type, lat, lng, zone_ids) VALUES " + ", ".join(
+        stmts.append("INSERT INTO mid_school (school_id, name, est_type, lat, lng, zone_ids, si_code, students, mv_in, mv_out, net_in, pban_yr) VALUES "
+                     + ", ".join(
             f"({lit(s['id'])}, {lit(s['name'])}, {lit(s['type'])}, {s['lat']}, {s['lng']}, "
-            f"{lit(','.join(sorted(k for k, v in in_zone.items() if any(x['id'] == s['id'] for x in v))))})"
+            f"{lit(','.join(sorted(k for k, v in in_zone.items() if any(x['id'] == s['id'] for x in v))))}, "
+            + (lambda m: f"{lit(m.get('si_code'))}, {lit(m.get('students'))}::int, {lit(m.get('mv_in'))}::int, "
+                         f"{lit(m.get('mv_out'))}::int, {lit(m.get('net_in'))}::numeric, {lit(year if m else None)})")(moves.get(s["id"], {}))
             for s in rows[i:i + 500]) + ";")
     for i in range(0, len(vals), 1000):
         stmts.append("UPDATE complexes AS c SET mid_zone_id = v.zi, mid_zone = v.zn, mid_zone_shared = v.sh, mid_zone_schools = v.n, "
-                     "mid_school_id = v.si, mid_school = v.sn, mid_school_m = v.d "
-                     f"FROM (VALUES {', '.join(vals[i:i + 1000])}) AS v(a, zi, zn, sh, n, si, sn, d) WHERE c.apt_seq = v.a;")
+                     "mid_assigned = v.one, mid_near = v.near, mid_zone_net_in = v.zni "
+                     f"FROM (VALUES {', '.join(vals[i:i + 1000])}) AS v(a, zi, zn, sh, n, one, near, zni) WHERE c.apt_seq = v.a;")
     stmts.append("COMMIT;")
     db.query("\n".join(stmts))
-    print(f"  수도권 중학교 학교군 {len(zones)}개, 중학교 {len(rows)}곳, 좌표 단지 {len(cx)}개 중 {len(vals)}개 연결 (못 넣은 단지 {miss})")
+    print(f"  수도권 중학교 학교군 {len(zones)}개, 중학교 {len(rows)}곳, 좌표 단지 {len(cx)}개 중 {len(vals)}개 연결 "
+          f"(배정 확정 {one}, 못 넣은 단지 {miss})")
     return 0
 
 
