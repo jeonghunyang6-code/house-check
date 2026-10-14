@@ -109,7 +109,7 @@ curl -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
   - **연결 끊김 분석 (2026-10-14)**: 상세·기본·실거래 API 가 똑같이 약 11초 뒤 TLS 연결 단계에서 끊겼다 되기를 반복(프록시 기록: CONNECT 성공, ClientHello 전송 후 서버 무응답). 이 세션·GitHub 러너 둘 다. 한도·키 문제 아님(그때는 오류 본문이 온다). 해외 클라우드 IP 를 공공데이터포털 쪽이 간헐적으로 거르는 것으로 추정(미확인). → `molit.conn_pause`: 연속 실패 3번이면 1분·5분·15분 쉬고 같은 호출을 다시, 그래도 안 되면 Unreachable 로 멈춤 (molit·kapt 공통)
   - 남은 것: 나머지 약 1만 8천 단지(1초에 1곳쯤, limit 5000 씩 수동 실행) → 행정동 경계·인접 → 생활권 묶음(E0), 주변 시세(E2)
 
-### 생활 인프라: 초등학교 통학구역·지하철역·학원·병원 (2026-10-15, jobs/infra.py, 0025~0027)
+### 생활 인프라: 초등 통학구역·중학교 학교군·지하철역·학원·병원 (2026-10-15, jobs/infra.py, 0025~0028)
 
 - **공공데이터포털 파일 내려받기** `collector/datagokr_file.py`: 화면 '다운로드' 버튼과 같은 순서(selectFileDataDownload → check-limit → fileDownload). 보안문자 요구(needCaptcha·403·429)면 멈춤. 사이트가 자주 끊겨(약 11초 뒤 연결 끊김) 단계마다 재시도. '기관 자체 다운로드'로 연결된 데이터(행안부 localdata, 심평원, 나이스, 서울 열린데이터)는 이 방식으로 안 받아진다
 - **초등학교 통학구역** 15159265 한국교육시설안전원(SHP, 2026-09-20, EPSG:5186, 전국 7,132개): `python -m jobs.infra schoolzone`(pyshp·pyproj·shapely → Actions). complexes.school_zone(_id, _shared). 공동통학구역(HAKGUDO_GB=1) 걸치면 shared. 2026-10-15 좌표 있는 단지 11,489곳 연결(잠실엘스→잠일초, 리센츠→잠신초, 은마→대곡초). **좌표가 다 모이면 다시 실행**
@@ -121,7 +121,10 @@ curl -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
 - **학원** (`python -m jobs.infra academy`, NEIS_API_KEY, 0026): 나이스 acaInsTiInfo(키 없으면 한 번에 5건뿐) 서울 25,507 · 인천 6,920 · 경기 39,262건. 좌표가 없어 도로명 주소 괄호 안 법정동(읍·면은 주소에서)으로 센다 → `academy_dong` 1,181개 동(동을 못 읽은 4,081건 빠짐). 단지는 같은 법정동의 '입시.검정 및 보습' 수 `complexes.academy_exam`(교습소 포함)·`academy_hagwon`(학원만). 18,750개 중 18,532개 연결. 1위 대치동 1,186 · 목동 722 · 송도동 588 · 신정동 533 · 다산동 432 · 중계동 398. 단지 중앙값 62
   - 법정동 크기가 달라 큰 동(목동·다산동)이 유리하다. 반경이 아니라 '그 동의 학원가 규모'로만 읽을 것. 주소의 시군구가 개편 전 이름이거나 시까지만 있으면(화성시) 시 이름 → 시도 안에서 하나뿐인 동 이름 순으로 맞춘다(`match_dong`)
 - **병원** (`python -m jobs.infra hospital`, 공공데이터포털 '건강보험심사평가원_병원정보서비스' 활용 승인 2026-10-15, 0027): getHospBasisList 수도권 42,070곳(XPos·YPos 필드 실제 응답으로 확인). 상급종합 23 · 종합병원 130 → `hospital` 153곳, 단지별 가장 가까운 곳 `hosp_name·hosp_kind·hosp_m`(직선 5km 안) · 1km 안 의원 수 `clinic_1km`. 중앙값 1,385m · 50곳. 은마 → 강남세브란스 1.8km, 고덕그라시움 → 강동경희대병원 0.7km
-- **좌표가 다 모이면 schoolzone·stations·hospital 을 다시 실행** (academy 는 좌표와 무관)
+- **중학교 학교군** (`python -m jobs.infra midzone`, 0028): 한국교육시설안전원 중학교학교군 SHP(15159264, 2026-09-20, 초등과 같은 필드·EPSG:5186) + 학구도 연계정보(15159266, 학구ID↔학교ID) + 초중등학교위치(15159184, 위도·경도). 수도권 학교군·중학구 427개, 운영 중 중학교 1,214곳 → `mid_school`. 단지마다 `mid_zone`(공동학구면 shared), 학교군 안 중학교 수, **학교군 안 직선으로 가장 가까운 중학교** `mid_school·mid_school_m`. 17,950개 중 17,949개 연결
+  - 서울은 큰 학교군(예 강남서초2학교군 17개교) 안 근거리·추첨 배정이라 '가장 가까운 학교'는 실제 배정과 다를 수 있다(은마 → 단대부중 710m). 경기 신도시는 중학구가 작다(동탄2-1중학군 6개교)
+  - 다음: 학교알리미 공시(학업성취도·졸업생 진로 특목고·자사고 진학)를 학교별로 → 학교군·가장 가까운 학교에 붙이기. 학교알리미 OpenAPI 는 apiKey 필수(schoolinfo.go.kr, `openApi.do?apiKey=&apiType=&schulKndCode=03`), 최근 3년만
+- **좌표가 다 모이면 schoolzone·midzone·stations·hospital 을 다시 실행** (academy 는 좌표와 무관)
 - 대형마트는 보류: 행안부 localdata(러너 접속 실패)·서울(외부 링크)·경기(경기데이터드림 키)·인천(2022년, 주소만)으로 흩어짐
 
 ### 행정동 경계·인접, 서울 지역생활권 (2026-10-14, 생활권 E0 준비)
