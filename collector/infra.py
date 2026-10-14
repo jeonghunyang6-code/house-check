@@ -48,6 +48,29 @@ def normalize_station(row: dict, line_default: str = "") -> dict | None:
     return {"name": norm_name(name), "line": line, "lat": la, "lng": lo}
 
 
+def drop_shared_coords(rows: list[dict]) -> list[dict]:
+    """한 파일 안에서 이름이 다른 역이 좌표가 똑같으면 하나는 틀린 좌표다(경춘선 파일의 사릉 = 별내 좌표).
+    다른 출처에서 같은 이름이 AGREE_M 안에 있는 역만 맞는 것으로 보고 나머지를 뺀다.
+    아무도 확인되지 않으면 어느 쪽이 맞는지 몰라 그대로 둔다(의정부·청산, 마곡·발산 등)."""
+    groups: dict[tuple, set] = {}
+    for r in rows:
+        groups.setdefault((r["src"], r["lat"], r["lng"]), set()).add(r["name"])
+
+    def confirmed(r):
+        return any(o["src"] != r["src"] and o["name"] == r["name"]
+                   and dist_m(r["lat"], r["lng"], o["lat"], o["lng"]) <= AGREE_M for o in rows)
+
+    out = []
+    for r in rows:
+        names = groups[(r["src"], r["lat"], r["lng"])]
+        if len(names) > 1:
+            ok = {x["name"] for x in rows if x["src"] == r["src"] and (x["lat"], x["lng"]) == (r["lat"], r["lng"]) and confirmed(x)}
+            if ok and r["name"] not in ok:
+                continue
+        out.append(r)
+    return out
+
+
 def dist_m(la1: float, lo1: float, la2: float, lo2: float) -> float:
     p1, p2 = math.radians(la1), math.radians(la2)
     dp, dl = p2 - p1, math.radians(lo2 - lo1)

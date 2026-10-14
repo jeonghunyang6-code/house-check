@@ -17,7 +17,7 @@ import time
 
 from collector.datagokr_file import CaptchaRequired, DownloadError, download
 from collector.db import Db, DbError, connect, lit, select
-from collector.infra import merge_stations, nearest, normalize_station
+from collector.infra import drop_shared_coords, merge_stations, nearest, normalize_station
 
 # 수도권 도시·광역철도 역 위치 (공공데이터포털 파일데이터 번호). 2026-10-14 확인한 것만.
 # 국가철도공단·코레일의 일반열차역 목록(15067652·15127532)은 KTX·일반역 위주라 넣지 않는다
@@ -32,8 +32,10 @@ STATION_FILES = {
     "15041333": "", "15041336": "", "15041337": "",  # 분당선, 수인선, 신분당선
     "15041338": "", "15041339": "",                  # 인천 1·2호선
     "15041486": "", "15041487": "",                  # 경강선, 경의중앙선
+    "15041483": "",                                  # 경춘선 (2026-10-15 추가)
 }
-# 아직 못 받은 것(2026-10-14 페이지 오류·미확인): 경춘선·서해선·김포골드라인·신림선·GTX-A 등 → 해당 역 주변 단지는 거리가 길게 나올 수 있다
+# 아직 못 받은 것: 15041308·15041309·15041328·15041485 는 2026-10-15 에도 페이지 오류(500). 서해선·김포골드라인·신림선·GTX-A 는
+# 공공데이터포털에서 역위치 파일을 찾지 못함 → 해당 역 주변 단지는 거리가 길게 나올 수 있다
 SCHOOL_ZONE_FILE = "15159265"   # 한국교육시설안전원 초등학교통학구역 (SHP, EPSG:5186)
 CAPITAL_SD = ("11", "28", "41")
 
@@ -63,7 +65,7 @@ def run_stations(db: Db, src_dir: str | None) -> int:
         rows += got
         used.append(pk)
         print(f"  {pk}: 역 {len(got)}개", flush=True)
-    st = merge_stations(rows)
+    st = merge_stations(drop_shared_coords(rows))
     cx = select(db, "SELECT apt_seq, lat, lng FROM complexes WHERE lat IS NOT NULL")
     stmts = ["BEGIN;", "DELETE FROM station;"]
     for i in range(0, len(st), 500):

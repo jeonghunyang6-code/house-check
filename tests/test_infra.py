@@ -33,3 +33,15 @@ def test_merge_drops_conflicting_coordinate():
     jam = [x for x in s if x["name"] == "잠실새내"]
     assert len(jam) == 1 and abs(jam[0]["lat"] - 37.5117) < 0.001
     assert len([x for x in s if x["name"] == "양평"]) == 2
+
+
+def test_drop_shared_coords():
+    from collector.infra import drop_shared_coords
+    rows = [{"src": "a", "name": "별내", "lat": 37.642221, "lng": 127.127208},
+            {"src": "a", "name": "사릉", "lat": 37.642221, "lng": 127.127208},
+            {"src": "a", "name": "금곡", "lat": 37.637414, "lng": 127.207931},
+            {"src": "b", "name": "별내", "lat": 37.64217, "lng": 127.1273},
+            {"src": "c", "name": "의정부", "lat": 37.73873, "lng": 127.045891},
+            {"src": "c", "name": "청산", "lat": 37.73873, "lng": 127.045891}]
+    assert [(r["src"], r["name"]) for r in drop_shared_coords(rows)] == [
+        ("a", "별내"), ("a", "금곡"), ("b", "별내"), ("c", "의정부"), ("c", "청산")]
