@@ -33,6 +33,7 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           NEIS_API_KEY: ${{ secrets.NEIS_API_KEY }}
           DATA_GO_KR_SERVICE_KEY: ${{ secrets.DATA_GO_KR_SERVICE_KEY }}
+          SCHOOLINFO_API_KEY: ${{ secrets.SCHOOLINFO_API_KEY }}
           HC_DB_BACKEND: psql
           PYTHONUNBUFFERED: "1"
         run: python -m jobs.infra "${{ inputs.mode }}"
