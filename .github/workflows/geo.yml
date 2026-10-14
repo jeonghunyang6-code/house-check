@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "geocode(단지 좌표) | boundary(행정동 경계·인접)"
+        description: "geocode(단지 좌표) | boundary(행정동 경계·인접) | lifezone(서울 지역생활권 ↔ 행정동)"
         default: "geocode"
       limit:
         description: "한 번에 좌표를 받을 단지 수"
@@ -33,6 +33,9 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+      - name: 공간 라이브러리 (lifezone)
+        if: ${{ inputs.mode == 'lifezone' }}
+        run: pip install -q pyproj pyshp shapely
       - name: psql 확인
         run: command -v psql || (sudo apt-get update -q && sudo apt-get install -y -q postgresql-client)
       - name: 좌표 / 경계
@@ -49,5 +52,5 @@ jobs:
           LIMIT: ${{ inputs.limit || '5000' }}
           RETRY: ${{ inputs.retry_none || 'false' }}
         run: |
-          if [ "$MODE" = "boundary" ]; then python -m jobs.geo boundary; exit $?; fi
+          if [ "$MODE" = "boundary" ] || [ "$MODE" = "lifezone" ]; then python -m jobs.geo "$MODE"; exit $?; fi
           if [ "$RETRY" = "true" ]; then python -m jobs.geo geocode --limit "$LIMIT" --retry-none; else python -m jobs.geo geocode --limit "$LIMIT"; fi

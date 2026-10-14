@@ -1,7 +1,8 @@
 """행정동 경계 → 면적·중심·인접 (순수 함수, jobs/geo.py boundary). 좌표는 SGIS 경계의 UTM-K(EPSG:5179, 미터).
 
-인접: 두 경계가 꼭짓점을 함께 쓰면(같은 지형 자료라 맞닿은 변의 꼭짓점이 겹친다) 붙어 있다고 본다.
-꼭짓점을 CELL_M 격자로 묶고, 같은 칸을 MIN_SHARED 개 이상 함께 쓰는 쌍을 인접으로 센다(점 하나로만 닿은 모서리는 제외).
+인접: SGIS 경계는 동마다 따로 단순화돼 맞닿은 변이라도 꼭짓점이 서로 맞지 않는다(2026-10-14 실측: 꼭짓점 칸 비교로는
+강동구 성내3동 이웃 0, 잠실2동 이웃에서 잠실본동·6동 빠짐). 그래서 A 의 꼭짓점이 B 의 경계선(선분)에서 TOL_M 안에 있는
+개수를 세고, 양방향 중 큰 값이 MIN_SHARED 이상이면 인접으로 본다(점 하나로만 닿은 모서리는 제외). 선분은 CELL_M 격자로 찾는다.
 한강: 경계가 강 가운데서 맞닿아 성수동(성동구)·압구정동(강남구)처럼 강 건너도 인접으로 나온다.
      시군구별 강 남북(HAN_SIDE)이 서로 다르면 cross_river 로 표시만 하고, 묶을지는 생활권(E0) 단계에서 정한다.
 """
@@ -11,8 +12,9 @@ from __future__ import annotations
 from collections import defaultdict
 from itertools import combinations
 
-CELL_M = 20.0
-MIN_SHARED = 3
+TOL_M = 30.0
+CELL_M = 100.0
+MIN_SHARED = 2
 
 # 한강 남북 (시군구 이름). 서울은 어느 구도 강을 걸치지 않는다. 경기는 강에 닿는 곳만, 양평처럼 걸치는 곳은 넣지 않는다
 HAN_SIDE = {
@@ -60,23 +62,42 @@ def side_of(adm_nm: str) -> str | None:
     return None
 
 
+def _seg_dist2(px: float, py: float, x0: float, y0: float, x1: float, y1: float) -> float:
+    dx, dy = x1 - x0, y1 - y0
+    L = dx * dx + dy * dy
+    t = 0.0 if L == 0 else max(0.0, min(1.0, ((px - x0) * dx + (py - y0) * dy) / L))
+    qx, qy = x0 + t * dx - px, y0 + t * dy - py
+    return qx * qx + qy * qy
+
+
 def adjacency(features: list[dict]) -> list[tuple[str, str, int, bool]]:
-    """features: {'adm_cd', 'adm_nm', 'geometry'} → [(a, b, 함께 쓰는 칸 수, 한강 건너)] (a < b)."""
-    cells: dict[tuple[int, int], set[str]] = defaultdict(set)
-    names = {}
+    """features: {'adm_cd', 'adm_nm', 'geometry'} → [(a, b, 가까운 꼭짓점 수, 한강 건너)] (a < b)."""
+    names = {f["adm_cd"]: f.get("adm_nm", "") for f in features}
+    segs: dict[tuple[int, int], list[tuple[str, float, float, float, float]]] = defaultdict(list)
+    verts: list[tuple[str, float, float]] = []
     for f in features:
         cd = f["adm_cd"]
-        names[cd] = f.get("adm_nm", "")
         for r in rings(f["geometry"]):
-            for x, y in r:
-                cells[(int(x // CELL_M), int(y // CELL_M))].add(cd)
-    shared: dict[tuple[str, str], int] = defaultdict(int)
-    for owners in cells.values():
-        if len(owners) > 1:
-            for a, b in combinations(sorted(owners), 2):
-                shared[(a, b)] += 1
+            for (x0, y0), (x1, y1) in zip(r, r[1:]):
+                for i in range(int(min(x0, x1) // CELL_M), int(max(x0, x1) // CELL_M) + 1):
+                    for j in range(int(min(y0, y1) // CELL_M), int(max(y0, y1) // CELL_M) + 1):
+                        segs[(i, j)].append((cd, x0, y0, x1, y1))
+            verts += [(cd, x, y) for x, y in r[:-1]]
+    tol2 = TOL_M * TOL_M
+    near: dict[tuple[str, str], int] = defaultdict(int)   # (A, B) → B 의 경계선 가까이 있는 A 의 꼭짓점 수
+    for cd, x, y in verts:
+        ci, cj = int(x // CELL_M), int(y // CELL_M)
+        hit = set()
+        for di in (-1, 0, 1):
+            for dj in (-1, 0, 1):
+                for other, x0, y0, x1, y1 in segs.get((ci + di, cj + dj), ()):
+                    if other != cd and other not in hit and _seg_dist2(x, y, x0, y0, x1, y1) <= tol2:
+                        hit.add(other)
+        for other in hit:
+            near[(cd, other)] += 1
     out = []
-    for (a, b), n in sorted(shared.items()):
+    for a, b in sorted({tuple(sorted(k)) for k in near}):
+        n = max(near.get((a, b), 0), near.get((b, a), 0))
         if n >= MIN_SHARED:
             sa, sb = side_of(names[a]), side_of(names[b])
             out.append((a, b, n, bool(sa and sb and sa != sb)))

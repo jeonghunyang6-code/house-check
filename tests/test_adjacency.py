@@ -1,9 +1,12 @@
 from collector.adjacency import adjacency, area_centroid, side_of
 
 
-def sq(x, y, s=1000):
-    return {"type": "Polygon", "coordinates": [[[x, y], [x + s / 2, y], [x + s, y], [x + s, y + s / 2], [x + s, y + s],
-                                                [x + s / 2, y + s], [x, y + s], [x, y + s / 2], [x, y]]]}
+def sq(x, y, s=1000, step=100):
+    """변마다 step(m) 간격 꼭짓점이 있는 정사각형 (실제 경계처럼 꼭짓점이 촘촘)."""
+    n = int(s // step)
+    pts = ([[x + i * step, y] for i in range(n)] + [[x + s, y + i * step] for i in range(n)]
+           + [[x + s - i * step, y + s] for i in range(n)] + [[x, y + s - i * step] for i in range(n)])
+    return {"type": "Polygon", "coordinates": [pts + [pts[0]]]}
 
 
 def test_area_centroid():
@@ -24,3 +27,21 @@ def test_side_of():
     assert side_of("서울특별시 송파구 풍납1동") == "S"
     assert side_of("경기도 고양시 덕양구 화정1동") == "N"
     assert side_of("경기도 양평군 양평읍") is None
+
+
+def test_adjacency_tolerates_small_offsets():
+    """맞닿은 변의 꼭짓점이 몇 m 어긋나도 인접 (성내3동 사례)."""
+    a = sq(0, 0)
+    b = {"type": "Polygon", "coordinates": [[[1008, 3], [2000, 0], [2000, 1000], [1006, 1004]] + [[1000 + (i % 3) * 4, 1000 - i * 100 + 7] for i in range(1, 10)] + [[1008, 3]]]}
+    got = adjacency([{"adm_cd": "A", "adm_nm": "", "geometry": a}, {"adm_cd": "B", "adm_nm": "", "geometry": b}])
+    assert [(x, y) for x, y, *_ in got] == [("A", "B")]
+
+
+def test_adjacency_simplified_edges_without_shared_vertices():
+    """맞닿은 변의 꼭짓점이 서로 다른 위치에 있어도(동마다 따로 단순화) 인접."""
+    a = {"type": "Polygon", "coordinates": [[[0, 0], [1000, 0], [1000, 1000], [0, 1000], [0, 0]]]}
+    b = {"type": "Polygon", "coordinates": [[[1000, 0], [2000, 0], [2000, 1000], [1000, 1000], [1003, 640], [998, 310], [1000, 0]]]}
+    far = {"type": "Polygon", "coordinates": [[[1100, 1100], [1500, 1100], [1500, 1500], [1100, 1500], [1100, 1100]]]}
+    got = adjacency([{"adm_cd": "A", "adm_nm": "", "geometry": a}, {"adm_cd": "B", "adm_nm": "", "geometry": b},
+                     {"adm_cd": "F", "adm_nm": "", "geometry": far}])
+    assert [(x, y) for x, y, *_ in got] == [("A", "B")]   # F 는 100m 떨어져 인접 아님
