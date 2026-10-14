@@ -2,6 +2,7 @@
 
     python -m jobs.geo geocode --limit 5000   # 좌표 없는 단지 (최근 거래가 있는 단지 먼저)
     python -m jobs.geo boundary               # 수도권 행정동 경계 → adm_dong·adm_adjacent (0023), 원본은 HC_ARCHIVE 에
+    python -m jobs.geo lifezone               # 서울 지역생활권(OA-15527) ↔ 행정동 → seoul_lifezone (0024). pyproj·pyshp·shapely 필요
 
 주소 후보(지번 → 도로명 → K-apt 도로명)를 차례로 넣고, 돌아온 법정동이 우리 단지의 법정동과 맞을 때만 쓴다.
 다 실패하면 geo_method = 'none' 으로 표시하고 다시 부르지 않는다(--retry-none 으로 다시).
@@ -121,9 +122,63 @@ def run_boundary(db: Db, sg: Sgis, archive: str | None) -> int:
     return 0
 
 
+LIFEZONE_PAGE = "https://data.seoul.go.kr/dataList/OA-15527/S/1/datasetView.do"
+LIFEZONE_FILE = "https://datafile.seoul.go.kr/bigfile/iot/inf/nio_download.do?&useCache=false"
+LIFEZONE_CRS = ("EPSG:5186", "EPSG:5181", "EPSG:5174", "EPSG:2097", "EPSG:5179")   # 파일에 .prj 가 없어 맞는 것을 고른다
+
+
+def run_lifezone(db: Db) -> int:
+    """서울 열린데이터광장 생활권경계 shp(공개 파일 1개)를 받아 행정동 중심이 어느 지역생활권에 드는지 잇는다."""
+    import io
+    import re
+    import urllib.parse
+    import urllib.request
+    import zipfile
+
+    import shapefile                       # pyshp
+    from pyproj import Transformer
+    from shapely.geometry import Point, shape
+
+    ua = {"User-Agent": "house-check (personal research)"}
+    page = urllib.request.urlopen(urllib.request.Request(LIFEZONE_PAGE, headers=ua), timeout=60).read().decode("utf-8", "replace")
+    seq = re.search(r"downloadFile\('(\d+)'\)", page).group(1)
+    body = urllib.parse.urlencode({"infId": "OA-15527", "infSeq": seq, "seq": seq}).encode()
+    data = urllib.request.urlopen(urllib.request.Request(LIFEZONE_FILE, data=body, headers=ua), timeout=120).read()
+    z = zipfile.ZipFile(io.BytesIO(data))
+    base = next(n[:-4] for n in z.namelist() if n.lower().endswith(".shp"))
+    sf = shapefile.Reader(shp=io.BytesIO(z.read(base + ".shp")), dbf=io.BytesIO(z.read(base + ".dbf")),
+                          shx=io.BytesIO(z.read(base + ".shx")), encoding="cp949")
+    zones = []
+    for sr in sf.shapeRecords():
+        label = sr.record["LABEL"]                     # '지역생활권(강남구_대치도곡)', '권역생활권(동남권)'
+        m = re.match(r"(지역|권역)생활권\((.+)\)", label or "")
+        if m:
+            zones.append((m.group(1), m.group(2), shape(sr.shape.__geo_interface__)))
+    dongs = select(db, "SELECT adm_cd, cx, cy FROM adm_dong WHERE adm_cd LIKE '11%'")
+    best = None
+    for crs in LIFEZONE_CRS:                           # 서울 행정동 중심이 가장 많이 생활권 안에 드는 좌표계
+        tf = Transformer.from_crs("EPSG:5179", crs, always_xy=True)
+        pts = {d["adm_cd"]: Point(*tf.transform(d["cx"], d["cy"])) for d in dongs}
+        hit = sum(1 for p in pts.values() if any(k == "지역" and g.contains(p) for k, _, g in zones))
+        if not best or hit > best[1]:
+            best = (crs, hit, pts)
+    crs, hit, pts = best
+    rows = []
+    for cd, p in pts.items():
+        local = next((n for k, n, g in zones if k == "지역" and g.contains(p)), None)
+        area = next((n for k, n, g in zones if k == "권역" and g.contains(p)), None)
+        if local:
+            rows.append(f"({lit(cd)}, {lit(local)}, {lit(area)}, 'centroid')")
+    db.query("BEGIN;\nDELETE FROM seoul_lifezone;\n" + (("INSERT INTO seoul_lifezone (adm_cd, local_zone, area_zone, method) VALUES "
+                                                          + ", ".join(rows) + ";\n") if rows else "") + "COMMIT;")
+    n_local = len({n for k, n, _ in zones if k == "지역"})
+    print(f"  생활권 파일 좌표계 {crs}: 지역생활권 {n_local}개, 서울 행정동 {len(dongs)}개 중 {len(rows)}개 연결 (못 넣은 동 {len(dongs) - len(rows)})")
+    return 0 if rows else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("mode", choices=["geocode", "boundary"])
+    ap.add_argument("mode", choices=["geocode", "boundary", "lifezone"])
     ap.add_argument("--archive", default=os.environ.get("HC_ARCHIVE"), help="boundary: 경계 원본을 둘 곳 (gh | dir:경로)")
     ap.add_argument("--limit", type=int, default=5000)
     ap.add_argument("--retry-none", action="store_true")
@@ -133,6 +188,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if a.mode == "boundary":
             rc = run_boundary(connect(a.db), Sgis(), a.archive)
+        elif a.mode == "lifezone":
+            rc = run_lifezone(connect(a.db))
         else:
             rc = run_geocode(connect(a.db), Sgis(), a.limit, a.retry_none, datetime.now(KST).date())
     except (DbError, SgisError) as e:
