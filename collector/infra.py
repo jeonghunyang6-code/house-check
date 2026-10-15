@@ -51,7 +51,8 @@ def normalize_station(row: dict, line_default: str = "") -> dict | None:
 def drop_shared_coords(rows: list[dict]) -> list[dict]:
     """한 파일 안에서 이름이 다른 역이 좌표가 똑같으면 하나는 틀린 좌표다(경춘선 파일의 사릉 = 별내 좌표).
     다른 출처에서 같은 이름이 AGREE_M 안에 있는 역만 맞는 것으로 보고 나머지를 뺀다.
-    아무도 확인되지 않으면 어느 쪽이 맞는지 몰라 그대로 둔다(의정부·청산, 마곡·발산 등)."""
+    아무도 확인되지 않으면 어느 쪽이 맞는지 몰라 그대로 둔다(마곡·발산 등). 단 같은 이름이 다른 출처에서 다른 자리로 나오면
+    좌표를 공유한 쪽을 뺀다(2026-10-16: 1호선 파일의 청산 = 의정부 좌표, 카카오 보충 파일은 연천 청산면)."""
     groups: dict[tuple, set] = {}
     for r in rows:
         groups.setdefault((r["src"], r["lat"], r["lng"]), set()).add(r["name"])
@@ -66,6 +67,8 @@ def drop_shared_coords(rows: list[dict]) -> list[dict]:
         if len(names) > 1:
             ok = {x["name"] for x in rows if x["src"] == r["src"] and (x["lat"], x["lng"]) == (r["lat"], r["lng"]) and confirmed(x)}
             if ok and r["name"] not in ok:
+                continue
+            if not confirmed(r) and any(o["src"] != r["src"] and o["name"] == r["name"] for o in rows):
                 continue
         out.append(r)
     return out
