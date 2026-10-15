@@ -2,7 +2,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
 <style>
-/* 레이아웃: 실제 앱 화면(폰 폭 카드) 네 장을 책상 위에 나란히 놓은 구성. 좁은 화면에서는 한 장씩 세로로 쌓인다. */
+/* 레이아웃: 실제 앱 화면(폰 폭 카드) 여러 장을 책상 위에 나란히 놓은 구성. 좁은 화면에서는 한 장씩 세로로 쌓인다. */
 :root {
   --bg: #e9edf0;          /* 책상: 청회색 */
   --screen: #ffffff;      /* 앱 화면 */
@@ -132,7 +132,7 @@ footer.foot { color: var(--ink-3); font-size: 12px; max-width: 90ch; display: gr
 <div class="wrap">
   <header class="top">
     <h1>house-check 화면 시안</h1>
-    <p>실제 수집 데이터(실거래: 서울 2020년~, 경기·인천 2026년 9월~ / 주간 지수: 한국부동산원)로 그린 핵심 화면 다섯 장입니다. 화면 구성과 보여주는 방식을 정하는 용도입니다.</p>
+    <p>실제 수집 데이터(실거래: 서울 2020년~, 경기·인천 2026년 9월~ / 주간 지수: 한국부동산원)로 그린 핵심 화면 여덟 장입니다. 화면 구성과 보여주는 방식을 정하는 용도입니다.</p>
   </header>
   <div class="notice" id="notice"></div>
 
@@ -917,6 +917,12 @@ function drawCx(c) {
   if (c.e3 && c.e3.length) notes.push(`바로 위 급지 비교(E3): ${c.e3.join(', ')}. 목표 시세 ${eok(c.m.e3_target_10k)} (비교 단지 ㎡당 기준 시세 × 이 면적, 📖 미래 시세 = 바로 위 급지 현재 시세 p.358~359)`
     + (c.m.rel_strength_e3 != null ? `. 12개월 변화 비교 단지 ${(+c.m.e3_chg_12m).toFixed(1)}% 대비 ${(+c.m.rel_strength_e3 > 0 ? '+' : '') + (+c.m.rel_strength_e3).toFixed(1)}%p` : '')
     + '. 🔧 같은 생활권 또는 5km 안(한강 같은 쪽)에서 ㎡당 10~40% 비싼 단지 중 같은 생활권 먼저, 가까운 3곳.');
+  if (c.acc && c.acc.h2_cbd_min != null) {
+    const a = c.acc, f = (m, t) => m == null ? '–' : `<b>${m}분</b>${t ? ` (환승 ${t})` : ' (직통)'}`;
+    notes.push(`업무지구 접근(H2): 사대문 ${f(a.h2_cbd_min, a.h2_cbd_tr)} · 여의도 ${f(a.h2_ybd_min, a.h2_ybd_tr)} · 강남 ${f(a.h2_gbd_min, a.h2_gbd_tr)}. `
+      + `${a.station_name}역까지 걸어서 ${Math.round(a.station_m / 70)}분(📖 700m = 10분 p.220) 포함, 지하철은 노선별 평균 속도(정차 포함)로 계산한 추정치. 환승 1회 🔧 5분, 배차 대기·버스는 뺌. `
+      + `📖 교통은 중심업무지구 연결이 핵심이고, 어디서 타는지보다 어디서 내리는지(p.68~70, p.86~87).`);
+  }
   if (c.m && c.m.e4_cap_10k != null) notes.push(`한계 시세(E4): 바로 위 급지 비교 단지의 59㎡ 기준 시세 ${eok(c.m.e4_cap_10k)}(${c.m.e4_cap_n}곳) = 이 단지 84㎡의 천장. 지금 기준 시세는 천장의 <b>${(c.C / c.m.e4_cap_10k).toFixed(2)}배</b> `
     + `(${c.C >= c.m.e4_cap_10k ? '천장에 닿음 — 위 급지가 올라야 더 오를 수 있음' : '천장까지 여유'}, 📖 하급지 84㎡ 천장 = 상급지 59㎡ 가격, 상급지가 오르면 천장도 오른다 p.217~219).`);
   if (c.m && c.m.e4_compress != null) notes.push(`평형 압축(E4): ${c.m.e4_sizes} (최근 1년 중앙가). 큰 평형의 ㎡당 추가 가격이 59→84의 <b>${(+c.m.e4_compress).toFixed(2)}배</b>`
