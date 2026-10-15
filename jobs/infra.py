@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import glob
 import io
 import json
 import os
@@ -41,8 +42,8 @@ STATION_FILES = {
     "15041486": "", "15041487": "",                  # 경강선, 경의중앙선
     "15041483": "",                                  # 경춘선 (2026-10-15 추가)
 }
-# 아직 못 받은 것: 15041308·15041309·15041328·15041485 는 2026-10-15 에도 페이지 오류(500). 서해선·김포골드라인·신림선·GTX-A 는
-# 공공데이터포털에서 역위치 파일을 찾지 못함 → 해당 역 주변 단지는 거리가 길게 나올 수 있다
+# 15041308·15041309·15041328·15041485 는 2026-10-15 에도 페이지 오류(500). 서해선·김포골드라인·신림선·GTX-A 는
+# 공공데이터포털에 역위치 파일이 없어 st_kakao_*.csv 로 넣는다(run_stations)
 SCHOOL_ZONE_FILE = "15159265"   # 한국교육시설안전원 초등학교통학구역 (SHP, EPSG:5186)
 MID_ZONE_FILE = "15159264"      # 같은 기관 중학교학교군 (SHP, EPSG:5186, 필드는 초등과 같음)
 ZONE_SCHOOL_FILE = "15159266"   # 학교학구도연계정보 (CSV: 학구ID, 학교ID, 학교명, 학교급구분)
@@ -75,6 +76,13 @@ def run_stations(db: Db, src_dir: str | None) -> int:
         rows += got
         used.append(pk)
         print(f"  {pk}: 역 {len(got)}개", flush=True)
+    # 공공데이터에 없는 노선(신림선·김포골드라인·서해선·GTX-A)은 입지톡 커넥터(카카오 지도 지하철역)로 모은
+    # st_kakao_*.csv(선명, 역명, 경도, 위도)를 같은 폴더에 두면 함께 넣는다. 카카오 데이터라 저장소에 올리지 않는다
+    for path in sorted(glob.glob(os.path.join(src_dir, "st_kakao_*.csv"))) if src_dir else []:
+        got = [dict(s, src="kakao") for s in (normalize_station(r) for r in csv.DictReader(open(path, encoding="utf-8"))) if s]
+        rows += got
+        used.append("kakao")
+        print(f"  {os.path.basename(path)}: 역 {len(got)}개", flush=True)
     st = merge_stations(drop_shared_coords(rows))
     cx = select(db, "SELECT apt_seq, lat, lng FROM complexes WHERE lat IS NOT NULL")
     stmts = ["BEGIN;", "DELETE FROM station;"]
@@ -348,10 +356,45 @@ def run_hospital(db: Db) -> int:
     return 0
 
 
+CLOSED = ("폐점", "예정")   # 이름에 이 말이 있으면 문을 닫았거나 아직 안 연 곳
+
+
+def run_mart(db: Db, path: str | None) -> int:
+    """대형마트 TSV(place_id, 이름, 위도, 경도, 브랜드; 입지톡 커넥터로 모은 카카오 '대형마트 > 브랜드') → mart, 단지별 가장 가까운 곳."""
+    if not path or not os.path.exists(path):
+        print("  --file 로 대형마트 TSV 를 넘겨야 한다 (커넥터로 모은 것, 저장소에 두지 않음)", file=sys.stderr)
+        return 2
+    marts, seen = [], set()
+    for line in open(path, encoding="utf-8"):
+        pid, name, lat, lng, brand = line.rstrip("\n").split("\t")
+        if pid in seen or any(w in name for w in CLOSED):
+            continue
+        seen.add(pid)
+        marts.append({"id": pid, "name": name, "brand": brand, "lat": float(lat), "lng": float(lng)})
+    today = time.strftime("%Y-%m-%d")
+    cx = select(db, "SELECT apt_seq, lat, lng FROM complexes WHERE lat IS NOT NULL")
+    vals = []
+    for c in cx:
+        m, d = nearest(float(c["lat"]), float(c["lng"]), marts)
+        vals.append(f"({lit(c['apt_seq'])}, {lit(m['name'] if m else None)}, {d if d is not None else 'NULL'}::int)")
+    stmts = ["BEGIN;", "DELETE FROM mart;",
+             "INSERT INTO mart (place_id, name, brand, lat, lng, collected) VALUES " + ", ".join(
+                 f"({lit(m['id'])}, {lit(m['name'])}, {lit(m['brand'])}, {m['lat']}, {m['lng']}, {lit(today)})" for m in marts) + ";"]
+    for i in range(0, len(vals), 1000):
+        stmts.append("UPDATE complexes AS c SET mart_name = v.n, mart_m = v.d "
+                     f"FROM (VALUES {', '.join(vals[i:i + 1000])}) AS v(a, n, d) WHERE c.apt_seq = v.a;")
+    stmts.append("COMMIT;")
+    db.query("\n".join(stmts))
+    near = sum(1 for v in vals if "NULL::int" not in v)
+    print(f"  대형마트 {len(marts)}곳, 좌표 단지 {len(cx)}개 중 5km 안 {near}개")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("mode", choices=["stations", "schoolzone", "midzone", "academy", "hospital"])
+    ap.add_argument("mode", choices=["stations", "schoolzone", "midzone", "academy", "hospital", "mart"])
     ap.add_argument("--dir", help="stations: 미리 받아 둔 st_<번호>.csv 폴더")
+    ap.add_argument("--file", help="mart: 대형마트 TSV")
     ap.add_argument("--db", choices=["api", "psql"])
     a = ap.parse_args(argv)
     t0 = time.monotonic()
@@ -359,7 +402,7 @@ def main(argv: list[str] | None = None) -> int:
         db = connect(a.db)
         rc = {"stations": lambda: run_stations(db, a.dir), "schoolzone": lambda: run_schoolzone(db),
               "midzone": lambda: run_midzone(db),
-              "academy": lambda: run_academy(db), "hospital": lambda: run_hospital(db)}[a.mode]()
+              "academy": lambda: run_academy(db), "hospital": lambda: run_hospital(db), "mart": lambda: run_mart(db, a.file)}[a.mode]()
     except DbError as e:
         print(f"[infra] DB 오류: {e}", file=sys.stderr)
         rc = 1

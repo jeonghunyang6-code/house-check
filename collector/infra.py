@@ -123,7 +123,41 @@ def merge_stations(rows: list[dict]) -> list[dict]:
             twin["lines"] += [ln for ln in s["lines"] if ln not in twin["lines"]]
         else:
             keep.append(s)
-    return keep
+    return drop_strays(keep)
+
+
+STRAY_M = 5000   # 같은 노선 역이 이 안에 하나도 없으면 엉뚱한 곳에 찍힌 좌표
+
+
+def drop_strays(stations: list[dict]) -> list[dict]:
+    """같은 이름이 멀리 둘로 남은 역 중 원본 좌표가 틀린 쪽을 뺀다(2026-10-15: 수서 수인분당이 이천, 판교 신분당선이 수원,
+    가정 인천2호선이 전북, 연신내 6호선이 태릉 쪽에 찍힌 파일). 틀린 쪽으로 보는 것:
+    ① 같은 노선 역이 STRAY_M 안에 하나도 없는데 다른 쪽은 있다  ② 노선이 전부 다른 쪽(더 믿을 만한)에 이미 있다.
+    뺀 쪽 노선은 남는 쪽에 합친다. 양평(5호선·경의중앙)처럼 둘 다 이웃 역이 있으면 다른 역으로 둔다."""
+    def lonely(s):
+        ls = set(s["lines"])
+        return bool(ls) and not any(o is not s and set(o["lines"]) & ls and dist_m(s["lat"], s["lng"], o["lat"], o["lng"]) <= STRAY_M
+                                    for o in stations)
+
+    drop = set()
+    by_name: dict[str, list[dict]] = {}
+    for s in stations:
+        by_name.setdefault(s["name"], []).append(s)
+    for group in by_name.values():
+        if len(group) < 2:
+            continue
+        alone = {id(s) for s in group if lonely(s)}
+        if alone and len(alone) < len(group):
+            drop |= alone
+        ranked = sorted((s for s in group if id(s) not in drop), key=lambda s: (-s["w"], -s["n"], -len(s["lines"])))
+        for i, s in enumerate(ranked):
+            if any(set(s["lines"]) <= set(t["lines"]) for t in ranked[:i] if id(t) not in drop):
+                drop.add(id(s))
+        keep = [s for s in group if id(s) not in drop]
+        for s in group:
+            if id(s) in drop and keep:
+                keep[0]["lines"] += [ln for ln in s["lines"] if ln not in keep[0]["lines"]]
+    return [s for s in stations if id(s) not in drop]
 
 
 def nearest(lat: float, lng: float, stations: list[dict]) -> tuple[dict | None, float | None]:
