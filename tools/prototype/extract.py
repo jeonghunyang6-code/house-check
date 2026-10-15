@@ -63,7 +63,7 @@ out['e3_names'] = select(db, f"""SELECT apt_seq, apt_name FROM complexes WHERE a
  SELECT unnest(string_to_array(e3_seqs, ',')) FROM complex_metrics WHERE apt_seq IN ({sl}) AND area_group IN (84,85))""")
 out['cx_access'] = select(db, f"""SELECT apt_seq, station_name, station_m, h2_cbd_min, h2_cbd_tr, h2_ybd_min, h2_ybd_tr, h2_gbd_min, h2_gbd_tr
  FROM complexes WHERE apt_seq IN ({sl})""")
-out['cx_zone'] = select(db, f"""SELECT c.apt_seq, z.name, z.e5_ratio, z.e5_n, z.e7_new_ppm, z.e7_mid_ppm, z.e7_old_ppm, z.e7_n
+out['cx_zone'] = select(db, f"""SELECT c.apt_seq, z.name, z.e5_ratio, z.e5_n, z.e7_new_ppm, z.e7_mid_ppm, z.e7_old_ppm, z.e7_n, z.f1_react_rel, z.f1_react_n
  FROM complexes c JOIN lifezone z ON z.zone_id = c.lifezone_id WHERE c.apt_seq IN ({sl})""")
 # D2. 급지 E1 (dong_grade 최신): 예시 단지의 동 급지·표시 3개
 G = "(SELECT * FROM dong_grade WHERE asof = (SELECT max(asof) FROM dong_grade))"
@@ -94,6 +94,25 @@ out['auction'] = select(db, """SELECT period_month, area_code, sale_ratio, sourc
 # G. 유동성·소득·집값 (G1): 2005년부터 전체
 out['g1'] = select(db, """SELECT series, period, value FROM macro_monthly
  WHERE series IN ('m2', 'household_income', 'apt_kb_nat', 'apt_kb_seoul', 'base_rate') AND period >= '2004' ORDER BY series, period""")
+# H. E6 갈아타기 격차: 단지별 전용 84~85㎡(면적군 84·85) 중개·비해제 분기 중앙가. 과거 파일(2020~2024-09) + DB(2024-10~)
+import glob, gzip, csv as _csv
+from statistics import median as _med
+_q = lambda ym: f"{ym[:4]}Q{(int(ym[4:6]) - 1) // 3 + 1}"
+_v: dict = {}
+for f in sorted(glob.glob(os.path.join((os.environ.get('HC_ARCHIVE') or '').removeprefix('dir:') or str(ROOT / 'data/archive'), 'deals_hist_*.csv.gz'))):
+    for r in _csv.DictReader(gzip.open(f, 'rt', encoding='utf-8')):
+        if r['is_cancelled'] in ('1', 'True', 'true') or r['deal_type'] != '중개' or not r['area_m2'] or math.floor(float(r['area_m2'])) not in (84, 85):
+            continue
+        _v.setdefault((r['apt_seq'], _q(r['contract_month'])), []).append(int(r['price_10k']))
+e6 = {}
+for (a, q), v in _v.items():
+    e6.setdefault(a, {})[q] = _med(v)
+for r in select(db, """SELECT apt_seq, substr(contract_month,1,4)||'Q'||((substr(contract_month,5,2)::int-1)/3+1) q,
+  percentile_cont(0.5) WITHIN GROUP (ORDER BY price_10k) p FROM deals
+  WHERE NOT is_cancelled AND deal_type = '중개' AND area_group IN (84, 85) GROUP BY 1, 2"""):
+    e6.setdefault(r['apt_seq'], {})[r['q']] = float(r['p'])
+out['e6'] = e6
+out['e6_names'] = select(db, "SELECT apt_seq, apt_name, region_code, umd_name FROM complexes")
 out['seqs'] = SEQS
 out['regions'] = {k: v for k, v in REGIONS.items()}
 json.dump(out, open(OUT / 'raw.json', 'w'), ensure_ascii=False, default=str)

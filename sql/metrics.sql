@@ -324,21 +324,27 @@ UPDATE lifezone l SET e7_new_ppm = CASE WHEN e.nn >= 2 THEN round(e.pn::numeric,
   e7_n = e.nn || '/' || e.nm || '/' || e.no
 FROM e WHERE l.zone_id = e.z;
 
--- 8) F1 입주 물량 (📖 입주 시작 후 5~6개월이 입주장 p.55, 입주 물량이 전세를 누른다 p.154, p.423). presale(0034, 청약홈 공급 세대,
---    재건축·재개발 조합원 몫은 빠짐). 같은 생활권·같은 시군구에서 이번 달부터 24개월 안 입주 공급 세대 합.
+-- 8) F1 입주 물량 (📖 입주 시작 후 5~6개월이 입주장 p.55, 입주 물량이 전세를 누른다 p.154, p.423). presale(0034·0035): 총 세대
+--    (K-apt, 입주 전 정비사업은 추정, 아니면 청약홈 공급 세대). 한국부동산원 입주 예정 물량(0037)이 다루는 달은 그 실제 총 세대로. 같은 생활권·같은 시군구에서 이번 달부터 24개월 안 입주 세대 합.
 --    입주장 = 같은 생활권에서 입주 예정월이 최근 6개월(이번 달 포함) 안인 단지
 WITH cx AS (SELECT DISTINCT m.apt_seq, x.lifezone_id AS z, x.region_code AS rc FROM complex_metrics m JOIN complexes x USING (apt_seq)),
 cur AS (SELECT to_char({TODAY}, 'YYYYMM') AS c, to_char({TODAY} + INTERVAL '23 month', 'YYYYMM') AS e,
                to_char({TODAY} - INTERVAL '5 month', 'YYYYMM') AS s),
-z AS (SELECT p.lifezone_id AS z, sum(p.households) AS hh FROM presale p, cur WHERE p.move_in_ym BETWEEN cur.c AND cur.e GROUP BY 1),
-g AS (SELECT p.region_code AS rc, sum(p.households) AS hh FROM presale p, cur WHERE p.move_in_ym BETWEEN cur.c AND cur.e GROUP BY 1),
-ip AS (SELECT p.lifezone_id AS z, string_agg(format('%s(%s.%s, %s세대)', p.name, left(p.move_in_ym, 4), right(p.move_in_ym, 2), p.households),
-         ', ' ORDER BY p.move_in_ym DESC, p.households DESC) AS t
-       FROM presale p, cur WHERE p.move_in_ym BETWEEN cur.s AND cur.c AND p.lifezone_id IS NOT NULL GROUP BY 1),
+pr AS (SELECT min(move_in_ym) AS a, max(move_in_ym) AS b FROM ipju_plan),
+p AS (   -- 입주 월마다 출처 하나: 한국부동산원 입주 예정 물량(ipju_plan)이 다루는 달은 그 표만, 나머지 달은 청약홈(presale 총 세대)
+  SELECT name, move_in_ym, households AS hh, lifezone_id, region_code FROM ipju_plan
+  UNION ALL
+  SELECT q.name, q.move_in_ym, coalesce(q.total_hh, q.households), q.lifezone_id, q.region_code FROM presale q, pr
+  WHERE pr.a IS NULL OR q.move_in_ym < pr.a OR q.move_in_ym > pr.b),
+z AS (SELECT p.lifezone_id AS z, sum(p.hh) AS hh FROM p, cur WHERE p.move_in_ym BETWEEN cur.c AND cur.e GROUP BY 1),
+g AS (SELECT p.region_code AS rc, sum(p.hh) AS hh FROM p, cur WHERE p.move_in_ym BETWEEN cur.c AND cur.e GROUP BY 1),
+ip AS (SELECT p.lifezone_id AS z, string_agg(format('%s(%s.%s, %s세대)', p.name, left(p.move_in_ym, 4), right(p.move_in_ym, 2), p.hh),
+         ', ' ORDER BY p.move_in_ym DESC, p.hh DESC) AS t
+       FROM p, cur WHERE p.move_in_ym BETWEEN cur.s AND cur.c AND p.lifezone_id IS NOT NULL GROUP BY 1),
 nx AS (SELECT DISTINCT ON (p.lifezone_id) p.lifezone_id AS z,
-         format('%s(%s.%s, %s세대)', p.name, left(p.move_in_ym, 4), right(p.move_in_ym, 2), p.households) AS t
-       FROM presale p, cur WHERE p.move_in_ym > cur.c AND p.move_in_ym <= cur.e AND p.lifezone_id IS NOT NULL
-       ORDER BY p.lifezone_id, p.households DESC, p.move_in_ym),
+         format('%s(%s.%s, %s세대)', p.name, left(p.move_in_ym, 4), right(p.move_in_ym, 2), p.hh) AS t
+       FROM p, cur WHERE p.move_in_ym > cur.c AND p.move_in_ym <= cur.e AND p.lifezone_id IS NOT NULL
+       ORDER BY p.lifezone_id, p.hh DESC, p.move_in_ym),
 v AS (SELECT cx.apt_seq, coalesce(z.hh, 0) AS zh, coalesce(g.hh, 0) AS gh, ip.t AS ip, nx.t AS nx, cx.z
       FROM cx LEFT JOIN z ON z.z = cx.z LEFT JOIN g ON g.rc = cx.rc LEFT JOIN ip ON ip.z = cx.z LEFT JOIN nx ON nx.z = cx.z)
 UPDATE complex_metrics m SET f1_zone_24m = CASE WHEN v.z IS NOT NULL THEN v.zh END, f1_sgg_24m = v.gh, f1_ipju = v.ip, f1_next = v.nx

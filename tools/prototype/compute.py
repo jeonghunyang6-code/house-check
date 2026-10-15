@@ -75,7 +75,7 @@ for seq in d['seqs']:
                'm': m84 and {k: m84[k] for k in ('jeonse_24m_10k', 'jeonse_24m_n', 'reverse_risk', 'reserve_10k', 'real_ref_10k', 'base2020_10k', 'real_chg_2020',
                'turnover_pct', 'turnover_state', 'e3_target_10k', 'e3_chg_12m', 'rel_strength_e3', 'e2_ratio', 'e2_n', 'e2_basis', 'e4_cap_10k', 'e4_cap_n', 'e4_compress', 'e4_sizes', 'f1_zone_24m', 'f1_sgg_24m', 'f1_ipju', 'f1_next')},
                'acc': next(({k: z[k] for k in ('station_name', 'station_m', 'h2_cbd_min', 'h2_cbd_tr', 'h2_ybd_min', 'h2_ybd_tr', 'h2_gbd_min', 'h2_gbd_tr')} for z in d.get('cx_access', []) if z['apt_seq'] == seq), None),
-               'zone': next(({k: z[k] for k in ('name', 'e5_ratio', 'e5_n', 'e7_new_ppm', 'e7_mid_ppm', 'e7_old_ppm', 'e7_n')} for z in d.get('cx_zone', []) if z['apt_seq'] == seq), None),
+               'zone': next(({k: z[k] for k in ('name', 'e5_ratio', 'e5_n', 'e7_new_ppm', 'e7_mid_ppm', 'e7_old_ppm', 'e7_n', 'f1_react_rel', 'f1_react_n')} for z in d.get('cx_zone', []) if z['apt_seq'] == seq), None),
                'e3': m84 and m84['e3_seqs'] and [n['apt_name'] for n in d.get('e3_names', []) if n['apt_seq'] in m84['e3_seqs'].split(',')],
                'phase': ph and {k: ph[k] for k in ('phase', 'chg_12m', 'up_months', 'down_months', 'last3', 'region_chg_12m', 'rel_strength')}, 'seq': seq, 'name': name, 'region': REG[seq[:5]], 'P': P, 'T': T, 'C': C, 'conf': conf, 'cn': cn if C else 0,
                'rec': rec, 'pattern': pattern, 'J': J, 'jn': jn, 'jsrc': '신규' if new else '전체', 'ratio': ratio, 'band': nb,
@@ -143,12 +143,32 @@ def g2():  # 금리와 집값 (📖 p.48~49): 기준금리, 서울 아파트(KB)
     return {'rate': [[p, v] for p, v in rate if p >= '200601'], 'yoy': [[p, v] for p, v in yy],
             'rel': [[p, x] for p, x in rate_price_relation(rate, kb) if p >= '200601']}
 
+def e6():
+    """E6: 최근 끝난 20분기 84㎡ 분기 중앙가. 🔧 12분기 이상 값이 있고 마지막 2분기 중 하나에 값이 있는 단지만."""
+    y, q = TODAY.year, (TODAY.month - 1) // 3      # 이번 분기 바로 전(끝난 분기)
+    if q == 0:
+        y, q = y - 1, 4
+    qs = []
+    for _ in range(20):
+        qs.append(f"{y}Q{q}")
+        y, q = (y, q - 1) if q > 1 else (y - 1, 4)
+    qs.reverse()
+    nm = {r['apt_seq']: r for r in d.get('e6_names', [])}
+    rows = []
+    for a, v in d.get('e6', {}).items():
+        if a not in nm or sum(1 for x in qs if x in v) < 12 or not (qs[-1] in v or qs[-2] in v):
+            continue
+        r = nm[a]
+        rows.append([r['apt_name'], r['region_code'], r['umd_name'], [round(v[x]) if x in v else None for x in qs]])
+    rows.sort(key=lambda r: (r[1], r[0]))
+    return {'q': qs, 'cx': rows}
+
 from collector.regions import REGIONS
 json.dump({'monthly': monthly, 'cx': cx, 'today': today,
            'recent': {'n': len(rh), 'highs': sum(r['price_10k'] > r['prev_high'] for r in rh)},
            'weekly': weekly(), 'signals': {r['key']: r for r in d['signals']},
            'macro': {k: [[r['period'], float(r['value'])] for r in d['macro'] if r['series'] == k] for k in {r['series'] for r in d['macro']}},
-           'g1': g1(), 'g2': g2(),
+           'g1': g1(), 'g2': g2(), 'e6': e6(),
            'auction': {a: [[r['period_month'].replace('-', ''), float(r['sale_ratio']) * 100] for r in d.get('auction', []) if r['area_code'] == a]
                        for a in ('서울', '경기', '인천', '전국')},
            # ⑦ 후보 단지: [단지, 시군구, 동, 면적군, 기준 시세(만원), 신뢰도, 국면, 급지, 재건축 기대, 동 안 격차, 신축 대단지, 세대수, 준공, 월 회전율 %]

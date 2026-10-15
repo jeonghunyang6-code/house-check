@@ -310,6 +310,16 @@ footer.foot { color: var(--ink-3); font-size: 12px; max-width: 90ch; display: gr
         </form>
         <div class="kpis" id="mvOut"></div>
         <div class="sec" id="mvNotes"></div>
+
+        <form class="calc" id="e6" autocomplete="off" style="margin-top:14px">
+          <p class="calc-intro"><b>갈아타기 격차</b>: 두 단지(84㎡) 가격 차이가 지난 5년 중 어디쯤인지 봅니다. 차이가 줄었을 때가 갈아탈 때입니다(📖 p.438~439).</p>
+          <label class="calc-row" for="e6_a"><span>지금 집</span><span class="calc-in" style="flex-basis:15em"><input id="e6_a" list="e6list" style="text-align:left"></span></label>
+          <label class="calc-row" for="e6_b"><span>목표 집</span><span class="calc-in" style="flex-basis:15em"><input id="e6_b" list="e6list" style="text-align:left"></span></label>
+          <datalist id="e6list"></datalist>
+        </form>
+        <div class="kpis" id="e6Out"></div>
+        <svg class="chart" id="e6Chart" viewBox="0 0 340 170" role="img" aria-label="두 단지 84제곱미터 분기 중앙가 차이 추이"></svg>
+        <div class="sec" id="e6Notes"></div>
       </div>
     </section>
   </div>
@@ -832,6 +842,54 @@ const Move = {
   draw();
 })();
 
+/* ⑧ E6 갈아타기 격차 (📖 격차가 줄어들 때 갈아탄다 p.438~439, 최소 1.5배 p.436~438): 84㎡ 분기 중앙가 차이의 최근 20분기 분포 안 현재 위치.
+   🔧 하위 20% = 격차 축소 구간. 분기 중앙가라 그 분기 거래 몇 건의 층·동에 따라 흔들린다 */
+(function () {
+  const E = D.e6 || { q: [], cx: [] }, R = D.region_names || {};
+  const label = (c) => `${c[0]} · ${c[2] || ''} (${(R[c[1]] || '').replace(/^(서울|경기|인천) /, '')})`;
+  const idx = new Map(E.cx.map((c, i) => [label(c), i]));
+  $('#e6list').innerHTML = E.cx.map(c => `<option value="${label(c).replace(/"/g, '&quot;')}"></option>`).join('');
+  const find = (re) => E.cx.findIndex(c => re.test(c[0]));
+  const KEY = 'hc-e6';
+  let saved = null; try { saved = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) {}
+  const da = find(/^한진한화그랑빌$/), db = find(/^헬리오시티$/);
+  $('#e6_a').value = saved && idx.has(saved.a) ? saved.a : da >= 0 ? label(E.cx[da]) : '';
+  $('#e6_b').value = saved && idx.has(saved.b) ? saved.b : db >= 0 ? label(E.cx[db]) : '';
+  const man = (v) => Math.abs(v) >= 10000 ? (v / 10000).toFixed(2).replace(/\.?0+$/, '') + '억' : Math.round(v).toLocaleString() + '만';
+  function draw() {
+    const ia = idx.get($('#e6_a').value), ib = idx.get($('#e6_b').value), svg = $('#e6Chart');
+    svg.innerHTML = '';
+    if (ia == null || ib == null) {
+      $('#e6Out').innerHTML = ''; $('#e6Notes').innerHTML = `<p class="muted" style="margin:0">목록에서 단지를 고르세요 (수도권 ${E.cx.length.toLocaleString()}곳: 최근 20분기 중 12분기 이상 84㎡ 거래가 있는 단지).</p>`;
+      return;
+    }
+    try { localStorage.setItem(KEY, JSON.stringify({ a: $('#e6_a').value, b: $('#e6_b').value })); } catch (e) {}
+    const A = E.cx[ia][3], B = E.cx[ib][3];
+    const g = E.q.map((q, i) => (A[i] != null && B[i] != null) ? [q, B[i] - A[i]] : null).filter(Boolean);
+    if (g.length < 6) { $('#e6Out').innerHTML = ''; $('#e6Notes').innerHTML = '<p class="muted" style="margin:0">두 단지가 함께 거래된 분기가 6개 미만이라 계산하지 않습니다.</p>'; return; }
+    const cur = g[g.length - 1], lastA = [...A].reverse().find(v => v != null), lastB = [...B].reverse().find(v => v != null);
+    const pct = g.filter(p => p[1] <= cur[1]).length / g.length * 100, ratio = lastB / lastA;
+    const sorted = g.map(p => p[1]).sort((x, y) => x - y), p20 = sorted[Math.max(0, Math.ceil(sorted.length * 0.2) - 1)];
+    $('#e6Out').innerHTML = `
+      <div class="kpi"><span class="k">지금 격차 (${cur[0]})</span><span class="v">${man(cur[1])}</span><span class="d">목표 − 지금 집, 84㎡ 분기 중앙가</span></div>
+      <div class="kpi"><span class="k">5년 중 위치</span><span class="v">하위 ${Math.round(pct)}%</span><span class="d">${pct <= 20 ? '<b>격차 축소 구간</b>' : '아직 격차가 큰 편'}</span></div>
+      <div class="kpi"><span class="k">목표 ÷ 지금</span><span class="v">${ratio.toFixed(2)}배</span><span class="d">${ratio >= 1.5 ? '1.5배 이상' : '<b>1.5배 미만 — 후보에서 뺌</b>'}</span></div>
+      <div class="kpi"><span class="k">함께 거래된 분기</span><span class="v">${g.length}개</span><span class="d">${g[0][0]} ~ ${cur[0]}</span></div>`;
+    const W = 340, H = 170, L = 34, Rr = 8, T = 10, Bm = 22, vs = g.map(p => p[1]), lo = Math.min(0, ...vs), hi = Math.max(...vs) || 1;
+    const x = (i) => L + (W - L - Rr) * E.q.indexOf(g[i][0]) / (E.q.length - 1), y = (v) => T + (H - T - Bm) * (1 - (v - lo) / (hi - lo || 1));
+    for (const t of [lo, (lo + hi) / 2, hi]) { el('line', { x1: L, x2: W - Rr, y1: y(t), y2: y(t), class: 'grid' }, svg); txt(svg, L - 4, y(t) + 3, (t / 10000).toFixed(1) + '억', 'end'); }
+    el('line', { x1: L, x2: W - Rr, y1: y(p20), y2: y(p20), stroke: css('--ink-3'), 'stroke-dasharray': '3 3' }, svg);
+    txt(svg, W - Rr, y(p20) - 3, '하위 20%', 'end');
+    el('path', { d: g.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p[1]).toFixed(1)}`).join(''), fill: 'none', stroke: css('--s-trade'), 'stroke-width': 2, 'stroke-linejoin': 'round' }, svg);
+    el('circle', { cx: x(g.length - 1), cy: y(cur[1]), r: 3.5, fill: css('--s-trade'), stroke: css('--screen'), 'stroke-width': 2 }, svg);
+    [0, g.length - 1].forEach(i => txt(svg, x(i), H - 6, `${g[i][0].slice(2, 4)}년 ${g[i][0].slice(5)}분기`, i ? 'end' : 'start'));
+    $('#e6Notes').innerHTML = `<p class="muted" style="margin:0">📖 상승 초반에는 비싼 집이 먼저 올라 격차가 벌어지고 후반에 좁혀진다. 격차가 줄었을 때 갈아탄다(p.438~439). 목표가 지금 집의 1.5배가 안 되면 거래비용으로 남는 게 없다(p.436~438). 🔧 지난 20분기 중 하위 20%면 '격차 축소 구간'. 분기마다 그 분기에 팔린 집의 층·동에 따라 값이 흔들립니다.</p>`;
+  }
+  for (const id of ['#e6_a', '#e6_b']) { $(id).addEventListener('change', draw); $(id).addEventListener('input', () => { if (idx.has($(id).value)) draw(); }); }
+  $('#e6').addEventListener('submit', (e) => e.preventDefault());
+  draw();
+})();
+
 /* ② 오늘의 실거래 */
 (function () {
   const rows = D.today, state = { region: '전체', high: false };
@@ -931,7 +989,10 @@ function drawCx(c) {
     notes.push(`입주 물량(F1): 앞으로 24개월 같은 생활권 ${m.f1_zone_24m != null ? `<b>${Number(m.f1_zone_24m).toLocaleString()}세대</b>` : '–'}, 같은 시군구 ${Number(m.f1_sgg_24m || 0).toLocaleString()}세대`
       + (m.f1_next ? ` (가장 큰 입주: ${m.f1_next})` : '') + '. '
       + (m.f1_ipju ? `<b>지금 입주장</b>: ${m.f1_ipju} — 📖 입주 시작 후 5~6개월은 전세·매매가 눌린다(p.55). ` : '같은 생활권에 지금 입주장 없음. ')
-      + '청약홈 공급 세대 기준이라 재건축·재개발 조합원 몫은 빠져 실제 입주보다 적다.');
+      + '세대 수: 한국부동산원 입주 예정 물량(앞으로 약 2년, 조합원·임대 포함 실제 총 세대)이 다루는 달은 그 값. 그 밖의 달은 청약홈 — 입주한 단지는 K-apt, 입주 전 정비사업은 실제÷공급 비율(약 2.3배)로 추정.'
+      + (c.zone && c.zone.f1_react_rel != null ? ` 과거 큰 입주 ${c.zone.f1_react_n}번 때 이 생활권 전세는 같은 시도보다 <b>${(+c.zone.f1_react_rel > 0 ? '+' : '') + (+c.zone.f1_react_rel).toFixed(1)}%p</b> → `
+          + (+c.zone.f1_react_rel <= -2 ? '<b>입주 때 전세가 눌림 (대기 수요 적음)</b>' : +c.zone.f1_react_rel >= 0 ? '입주를 잘 흡수 (대기 수요 많음)' : '보통')
+          + ' (🔧 −2%p, 입주 전후 6개월 전세 비교, 📖 입주 물량이 전세를 누른다 p.154).' : ''));
   }
   if (c.acc && c.acc.h2_cbd_min != null) {
     const a = c.acc, f = (m, t) => m == null ? '–' : `<b>${m}분</b>${t ? ` (환승 ${t})` : ' (직통)'}`;
