@@ -60,6 +60,8 @@ out['cx_phase'] = select(db, f"""SELECT apt_seq, area_group, phase, chg_12m, up_
  FROM complex_metrics WHERE apt_seq IN ({sl}) AND area_group IN (84,85)""")
 out['e3_names'] = select(db, f"""SELECT apt_seq, apt_name FROM complexes WHERE apt_seq IN (
  SELECT unnest(string_to_array(e3_seqs, ',')) FROM complex_metrics WHERE apt_seq IN ({sl}) AND area_group IN (84,85))""")
+out['cx_access'] = select(db, f"""SELECT apt_seq, station_name, station_m, h2_cbd_min, h2_cbd_tr, h2_ybd_min, h2_ybd_tr, h2_gbd_min, h2_gbd_tr
+ FROM complexes WHERE apt_seq IN ({sl})""")
 out['cx_zone'] = select(db, f"""SELECT c.apt_seq, z.name, z.e5_ratio, z.e5_n, z.e7_new_ppm, z.e7_mid_ppm, z.e7_old_ppm, z.e7_n
  FROM complexes c JOIN lifezone z ON z.zone_id = c.lifezone_id WHERE c.apt_seq IN ({sl})""")
 # D2. 급지 E1 (dong_grade 최신): 예시 단지의 동 급지·표시 3개

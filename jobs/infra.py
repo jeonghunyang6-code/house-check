@@ -2,6 +2,7 @@
 
     python -m jobs.infra stations [--dir 내려받은_파일_폴더]   # 역 위치 → station, 단지별 가장 가까운 역
     python -m jobs.infra schoolzone                           # 초등학교 통학구역(SHP) → 단지별 배정 통학구역 (pyshp·pyproj·shapely)
+    python -m jobs.infra access [--dir 역간거리_파일_폴더]      # 업무지구 접근 H2 → station_access, complexes.h2_* (stations 뒤에)
 
 좌표가 있는 단지(complexes.lat, jobs/geo.py)만 연결한다. 사이트가 자주 끊겨 파일마다 재시도하고, 보안문자를 요구하면 멈춘다.
 """
@@ -20,7 +21,9 @@ from collections import Counter
 
 from collector.datagokr_file import CaptchaRequired, DownloadError, download
 from collector.db import Db, DbError, connect, lit, select
+from collector import access as ac
 from collector import hira, schoolinfo
+from collector.lifezone import station_keys, station_key
 from collector.infra import dist_m, drop_shared_coords, merge_stations, nearest, normalize_station
 from collector.neis import OFFICES, PAGE, NeisError, count_by_dong, fetch_page, match_dong
 from collector.kapt import _get_json
@@ -44,6 +47,11 @@ STATION_FILES = {
 }
 # 15041308·15041309·15041328·15041485 는 2026-10-15 에도 페이지 오류(500). 서해선·김포골드라인·신림선·GTX-A 는
 # 공공데이터포털에 역위치 파일이 없어 st_kakao_*.csv 로 넣는다(run_stations)
+# 국가철도공단 노선별 역간거리 (행 순서 = 역 순서). 2026-10-16 확인. 코레일 묶음(15081858)에 1호선 지선·경의중앙 등이 같이 있다
+LINE_ORDER_FILES = ("15041460", "15041425", "15041423", "15041350", "15041348", "15041297", "15041340", "15041299", "15041298",
+                    "15041296", "15041327", "15041295", "15041310", "15041284", "15041269", "15041074", "15081850", "15081852",
+                    "15081853", "15081855", "15081856", "15081857", "15081858", "15081860")
+H2_WALK_MAX_M = 2000            # 🔧 가장 가까운 역이 이보다 멀면 걸어서 가는 계산을 하지 않는다(버스는 모델에 없음)
 SCHOOL_ZONE_FILE = "15159265"   # 한국교육시설안전원 초등학교통학구역 (SHP, EPSG:5186)
 MID_ZONE_FILE = "15159264"      # 같은 기관 중학교학교군 (SHP, EPSG:5186, 필드는 초등과 같음)
 ZONE_SCHOOL_FILE = "15159266"   # 학교학구도연계정보 (CSV: 학구ID, 학교ID, 학교명, 학교급구분)
@@ -101,6 +109,63 @@ def run_stations(db: Db, src_dir: str | None) -> int:
     db.query("\n".join(stmts))
     near = sum(1 for v in vals if int(v.rsplit(", ", 1)[1].rstrip(")")) <= 700)
     print(f"  역 {len(st)}개(파일 {len(used)}개), 좌표 단지 {len(cx)}개 중 {len(vals)}개 연결, 700m 안 {near}개")
+    return 0
+
+
+def run_access(db: Db, src_dir: str | None) -> int:
+    blocks = []
+    for pk in LINE_ORDER_FILES:
+        path = os.path.join(src_dir, f"{pk}.bin") if src_dir else None
+        try:
+            data = open(path, "rb").read() if path and os.path.exists(path) else download(pk)[1]
+        except CaptchaRequired as e:
+            print(f"  {pk}: {e}", file=sys.stderr)
+            return 2
+        except DownloadError as e:
+            print(f"  {pk}: 실패 {e}", file=sys.stderr)
+            continue
+        blocks += ac.parse_line_file(ac.decode(data))
+    st = station_keys(select(db, "SELECT name, lines, lat, lng FROM station"))
+    for s in st.values():
+        s["lines"] = {ac.canon_line(x) for x in s["lines"]}
+    g = ac.build_graph(st, blocks)
+    res = {c: ac.access(g, {k for k, s in st.items() if s["name"] in names}) for c, names in ac.CBD.items()}
+    lost = [k for k in st if not any(k in res[c] for c in res)]
+    today = time.strftime("%Y-%m-%d")
+
+    def cell(c, k):
+        v = res[c].get(k)
+        return (f"{v[0]:.1f}", str(v[1])) if v else ("NULL", "NULL")
+    stmts = ["BEGIN;", "DELETE FROM station_access;"]
+    rows = [f"({lit(s['name'])}, {s['lat']}, {s['lng']}, " + ", ".join(", ".join(cell(c, k)) for c in ac.CBD) + f", {lit(today)})"
+            for k, s in st.items()]
+    for i in range(0, len(rows), 500):
+        stmts.append("INSERT INTO station_access (name, lat, lng, cbd_min, cbd_tr, ybd_min, ybd_tr, gbd_min, gbd_tr, built) VALUES "
+                     + ", ".join(rows[i:i + 500]) + ";")
+    cx = select(db, "SELECT apt_seq, lat, lng, station_name, station_m FROM complexes WHERE station_name IS NOT NULL AND lat IS NOT NULL")
+    vals = []
+    for c in cx:
+        if c["station_m"] is None or int(c["station_m"]) > H2_WALK_MAX_M:
+            continue
+        k = station_key(c["station_name"], float(c["lat"]), float(c["lng"]), st)
+        walk = int(c["station_m"]) / ac.WALK_M_PER_MIN
+        out = []
+        for cb in ac.CBD:
+            v = res[cb].get(k)
+            out += [str(round(walk + v[0])), str(v[1])] if v else ["NULL", "NULL"]
+        vals.append(f"({lit(c['apt_seq'])}, {', '.join(out)})")
+    stmts.append("UPDATE complexes SET h2_cbd_min = NULL, h2_cbd_tr = NULL, h2_ybd_min = NULL, h2_ybd_tr = NULL, h2_gbd_min = NULL, h2_gbd_tr = NULL;")
+    for i in range(0, len(vals), 1000):
+        stmts.append("UPDATE complexes AS c SET h2_cbd_min = v.a::int, h2_cbd_tr = v.b::smallint, h2_ybd_min = v.c::int, h2_ybd_tr = v.d::smallint, "
+                     "h2_gbd_min = v.e::int, h2_gbd_tr = v.f::smallint "
+                     f"FROM (VALUES {', '.join(vals[i:i + 1000])}) AS v(s, a, b, c, d, e, f) WHERE c.apt_seq = v.s;")
+    stmts.append("COMMIT;")
+    db.query("\n".join(stmts))
+    print(f"  노선 {len(g)}개, 역 {len(st)}개 중 그래프 밖 {len(lost)}개 {lost[:10]}, 단지 {len(vals)}개(역 {H2_WALK_MAX_M}m 안)")
+    for nm in ("잠실", "판교", "고덕", "녹번", "동탄", "상계"):
+        k = next((k for k in st if st[k]["name"] == nm), None)
+        if k:
+            print(f"    {nm}: " + ", ".join(f"{c} {res[c][k][0]:.0f}분·환승{res[c][k][1]}" for c in ac.CBD if k in res[c]))
     return 0
 
 
@@ -392,8 +457,8 @@ def run_mart(db: Db, path: str | None) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("mode", choices=["stations", "schoolzone", "midzone", "academy", "hospital", "mart"])
-    ap.add_argument("--dir", help="stations: 미리 받아 둔 st_<번호>.csv 폴더")
+    ap.add_argument("mode", choices=["stations", "schoolzone", "midzone", "academy", "hospital", "mart", "access"])
+    ap.add_argument("--dir", help="stations: 미리 받아 둔 st_<번호>.csv 폴더, access: <번호>.bin 역간거리 파일 폴더")
     ap.add_argument("--file", help="mart: 대형마트 TSV")
     ap.add_argument("--db", choices=["api", "psql"])
     a = ap.parse_args(argv)
@@ -402,7 +467,8 @@ def main(argv: list[str] | None = None) -> int:
         db = connect(a.db)
         rc = {"stations": lambda: run_stations(db, a.dir), "schoolzone": lambda: run_schoolzone(db),
               "midzone": lambda: run_midzone(db),
-              "academy": lambda: run_academy(db), "hospital": lambda: run_hospital(db), "mart": lambda: run_mart(db, a.file)}[a.mode]()
+              "academy": lambda: run_academy(db), "hospital": lambda: run_hospital(db), "mart": lambda: run_mart(db, a.file),
+              "access": lambda: run_access(db, a.dir)}[a.mode]()
     except DbError as e:
         print(f"[infra] DB 오류: {e}", file=sys.stderr)
         rc = 1
