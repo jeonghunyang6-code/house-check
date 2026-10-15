@@ -15,11 +15,11 @@ def _db():
     db = PsqlDb(URL)
     db.query("DROP TABLE IF EXISTS deal_events, deals, rent_events, rents, snapshot_runs, rent_monthly, archive_cells, complex_metrics, "
              "macro_monthly, deal_anchor, deal_region_month, region_phase, market_signals, rone_weekly, rone_regions, complexes, kapt_complexes, "
-             "adm_dong, adm_adjacent, lifezone CASCADE;")
+             "adm_dong, adm_adjacent, lifezone, presale CASCADE;")
     for m in ("0001_deals.sql", "0005_snapshot_runs.sql", "0006_rents.sql", "0007_rent_archive.sql", "0010_metrics.sql",
               "0009_rone_weekly.sql", "0011_market.sql", "0012_macro.sql", "0013_macro_annual.sql", "0014_complex_phase.sql", "0015_quadrant_strength.sql",
               "0016_reverse_real.sql", "0008_complexes.sql", "0019_deal_anchor.sql", "0020_turnover_e3.sql",
-              "0022_complex_geo.sql", "0023_adm_dong.sql", "0030_lifezone.sql", "0031_e2.sql", "0032_e4_e5_e7.sql"):
+              "0022_complex_geo.sql", "0023_adm_dong.sql", "0030_lifezone.sql", "0031_e2.sql", "0032_e4_e5_e7.sql", "0034_presale.sql"):
         db.query((ROOT / "db" / "migrations" / m).read_text(encoding="utf-8"))
     return db
 
@@ -197,3 +197,24 @@ def test_metrics_e5_e7():
     assert z["e7_n"] == "2/2/1" and z["e7_old_ppm"] is None
     assert float(z["e7_mid_ppm"]) == round((90000 * (1 + 0.9) / 2 / 84 + 80000 / 84) / 2, 1)
     assert z["e7_new_ppm"] is not None
+
+
+def test_metrics_f1():
+    """F1: 같은 생활권·시군구 24개월 입주 공급 세대, 입주장(최근 6개월 입주), 가장 큰 다음 입주."""
+    if not URL:
+        return
+    db = _db()
+    db.query("INSERT INTO complexes (apt_seq, apt_name, region_code, umd_name, updated_at, lifezone_id) VALUES "
+             "('A', 'a', '11680', '역삼동', '2026-10-01', 'Z1'), ('B', 'b', '11680', '역삼동', '2026-10-01', 'Z2');")
+    for d in ("2026-09-01", "2026-10-01"):
+        _deal(db, "A", d, 100000)
+        _deal(db, "B", d, 100000)
+    rows = [("p1", "입주중", 500, "202606", "Z1"), ("p2", "다음", 800, "202703", "Z1"), ("p3", "작은", 100, "202612", "Z1"),
+            ("p4", "멀리", 900, "202901", "Z1"), ("p5", "옛날", 700, "202601", "Z1"), ("p6", "옆생활권", 300, "202701", "Z2")]
+    db.query("INSERT INTO presale (house_no, name, address, households, move_in_ym, region_code, lifezone_id, updated) VALUES " + ", ".join(
+        f"({lit(h)}, {lit(n)}, 'x', {hh}, {lit(ym)}, '11680', {lit(z)}, '2026-10-12')" for h, n, hh, ym, z in rows) + ";")
+    db.query(render(TODAY, 4000))
+    a = select(db, "SELECT * FROM complex_metrics WHERE apt_seq = 'A'")[0]
+    assert (a["f1_zone_24m"], a["f1_sgg_24m"]) == (900, 1200)          # 2026-10 ~ 2028-09: 다음 800 + 작은 100 (+ 옆생활권 300 은 시군구만)
+    assert a["f1_ipju"] == "입주중(2026.06, 500세대)"                  # 2026-05 ~ 2026-10 입주
+    assert a["f1_next"] == "다음(2027.03, 800세대)"

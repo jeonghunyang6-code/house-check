@@ -45,6 +45,8 @@ def test_drop_shared_coords():
             {"src": "c", "name": "청산", "lat": 37.73873, "lng": 127.045891}]
     assert [(r["src"], r["name"]) for r in drop_shared_coords(rows)] == [
         ("a", "별내"), ("a", "금곡"), ("b", "별내"), ("c", "의정부"), ("c", "청산")]
+    rows.append({"src": "kakao", "name": "청산", "lat": 37.995089, "lng": 127.074274})   # 다른 출처가 다른 자리 → 공유 좌표 쪽을 뺀다
+    assert [(r["src"], r["name"]) for r in drop_shared_coords(rows)][-2:] == [("c", "의정부"), ("kakao", "청산")]
 
 
 def test_hira_items_and_grid():
