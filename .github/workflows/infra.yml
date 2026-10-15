@@ -1,11 +1,11 @@
-# 생활 인프라 (jobs/infra.py): 역 위치·초등학교 통학구역·동별 학원 수·병원 → 단지 연결. 가끔(분기) 수동 실행.
+# 생활 인프라 (jobs/infra.py): 역 위치·초등 통학구역·중학교 학교군·동별 학원 수·병원 → 단지 연결. 가끔(분기) 수동 실행.
 name: infra
 
 on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "stations | schoolzone | academy | hospital"
+        description: "stations | schoolzone | midzone | academy | hospital"
         default: "schoolzone"
 
 permissions:
@@ -33,6 +33,7 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           NEIS_API_KEY: ${{ secrets.NEIS_API_KEY }}
           DATA_GO_KR_SERVICE_KEY: ${{ secrets.DATA_GO_KR_SERVICE_KEY }}
+          SCHOOLINFO_API_KEY: ${{ secrets.SCHOOLINFO_API_KEY }}
           HC_DB_BACKEND: psql
           PYTHONUNBUFFERED: "1"
         run: python -m jobs.infra "${{ inputs.mode }}"

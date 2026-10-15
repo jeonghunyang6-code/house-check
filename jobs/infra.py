@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import csv
 import io
+import json
 import os
 import sys
 import time
@@ -18,8 +19,8 @@ from collections import Counter
 
 from collector.datagokr_file import CaptchaRequired, DownloadError, download
 from collector.db import Db, DbError, connect, lit, select
-from collector import hira
-from collector.infra import drop_shared_coords, merge_stations, nearest, normalize_station
+from collector import hira, schoolinfo
+from collector.infra import dist_m, drop_shared_coords, merge_stations, nearest, normalize_station
 from collector.neis import OFFICES, PAGE, NeisError, count_by_dong, fetch_page, match_dong
 from collector.kapt import _get_json
 from collector.regions import REGIONS
@@ -43,6 +44,9 @@ STATION_FILES = {
 # 아직 못 받은 것: 15041308·15041309·15041328·15041485 는 2026-10-15 에도 페이지 오류(500). 서해선·김포골드라인·신림선·GTX-A 는
 # 공공데이터포털에서 역위치 파일을 찾지 못함 → 해당 역 주변 단지는 거리가 길게 나올 수 있다
 SCHOOL_ZONE_FILE = "15159265"   # 한국교육시설안전원 초등학교통학구역 (SHP, EPSG:5186)
+MID_ZONE_FILE = "15159264"      # 같은 기관 중학교학교군 (SHP, EPSG:5186, 필드는 초등과 같음)
+ZONE_SCHOOL_FILE = "15159266"   # 학교학구도연계정보 (CSV: 학구ID, 학교ID, 학교명, 학교급구분)
+SCHOOL_POS_FILE = "15159184"    # 초중등학교위치 (CSV: 학교ID, 학교명, 학교급구분, 설립형태, 운영상태, 위도, 경도)
 CAPITAL_SD = ("11", "28", "41")
 
 
@@ -92,33 +96,44 @@ def run_stations(db: Db, src_dir: str | None) -> int:
     return 0
 
 
-def run_schoolzone(db: Db) -> int:
+def _load_zones(pk: str):
+    """한국교육시설안전원 학구도 SHP → (zones[(id, 이름, 공동학구 여부 GB, 도형)], STRtree, 4326→5186 변환)."""
     import zipfile
 
     import shapefile
     from pyproj import Transformer
-    from shapely.geometry import Point, shape
+    from shapely.geometry import shape
     from shapely.strtree import STRtree
 
-    try:
-        _, data = download(SCHOOL_ZONE_FILE)
-    except CaptchaRequired as e:
-        print(f"  {e}", file=sys.stderr)
-        return 2
+    _, data = download(pk)
     z = zipfile.ZipFile(io.BytesIO(data))
     base = next(n[:-4] for n in z.namelist() if n.lower().endswith(".shp"))
     sf = shapefile.Reader(shp=io.BytesIO(z.read(base + ".shp")), dbf=io.BytesIO(z.read(base + ".dbf")),
                           shx=io.BytesIO(z.read(base + ".shx")), encoding="cp949")
     zones = [(sr.record["HAKGUDO_ID"], sr.record["HAKGUDO_NM"], str(sr.record["HAKGUDO_GB"]), shape(sr.shape.__geo_interface__))
              for sr in sf.shapeRecords() if str(sr.record["SD_CD"]) in CAPITAL_SD]
-    tree = STRtree([g for *_, g in zones])
     tf = Transformer.from_crs("EPSG:4326", "EPSG:5186", always_xy=True)   # .prj: Korea 2000 중부원점(200000, 600000)
+    return zones, STRtree([g for *_, g in zones]), tf
+
+
+def _zone_hits(zones, tree, tf, lat: float, lng: float):
+    from shapely.geometry import Point
+
+    p = Point(*tf.transform(lng, lat))
+    hits = [zones[i] for i in tree.query(p) if zones[i][3].contains(p)]
+    return [h for h in hits if h[2] == "0"] or hits, hits
+
+
+def run_schoolzone(db: Db) -> int:
+    try:
+        zones, tree, tf = _load_zones(SCHOOL_ZONE_FILE)
+    except CaptchaRequired as e:
+        print(f"  {e}", file=sys.stderr)
+        return 2
     cx = select(db, "SELECT apt_seq, lat, lng FROM complexes WHERE lat IS NOT NULL")
     vals, miss = [], 0
     for c in cx:
-        p = Point(*tf.transform(float(c["lng"]), float(c["lat"])))
-        hits = [zones[i] for i in tree.query(p) if zones[i][3].contains(p)]
-        main = [h for h in hits if h[2] == "0"] or hits
+        main, hits = _zone_hits(zones, tree, tf, float(c["lat"]), float(c["lng"]))
         if not main:
             miss += 1
             continue
@@ -130,6 +145,118 @@ def run_schoolzone(db: Db) -> int:
     stmts.append("COMMIT;")
     db.query("\n".join(stmts))
     print(f"  수도권 통학구역 {len(zones)}개, 좌표 단지 {len(cx)}개 중 {len(vals)}개 연결 (못 넣은 단지 {miss})")
+    return 0
+
+
+def _csv_file(pk: str) -> list[dict]:
+    import zipfile
+
+    _, data = download(pk)
+    if data[:2] == b"PK":
+        z = zipfile.ZipFile(io.BytesIO(data))
+        data = z.read(next(n for n in z.namelist() if n.lower().endswith(".csv")))
+    return list(csv.DictReader(io.StringIO(_decode(data))))
+
+
+MID_NEAR = 3   # 학교군에 학교가 여럿이면 가까운 순으로 이만큼 보여준다 (배정 확정 아님)
+
+
+def _schoolinfo_moves(schools: dict[str, dict]) -> tuple[dict[str, dict], str | None]:
+    """학구도 중학교 → 학교알리미 전·출입. 키가 없거나 실패하면 빈 값(학교군 연결은 그대로 한다)."""
+    for year in (time.strftime("%Y"), str(int(time.strftime("%Y")) - 1)):
+        try:
+            base, moves = {}, {}
+            for sgg in list(REGIONS) + schoolinfo.EXTRA_SGG:
+                for r in schoolinfo.fetch(0, sgg, year):
+                    base[r["SCHUL_CODE"]] = r
+                for r in schoolinfo.fetch(10, sgg, year):
+                    moves[r["SCHUL_CODE"]] = r
+                time.sleep(0.3)
+            base = list(base.values())
+            if not moves:
+                raise schoolinfo.SchoolInfoError("전출입 공시 없음")
+        except schoolinfo.SchoolInfoError as e:
+            print(f"  학교알리미 {year}: {e}", file=sys.stderr)
+            continue
+        linked = schoolinfo.match(schools, base)
+        out = {}
+        for sid, r in linked.items():
+            m = moves.get(r["SCHUL_CODE"])
+            if m:
+                out[sid] = {"si_code": r["SCHUL_CODE"], "students": int(m.get("STDNT_SUM") or 0),
+                            "mv_in": int(m.get("MVIN_SUM") or 0), "mv_out": int(m.get("MVT_SUM") or 0),
+                            "net_in": schoolinfo.net_in_rate(m)}
+        print(f"  학교알리미 {year} 공시: 기본정보 {len(base)}곳, 학구도 중학교 {len(schools)}곳 중 {len(linked)}곳 연결, 전출입 {len(out)}곳")
+        return out, year
+    return {}, None
+
+
+def run_midzone(db: Db) -> int:
+    """단지가 든 중학교 학교군과 '배정 가능 학교들'. 학교군에 학교가 1곳이면 배정 확정, 여럿이면 학교군 안 거리·추첨
+    배정이라 확정할 수 없어 가까운 순 MID_NEAR 곳과 학교군 평균을 보여준다(서울은 1곳짜리 학교군에 든 단지가 없다)."""
+    try:
+        zones, tree, tf = _load_zones(MID_ZONE_FILE)
+        links = _csv_file(ZONE_SCHOOL_FILE)
+        pos = _csv_file(SCHOOL_POS_FILE)
+    except CaptchaRequired as e:
+        print(f"  {e}", file=sys.stderr)
+        return 2
+    schools = {}
+    for r in pos:
+        if r.get("학교급구분") != "중학교" or r.get("운영상태") != "운영":
+            continue
+        try:
+            schools[r["학교ID"]] = {"id": r["학교ID"], "name": r["학교명"], "type": r.get("설립형태"),
+                                   "lat": float(r["위도"]), "lng": float(r["경도"])}
+        except (TypeError, ValueError):
+            continue
+    zone_ids = {z[0] for z in zones}
+    in_zone: dict[str, list[dict]] = {}
+    for r in links:
+        if r.get("학구ID") in zone_ids and r.get("학교ID") in schools:
+            in_zone.setdefault(r["학구ID"], []).append(schools[r["학교ID"]])
+    used = {s["id"]: s for v in in_zone.values() for s in v}
+    moves, year = _schoolinfo_moves(used)
+
+    def zone_net_in(zid: str) -> float | None:
+        ms = [moves[s["id"]] for s in in_zone.get(zid, []) if s["id"] in moves and moves[s["id"]]["students"] > 0]
+        n = sum(m["students"] for m in ms)
+        return round(sum(m["mv_in"] - m["mv_out"] for m in ms) / n * 100, 1) if n else None
+
+    cx = select(db, "SELECT apt_seq, lat, lng FROM complexes WHERE lat IS NOT NULL")
+    vals, miss, one = [], 0, 0
+    for c in cx:
+        la, lo = float(c["lat"]), float(c["lng"])
+        main, hits = _zone_hits(zones, tree, tf, la, lo)
+        if not main:
+            miss += 1
+            continue
+        cand = list({s["id"]: s for h in hits for s in in_zone.get(h[0], [])}.values())
+        one += len(cand) == 1
+        ranked = sorted(cand, key=lambda s: dist_m(la, lo, s["lat"], s["lng"]))[:MID_NEAR]
+        near = [{"id": s["id"], "name": s["name"], "m": round(dist_m(la, lo, s["lat"], s["lng"])),
+                 "net_in": moves.get(s["id"], {}).get("net_in")} for s in ranked]
+        vals.append(f"({lit(c['apt_seq'])}, {lit(main[0][0])}, {lit(main[0][1])}, {lit(any(h[2] == '1' for h in hits))}, "
+                    f"{len(cand)}, {lit(len(cand) == 1)}, {lit(json.dumps(near, ensure_ascii=False))}::jsonb, "
+                    f"{lit(zone_net_in(main[0][0]))}::numeric)")
+    stmts = ["BEGIN;", "DELETE FROM mid_school;"]
+    rows = list(used.values())
+    for i in range(0, len(rows), 500):
+        stmts.append("INSERT INTO mid_school (school_id, name, est_type, lat, lng, zone_ids, si_code, students, mv_in, mv_out, net_in, pban_yr) VALUES "
+                     + ", ".join(
+            f"({lit(s['id'])}, {lit(s['name'])}, {lit(s['type'])}, {s['lat']}, {s['lng']}, "
+            f"{lit(','.join(sorted(k for k, v in in_zone.items() if any(x['id'] == s['id'] for x in v))))}, "
+            + (lambda m: f"{lit(m.get('si_code'))}, {lit(m.get('students'))}::int, {lit(m.get('mv_in'))}::int, "
+                         f"{lit(m.get('mv_out'))}::int, {lit(m.get('net_in'))}::numeric, {lit(year if m else None)})")(moves.get(s["id"], {}))
+            for s in rows[i:i + 500]) + ";")
+    for i in range(0, len(vals), 1000):
+        stmts.append("UPDATE complexes AS c SET mid_zone_id = v.zi, mid_zone = v.zn, mid_zone_shared = v.sh, mid_zone_schools = v.n, "
+                     "mid_assigned = v.one, mid_near = v.near, mid_zone_net_in = v.zni "
+                     f"FROM (VALUES {', '.join(vals[i:i + 1000])}) AS v(a, zi, zn, sh, n, one, near, zni) WHERE c.apt_seq = v.a;")
+    stmts.append("COMMIT;")
+    db.query("\n".join(stmts))
+    print(f"  수도권 중학교 학교군 {len(zones)}개, 중학교 {len(rows)}곳, 좌표 단지 {len(cx)}개 중 {len(vals)}개 연결 "
+          f"(배정 확정 {one}, 못 넣은 단지 {miss})")
     return 0
 
 
@@ -223,7 +350,7 @@ def run_hospital(db: Db) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("mode", choices=["stations", "schoolzone", "academy", "hospital"])
+    ap.add_argument("mode", choices=["stations", "schoolzone", "midzone", "academy", "hospital"])
     ap.add_argument("--dir", help="stations: 미리 받아 둔 st_<번호>.csv 폴더")
     ap.add_argument("--db", choices=["api", "psql"])
     a = ap.parse_args(argv)
@@ -231,6 +358,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         db = connect(a.db)
         rc = {"stations": lambda: run_stations(db, a.dir), "schoolzone": lambda: run_schoolzone(db),
+              "midzone": lambda: run_midzone(db),
               "academy": lambda: run_academy(db), "hospital": lambda: run_hospital(db)}[a.mode]()
     except DbError as e:
         print(f"[infra] DB 오류: {e}", file=sys.stderr)
