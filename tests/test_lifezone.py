@@ -1,6 +1,7 @@
 from collections import Counter
 
-from collector.lifezone import candidate_pairs, merge, pair_f1, ratio_cv, unit_index, unit_of, zone_name
+from collector.lifezone import (candidate_pairs, merge, pair_f1, ratio_cv, station_key, station_keys, unit_index, unit_of,
+                               zone_name)
 
 
 def _ix(base, drift, n=14):
@@ -55,3 +56,14 @@ def test_pair_f1_and_name():
     p, r, f = pair_f1(group, ref, block)
     assert p == 0.5 and abs(r - 1 / 3) < 1e-9
     assert zone_name(["D:111", "S:잠실", "S:석촌"], {"S:잠실": 50, "S:석촌": 20, "D:111": 5}, {"111": "서울특별시 송파구 잠실2동"}) == "잠실·석촌·잠실2동"
+
+
+def test_station_keys_split_same_name():
+    st = station_keys([{"name": "양평", "lines": "5호선", "lat": 37.5256, "lng": 126.8862},
+                       {"name": "양평", "lines": "경의중앙", "lat": 37.4927, "lng": 127.4919},
+                       {"name": "잠실", "lines": "2호선,8호선", "lat": 37.5133, "lng": 127.1001}])
+    assert set(st) == {"양평~1", "양평~2", "잠실"} and st["잠실"]["lines"] == {"2호선", "8호선"}
+    assert st[station_key("양평", 37.527, 126.89, st)]["lines"] == {"5호선"}      # 영등포 양평동 단지
+    assert st[station_key("양평", 37.49, 127.49, st)]["lines"] == {"경의중앙"}     # 양평군 단지
+    assert station_key("잠실", 37.51, 127.1, st) == "잠실"
+    assert zone_name(["S:양평~1"], {"S:양평~1": 3}, {}) == "양평"

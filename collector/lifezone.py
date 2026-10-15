@@ -24,7 +24,30 @@ MAX_COMPLEXES = 400     # 🔧
 MAX_SPAN_M = 2000       # 🔧 묶음 안 단위 중심끼리 최대 거리 (없으면 노선을 따라 길게 이어진다: 목동~대방)
 
 
+def station_keys(rows: list[dict]) -> dict[str, dict]:
+    """역 → 키. 이름이 겹치는 역(5호선 양평·경의중앙 양평)은 '양평~1'처럼 나눈다. 값: {name, lat, lng, lines(set)}."""
+    by: dict[str, list[dict]] = defaultdict(list)
+    for r in rows:
+        by[r["name"]].append(r)
+    out = {}
+    for name, rs in by.items():
+        for i, r in enumerate(sorted(rs, key=lambda r: (float(r["lat"]), float(r["lng"])))):
+            out[name if len(rs) == 1 else f"{name}~{i + 1}"] = {
+                "name": name, "lat": float(r["lat"]), "lng": float(r["lng"]),
+                "lines": {x.strip() for x in (r["lines"] or "").split(",") if x.strip()}}
+    return out
+
+
+def station_key(name: str, lat: float, lng: float, stations: dict[str, dict]) -> str:
+    """단지에 기록된 역 이름을 키로. 이름이 겹치면 단지에서 가장 가까운 쪽."""
+    if name in stations:
+        return name
+    cands = [k for k, s in stations.items() if s["name"] == name]
+    return min(cands, key=lambda k: dist_m(lat, lng, stations[k]["lat"], stations[k]["lng"])) if cands else name
+
+
 def unit_of(station_name: str | None, station_m: int | None, adm_cd: str | None) -> str | None:
+    """station_name 은 station_key 로 고른 키."""
     if station_name and station_m is not None and station_m <= STATION_M:
         return "S:" + station_name
     return "D:" + adm_cd if adm_cd else None
@@ -52,7 +75,7 @@ def ratio_cv(a: dict[str, float], b: dict[str, float], min_quarters: int = MIN_Q
 
 
 def candidate_pairs(units: dict[str, dict], stations: dict[str, dict], adm_adj: list[tuple[str, str]]) -> set[tuple[str, str]]:
-    """units: u → {adms: Counter(adm_cd), side: 한강 남북}. stations: 역명 → {lat, lng, lines(set)}."""
+    """units: u → {adms: Counter(adm_cd), side: 한강 남북}. stations: station_keys 결과."""
     pairs: set[tuple[str, str]] = set()
     for u in units:
         if not u.startswith("S:") or u[2:] not in stations:
@@ -131,7 +154,7 @@ def zone_name(units: list[str], n: dict[str, int], adm_nm: dict[str, str]) -> st
     """단지가 많은 단위부터 이름 3개: 역은 '잠실', 행정동은 '잠실2동'."""
     names = []
     for u in sorted(units, key=lambda x: -n.get(x, 0)):
-        nm = u[2:] if u.startswith("S:") else adm_nm.get(u[2:], u[2:]).split()[-1]
+        nm = u[2:].split("~")[0] if u.startswith("S:") else adm_nm.get(u[2:], u[2:]).split()[-1]
         if nm not in names:
             names.append(nm)
     return "·".join(names[:3])
