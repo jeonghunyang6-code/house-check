@@ -30,3 +30,4 @@ for a in ("서울특별시 강동구 둔촌동 170-1번지 일대", "경기도 �
         print("geo", a, h and {x: h.get(x) for x in ("x", "y", "adm_cd", "adm_nm")})
     except Exception as e:
         print("geo err", a, type(e).__name__, str(e)[:100])
+# run 2

@@ -1,4 +1,4 @@
-# 임시 점검 (PR 전에 지운다)
+# 임시 (PR 전에 지운다): 브랜치 코드로 presale 첫 실행
 name: probe_tmp
 on:
   push:
@@ -9,14 +9,21 @@ permissions:
 jobs:
   probe:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+      - run: command -v psql || (sudo apt-get update -q && sudo apt-get install -y -q postgresql-client)
       - env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DATA_GO_KR_SERVICE_KEY: ${{ secrets.DATA_GO_KR_SERVICE_KEY }}
           SGIS_CONSUMER_KEY: ${{ secrets.SGIS_CONSUMER_KEY }}
           SGIS_CONSUMER_SECRET: ${{ secrets.SGIS_CONSUMER_SECRET }}
-        run: python tools/probe/presale_probe.py
+          HC_DB_BACKEND: psql
+          PYTHONUNBUFFERED: "1"
+          NAVER_SET: ${{ secrets.NAVER_CLIENT_ID != '' }}
+        run: |
+          echo "NAVER secret in GitHub: $NAVER_SET"
+          python -m jobs.presale

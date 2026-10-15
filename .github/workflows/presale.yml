@@ -1,0 +1,35 @@
+# 청약홈 분양정보 → presale (jobs/presale.py) → 입주 물량 F1 은 다음 metrics 실행에서 단지에 붙는다. api.odcloud.kr·SGIS 는 클라우드 세션에서 막혀 있어 여기서 돈다.
+name: presale
+
+on:
+  schedule:
+    - cron: "17 21 * * 0"   # 매주 월요일 06:17 KST
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: presale
+  cancel-in-progress: false
+
+jobs:
+  presale:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: psql 확인
+        run: command -v psql || (sudo apt-get update -q && sudo apt-get install -y -q postgresql-client)
+      - name: 분양정보
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATA_GO_KR_SERVICE_KEY: ${{ secrets.DATA_GO_KR_SERVICE_KEY }}
+          SGIS_CONSUMER_KEY: ${{ secrets.SGIS_CONSUMER_KEY }}
+          SGIS_CONSUMER_SECRET: ${{ secrets.SGIS_CONSUMER_SECRET }}
+          HC_DB_BACKEND: psql
+          PYTHONUNBUFFERED: "1"
+        run: python -m jobs.presale
