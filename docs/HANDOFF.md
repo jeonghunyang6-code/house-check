@@ -217,7 +217,7 @@ curl -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
   - **공급 세대(TOT_SUPLY_HSHLDCO)는 일반+특별공급이라 재건축·재개발 조합원 몫이 빠진다** → 서울은 실제 입주보다 크게 적게 나온다(2027년 서울 4,240세대). K-apt 세대수로 보정하는 건 다음 과제
   - 단지: `f1_zone_24m`(같은 생활권 24개월), `f1_sgg_24m`, `f1_ipju`(생활권 안 최근 6개월 입주 = 📖 입주장 p.55), `f1_next`(가장 큰 다음 입주). 명세의 '과거 입주 반응 분류'는 아직
 - **G6**(jobs/auction.py, auction.yml 매달 7·14일): 네이버 뉴스 검색 요약문 → `collector/sources/auction_news.py` 추출 → 같은 달 기사 2건 이상 같은 값만 확정(발행월 − 1달). 2026-10-16 로컬 실행: 서울 2025-04~2026-09 16개월(2026-01 107.8% → 2026-09 94.7%), 경기 3·인천 5·전국 9개월. 경기·인천은 기사가 적어 빈 달이 많다. 한 번 확정된 값은 이후 모호해져도 남는다(덮어쓰기만)
-  - **GitHub 저장소 Secrets 에 `NAVER_CLIENT_ID`·`NAVER_CLIENT_SECRET` 이 없다(2026-10-16 확인)** → auction.yml 은 사용자가 등록하기 전까지 실패. 로컬 세션에서는 환경 변수로 돈다
+  - GitHub 저장소 Secrets 에 `NAVER_CLIENT_ID`·`NAVER_CLIENT_SECRET` 등록됨(2026-10-16 사용자). Actions 에서 실제 실행 확인(기사 668건, 확정 24건)
   - 시장 홈 거시 칸: 서울 최신값, 🔧 3개월 전 확정값 대비 상승/하락
 - **역 좌표**: 청산(1호선 파일이 의정부 좌표)·발곡(의정부경전철 파일 위도 37.275 오타) → 카카오 보충 파일(st_kakao, 저장소 밖)에 두 역 추가, `drop_shared_coords` 에 '같은 이름이 다른 출처에서 다른 자리면 공유 좌표 쪽을 뺀다' 규칙. 업무지구 그래프 밖 역 0개. **Actions 의 stations 실행은 카카오 파일이 없어 이 둘이 다시 틀린다** → stations 는 로컬에서 `--dir` 로
 
