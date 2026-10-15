@@ -1,4 +1,5 @@
-from collector.presale import address_candidates, month_add, parse_item
+from collector.infra import dist_m
+from collector.presale import address_candidates, match_complex, month_add, name_overlap, parse_item, total_households
 
 
 def test_parse_item():
@@ -20,3 +21,18 @@ def test_address_candidates():
 
 def test_month_add():
     assert (month_add("202611", 2), month_add("202601", -1), month_add("202612", 24)) == ("202701", "202512", "202812")
+
+
+def test_match_and_total():
+    assert name_overlap("올림픽파크 포레온", "올림픽파크포레온") == 8 and name_overlap("브라운스톤 월곡", "래미안월곡") == 2
+    p = {"name": "래미안 원베일리", "move_in_ym": "202308", "lat": 37.5070, "lng": 127.0000}
+    cands = [{"name": "래미안원베일리", "lat": 37.5072, "lng": 127.0003, "build_year": 2023, "households": 2990},
+             {"name": "래미안원베일리", "lat": 37.5200, "lng": 127.0000, "build_year": 2023, "households": 1},     # 1.4km
+             {"name": "반포자이", "lat": 37.5071, "lng": 127.0001, "build_year": 2023, "households": 3410}]          # 이름 다름
+    assert match_complex(p, cands, dist_m)["households"] == 2990
+    assert match_complex(dict(p, move_in_ym="202008"), cands, dist_m) is None                                       # 준공 연도 차이
+    rows = [{"house_no": f"h{i}", "households": 100, "imprmn": True} for i in range(6)] + [
+        {"house_no": "new", "households": 200, "imprmn": True}, {"house_no": "plain", "households": 300, "imprmn": False}]
+    matched = {f"h{i}": 250 + 10 * i for i in range(6)}
+    ratio, tot = total_households(rows, matched)
+    assert ratio == 2.75 and tot["new"] == (550, "추정 ×2.75") and tot["plain"] == (300, "공급") and tot["h0"] == (250, "K-apt")

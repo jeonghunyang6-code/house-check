@@ -18,7 +18,7 @@ import urllib.request
 
 from collector.db import Db, DbError, connect, lit, select
 from collector.infra import dist_m
-from collector.presale import AREAS, address_candidates, parse_item
+from collector.presale import AREAS, address_candidates, match_complex, parse_item, total_households
 from collector.sgis import Sgis, SgisError
 
 URL = "https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancDetail"
@@ -57,12 +57,12 @@ def run(db: Db, geo_limit: int) -> int:
         print(f"  {area}: 공고 {len(got)}건", flush=True)
     today = time.strftime("%Y-%m-%d")
     vals = [f"({lit(p['house_no'])}, {lit(p['name'])}, {lit(p['address'])}, {lit(p['area'])}, {p['households']}, {lit(p['move_in_ym'])}, "
-            f"{lit(p['notice_date'])}, {lit(p['house_type'])}, {lit(today)})" for p in rows.values()]
+            f"{lit(p['notice_date'])}, {lit(p['house_type'])}, {lit(p['imprmn'])}, {lit(today)})" for p in rows.values()]
     stmts = ["BEGIN;"]
     for i in range(0, len(vals), 500):     # 공고부터 저장 (좌표는 아래에서 나눠 채운다)
-        stmts.append("INSERT INTO presale (house_no, name, address, area, households, move_in_ym, notice_date, house_type, updated) VALUES "
+        stmts.append("INSERT INTO presale (house_no, name, address, area, households, move_in_ym, notice_date, house_type, imprmn, updated) VALUES "
                      + ", ".join(vals[i:i + 500]) + " ON CONFLICT (house_no) DO UPDATE SET name = EXCLUDED.name, households = EXCLUDED.households, "
-                     "move_in_ym = EXCLUDED.move_in_ym, updated = EXCLUDED.updated, "
+                     "move_in_ym = EXCLUDED.move_in_ym, imprmn = EXCLUDED.imprmn, updated = EXCLUDED.updated, "
                      "geo_method = CASE WHEN presale.address = EXCLUDED.address THEN presale.geo_method END, address = EXCLUDED.address;")
     stmts.append("COMMIT;")
     db.query("\n".join(stmts))
@@ -98,6 +98,31 @@ def run(db: Db, geo_limit: int) -> int:
             print(f"  좌표 {i}/{len(todo)} {geo_n}", flush=True)
     left = select(db, "SELECT count(*) AS n FROM presale WHERE geo_method IS NULL")[0]["n"]
     print(f"  공고 {len(rows)}건 저장, 이번에 좌표 {geo_n}, 남은 {left}건")
+    return link_totals(db)
+
+
+def link_totals(db: Db) -> int:
+    """입주한 공고는 K-apt 세대수로, 입주 전 정비사업 공고는 입주한 정비사업들의 비율로 총 세대를 채운다 (collector/presale.py)."""
+    rows = select(db, "SELECT house_no, name, households, move_in_ym, lat, lng, coalesce(imprmn, false) AS imprmn FROM presale")
+    cands = [dict(c, lat=float(c["lat"]), lng=float(c["lng"])) for c in select(db, """SELECT c.apt_seq, c.apt_name AS name, c.lat, c.lng,
+        c.build_year, k.households FROM complexes c JOIN kapt_complexes k ON k.kapt_code = c.kapt_code
+        WHERE c.lat IS NOT NULL AND c.build_year >= 2019 AND k.households > 0""")]
+    cur = time.strftime("%Y%m")
+    matched, seqs = {}, {}
+    for r in rows:
+        r["households"] = int(r["households"])
+        if r["move_in_ym"] <= cur and r["lat"] is not None:
+            c = match_complex(dict(r, lat=float(r["lat"]), lng=float(r["lng"])), cands, dist_m)
+            if c:
+                matched[r["house_no"]], seqs[r["house_no"]] = int(c["households"]), c["apt_seq"]
+    ratio, tot = total_households(rows, matched)
+    vals = [f"({lit(h)}, {t}, {lit(b)}, {lit(seqs.get(h))})" for h, (t, b) in tot.items()]
+    stmts = ["BEGIN;"] + [f"UPDATE presale AS p SET total_hh = v.t, total_basis = v.b, kapt_apt_seq = v.s FROM (VALUES {', '.join(vals[i:i + 1000])}) "
+                          "AS v(h, t, b, s) WHERE p.house_no = v.h;" for i in range(0, len(vals), 1000)] + ["COMMIT;"]
+    db.query("\n".join(stmts))
+    imp = sum(1 for r in rows if r["imprmn"])
+    print(f"  총 세대: K-apt 연결 {len(matched)}건(입주한 공고 {sum(1 for r in rows if r['move_in_ym'] <= cur)}건 중), "
+          f"정비사업 {imp}건, 비율 {ratio and round(ratio, 2)}")
     return 0
 
 
@@ -106,10 +131,11 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--db", choices=["api", "psql"])
     ap.add_argument("--geo-limit", type=int, default=1500, help="이번에 좌표를 찾을 공고 수 (SGIS 약 1초/건)")
+    ap.add_argument("--link-only", action="store_true", help="API 없이 총 세대 보정만 (DB 만 필요)")
     a = ap.parse_args(argv)
     t0 = time.monotonic()
     try:
-        rc = run(connect(a.db), a.geo_limit)
+        rc = link_totals(connect(a.db)) if a.link_only else run(connect(a.db), a.geo_limit)
     except (DbError, OSError, KeyError) as e:
         print(f"[presale] 실패: {type(e).__name__} {e}", file=sys.stderr)
         rc = 1

@@ -19,7 +19,7 @@ def _db():
     for m in ("0001_deals.sql", "0005_snapshot_runs.sql", "0006_rents.sql", "0007_rent_archive.sql", "0010_metrics.sql",
               "0009_rone_weekly.sql", "0011_market.sql", "0012_macro.sql", "0013_macro_annual.sql", "0014_complex_phase.sql", "0015_quadrant_strength.sql",
               "0016_reverse_real.sql", "0008_complexes.sql", "0019_deal_anchor.sql", "0020_turnover_e3.sql",
-              "0022_complex_geo.sql", "0023_adm_dong.sql", "0030_lifezone.sql", "0031_e2.sql", "0032_e4_e5_e7.sql", "0034_presale.sql"):
+              "0022_complex_geo.sql", "0023_adm_dong.sql", "0030_lifezone.sql", "0031_e2.sql", "0032_e4_e5_e7.sql", "0034_presale.sql", "0035_presale_total.sql"):
         db.query((ROOT / "db" / "migrations" / m).read_text(encoding="utf-8"))
     return db
 
@@ -213,8 +213,9 @@ def test_metrics_f1():
             ("p4", "멀리", 900, "202901", "Z1"), ("p5", "옛날", 700, "202601", "Z1"), ("p6", "옆생활권", 300, "202701", "Z2")]
     db.query("INSERT INTO presale (house_no, name, address, households, move_in_ym, region_code, lifezone_id, updated) VALUES " + ", ".join(
         f"({lit(h)}, {lit(n)}, 'x', {hh}, {lit(ym)}, '11680', {lit(z)}, '2026-10-12')" for h, n, hh, ym, z in rows) + ";")
+    db.query("UPDATE presale SET total_hh = 1600 WHERE house_no = 'p2';")   # 정비사업 총 세대 보정이 있으면 그 값을 쓴다
     db.query(render(TODAY, 4000))
     a = select(db, "SELECT * FROM complex_metrics WHERE apt_seq = 'A'")[0]
-    assert (a["f1_zone_24m"], a["f1_sgg_24m"]) == (900, 1200)          # 2026-10 ~ 2028-09: 다음 800 + 작은 100 (+ 옆생활권 300 은 시군구만)
+    assert (a["f1_zone_24m"], a["f1_sgg_24m"]) == (1700, 2000)          # 2026-10 ~ 2028-09: 다음 800 + 작은 100 (+ 옆생활권 300 은 시군구만)
     assert a["f1_ipju"] == "입주중(2026.06, 500세대)"                  # 2026-05 ~ 2026-10 입주
-    assert a["f1_next"] == "다음(2027.03, 800세대)"
+    assert a["f1_next"] == "다음(2027.03, 1600세대)"
