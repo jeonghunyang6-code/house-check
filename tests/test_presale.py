@@ -31,8 +31,11 @@ def test_match_and_total():
              {"name": "반포자이", "lat": 37.5071, "lng": 127.0001, "build_year": 2023, "households": 3410}]          # 이름 다름
     assert match_complex(p, cands, dist_m)["households"] == 2990
     assert match_complex(dict(p, move_in_ym="202008"), cands, dist_m) is None                                       # 준공 연도 차이
-    rows = [{"house_no": f"h{i}", "households": 100, "imprmn": True} for i in range(6)] + [
-        {"house_no": "new", "households": 200, "imprmn": True}, {"house_no": "plain", "households": 300, "imprmn": False}]
-    matched = {f"h{i}": 250 + 10 * i for i in range(6)}
+    rows = [{"house_no": f"h{i}", "name": f"단지{i}", "households": 100, "imprmn": True} for i in range(6)] + [
+        {"house_no": "new", "name": "새단지", "households": 200, "imprmn": True}, {"house_no": "plain", "name": "일반", "households": 300, "imprmn": False},
+        {"house_no": "h0b", "name": "단지0(조합원 취소분)", "households": 1, "imprmn": True},
+        {"house_no": "h1b", "name": "단지1 2차", "households": 40, "imprmn": True}]
+    matched = {f"h{i}": (250 + 10 * i, f"s{i}") for i in range(6)} | {"h0b": (250, "s0"), "h1b": (260, "s1")}
     ratio, tot = total_households(rows, matched)
     assert ratio == 2.75 and tot["new"] == (550, "추정 ×2.75") and tot["plain"] == (300, "공급") and tot["h0"] == (250, "K-apt")
+    assert tot["h0b"] == (0, "중복") and tot["h1b"] == (0, "중복")      # 취소분 이름, 같은 단지 두 번째 공고

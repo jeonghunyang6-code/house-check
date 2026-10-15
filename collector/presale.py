@@ -91,19 +91,37 @@ def match_complex(p: dict, cands: list[dict], dist) -> dict | None:
     return min(ok, key=lambda x: x[0])[1] if ok else None
 
 
-def total_households(rows: list[dict], matched: dict[str, int]) -> tuple[float | None, dict[str, tuple[int, str]]]:
-    """rows: 공고(house_no, households, imprmn). matched: house_no → K-apt 세대.
-    → (정비사업 비율 중앙값, house_no → (총 세대, 근거)). 비율은 공급 세대 30 이상인 입주 정비사업 공고로만 낸다."""
+DUP_NAME = re.compile(r"잔여|취소|무순위|임의공급|추가\s*모집|재공고|사후|계약\s*포기")
+
+
+def total_households(rows: list[dict], matched: dict[str, tuple[int, str]]) -> tuple[float | None, dict[str, tuple[int, str]]]:
+    """rows: 공고(house_no, name, households, imprmn). matched: house_no → (K-apt 세대, apt_seq).
+    → (정비사업 비율 중앙값, house_no → (총 세대, 근거)).
+    잔여·취소분 같은 다시 파는 공고(DUP_NAME)와 같은 단지에 맞춰진 두 번째 공고부터는 0(중복). 비율은 공급 30세대 이상
+    입주 정비사업 공고로만 낸다(2026-10-16: 67건 중앙값 2.34, 10~90% 1.17~4.72 → 단지별 추정은 거칠다)."""
     from statistics import median
-    rs = [matched[r["house_no"]] / r["households"] for r in rows
-          if r["imprmn"] and r["house_no"] in matched and r["households"] >= 30]
+    dup = {r["house_no"] for r in rows if DUP_NAME.search(r.get("name") or "")}
+    first: dict[str, str] = {}
+    for r in sorted(rows, key=lambda r: -r["households"]):
+        h = r["house_no"]
+        if h in matched and h not in dup:
+            seq = matched[h][1]
+            if seq in first:
+                dup.add(h)
+            else:
+                first[seq] = h
+    rs = [matched[r["house_no"]][0] / r["households"] for r in rows
+          if r["imprmn"] and r["house_no"] in matched and r["house_no"] not in dup and r["households"] >= 30]
     ratio = median(rs) if len(rs) >= 5 else None
     out = {}
     for r in rows:
-        if r["house_no"] in matched:
-            out[r["house_no"]] = (matched[r["house_no"]], "K-apt")
+        h = r["house_no"]
+        if h in dup:
+            out[h] = (0, "중복")
+        elif h in matched:
+            out[h] = (matched[h][0], "K-apt")
         elif r["imprmn"] and ratio:
-            out[r["house_no"]] = (round(r["households"] * ratio), f"추정 ×{ratio:.2f}")
+            out[h] = (round(r["households"] * ratio), f"추정 ×{ratio:.2f}")
         else:
-            out[r["house_no"]] = (r["households"], "공급")
+            out[h] = (r["households"], "공급")
     return ratio, out

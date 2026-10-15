@@ -98,7 +98,19 @@ def run(db: Db, geo_limit: int) -> int:
             print(f"  좌표 {i}/{len(todo)} {geo_n}", flush=True)
     left = select(db, "SELECT count(*) AS n FROM presale WHERE geo_method IS NULL")[0]["n"]
     print(f"  공고 {len(rows)}건 저장, 이번에 좌표 {geo_n}, 남은 {left}건")
-    return link_totals(db)
+    return link_totals(db) or react(db)
+
+
+def react(db: Db) -> int:
+    """과거 큰 입주 때 같은 생활권 전세 반응 (sql/f1_react.sql) → presale_react, lifezone.f1_react_*."""
+    from datetime import date
+    from pathlib import Path
+    sql = (Path(__file__).resolve().parent.parent / "sql" / "f1_react.sql").read_text(encoding="utf-8")
+    db.query(sql.replace("{TODAY}", lit(date.today())))
+    r = select(db, "SELECT count(*) AS n, percentile_cont(0.5) WITHIN GROUP (ORDER BY rel) AS m FROM presale_react")[0]
+    z = select(db, "SELECT count(*) AS n FROM lifezone WHERE f1_react_n IS NOT NULL")[0]["n"]
+    print(f"  과거 입주 반응: 사건 {r['n']}건(rel 중앙값 {r['m'] and round(float(r['m']), 2)}%p), 생활권 {z}곳")
+    return 0
 
 
 def link_totals(db: Db) -> int:
@@ -114,7 +126,7 @@ def link_totals(db: Db) -> int:
         if r["move_in_ym"] <= cur and r["lat"] is not None:
             c = match_complex(dict(r, lat=float(r["lat"]), lng=float(r["lng"])), cands, dist_m)
             if c:
-                matched[r["house_no"]], seqs[r["house_no"]] = int(c["households"]), c["apt_seq"]
+                matched[r["house_no"]], seqs[r["house_no"]] = (int(c["households"]), c["apt_seq"]), c["apt_seq"]
     ratio, tot = total_households(rows, matched)
     vals = [f"({lit(h)}, {t}, {lit(b)}, {lit(seqs.get(h))})" for h, (t, b) in tot.items()]
     stmts = ["BEGIN;"] + [f"UPDATE presale AS p SET total_hh = v.t, total_basis = v.b, kapt_apt_seq = v.s FROM (VALUES {', '.join(vals[i:i + 1000])}) "
@@ -122,7 +134,7 @@ def link_totals(db: Db) -> int:
     db.query("\n".join(stmts))
     imp = sum(1 for r in rows if r["imprmn"])
     print(f"  총 세대: K-apt 연결 {len(matched)}건(입주한 공고 {sum(1 for r in rows if r['move_in_ym'] <= cur)}건 중), "
-          f"정비사업 {imp}건, 비율 {ratio and round(ratio, 2)}")
+          f"정비사업 {imp}건, 비율 {ratio and round(ratio, 2)}, 중복 {sum(1 for t, b in tot.values() if b == '중복')}건")
     return 0
 
 
@@ -131,11 +143,12 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--db", choices=["api", "psql"])
     ap.add_argument("--geo-limit", type=int, default=1500, help="이번에 좌표를 찾을 공고 수 (SGIS 약 1초/건)")
-    ap.add_argument("--link-only", action="store_true", help="API 없이 총 세대 보정만 (DB 만 필요)")
+    ap.add_argument("--link-only", action="store_true", help="API 없이 총 세대 보정 + 과거 입주 반응만 (DB 만 필요)")
     a = ap.parse_args(argv)
     t0 = time.monotonic()
     try:
-        rc = link_totals(connect(a.db)) if a.link_only else run(connect(a.db), a.geo_limit)
+        db = connect(a.db)
+        rc = (link_totals(db) or react(db)) if a.link_only else run(db, a.geo_limit)
     except (DbError, OSError, KeyError) as e:
         print(f"[presale] 실패: {type(e).__name__} {e}", file=sys.stderr)
         rc = 1
