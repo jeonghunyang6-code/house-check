@@ -216,4 +216,33 @@ UPDATE complex_metrics m SET e3_seqs = e.seqs, e3_target_10k = round(e.e_ppm * m
   e3_chg_12m = round(e.e_chg::numeric, 2), rel_strength_e3 = round((m.chg_12m - e.e_chg)::numeric, 2)
 FROM e WHERE m.apt_seq = e.apt_seq AND m.area_group = e.area_group;
 
+-- 5) E2 주변 시세 위치 (📖 주변 시세가 높은 곳이 상승 여력이 크다 p.216~217, p.339, p.342; 명세: 같은 생활권, 없으면 반경 1.5km).
+--    이 단지 ㎡당 기준 시세 ÷ 주변 다른 단지(면적군 ±15㎡) ㎡당 기준 시세 중앙값. 🔧 주변 단지 3곳 이상일 때만.
+--    같은 생활권에 3곳이 안 되면 직선 1.5km 안·한강 같은 쪽 단지로
+WITH b AS (
+  SELECT m.apt_seq, m.area_group, m.ref_10k::numeric / m.area_group AS ppm, x.lifezone_id AS z, x.lat, x.lng,
+    ad.han_side AS side, floor(x.lat * 30)::int AS band
+  FROM complex_metrics m JOIN complexes x USING (apt_seq) LEFT JOIN adm_dong ad ON ad.adm_cd = x.adm_cd
+  WHERE m.ref_10k IS NOT NULL AND m.area_group BETWEEN 40 AND 135
+), pz AS (
+  SELECT a.apt_seq, a.area_group, percentile_cont(0.5) WITHIN GROUP (ORDER BY o.ppm) AS med, count(DISTINCT o.apt_seq) AS n
+  FROM b a JOIN b o ON o.z = a.z AND o.apt_seq <> a.apt_seq AND abs(o.area_group - a.area_group) <= 15
+  GROUP BY 1, 2
+), pr AS (
+  SELECT a.apt_seq, a.area_group, percentile_cont(0.5) WITHIN GROUP (ORDER BY o.ppm) AS med, count(DISTINCT o.apt_seq) AS n
+  FROM b a CROSS JOIN generate_series(-1, 1) g(k) JOIN b o ON o.band = a.band + g.k
+  WHERE a.lat IS NOT NULL AND o.apt_seq <> a.apt_seq AND abs(o.area_group - a.area_group) <= 15
+    AND coalesce(o.side, '') = coalesce(a.side, '')
+    AND 111320 * sqrt(power(o.lat - a.lat, 2) + power((o.lng - a.lng) * 0.7934, 2)) <= 1500
+  GROUP BY 1, 2
+), e AS (
+  SELECT b.apt_seq, b.area_group,
+    CASE WHEN pz.n >= 3 THEN b.ppm / pz.med WHEN pr.n >= 3 THEN b.ppm / pr.med END AS ratio,
+    CASE WHEN pz.n >= 3 THEN pz.n WHEN pr.n >= 3 THEN pr.n END AS n,
+    CASE WHEN pz.n >= 3 THEN '생활권' WHEN pr.n >= 3 THEN '반경 1.5km' END AS basis
+  FROM b LEFT JOIN pz USING (apt_seq, area_group) LEFT JOIN pr USING (apt_seq, area_group)
+)
+UPDATE complex_metrics m SET e2_ratio = round(e.ratio::numeric, 3), e2_n = e.n, e2_basis = e.basis
+FROM e WHERE m.apt_seq = e.apt_seq AND m.area_group = e.area_group AND e.ratio IS NOT NULL;
+
 COMMIT;
