@@ -64,9 +64,7 @@ def complex_prices(db: Db, hist_dir: str | None) -> dict[str, dict[str, float]]:
 
 def run(db: Db, hist_dir: str | None) -> int:
     cx = select(db, "SELECT apt_seq, region_code, lat, lng, adm_cd, station_name, station_m FROM complexes WHERE lat IS NOT NULL")
-    stations = {r["name"]: {"lat": float(r["lat"]), "lng": float(r["lng"]),
-                            "lines": {x.strip() for x in (r["lines"] or "").split(",") if x.strip()}}
-                for r in select(db, "SELECT name, lines, lat, lng FROM station")}
+    stations = lz.station_keys(select(db, "SELECT name, lines, lat, lng FROM station"))
     side = {r["adm_cd"]: r["han_side"] for r in select(db, "SELECT adm_cd, han_side FROM adm_dong")}
     adm_nm = {r["adm_cd"]: r["adm_nm"] for r in select(db, "SELECT adm_cd, adm_nm FROM adm_dong")}
     adj = [(r["a"], r["b"]) for r in select(db, "SELECT a, b FROM adm_adjacent WHERE NOT cross_river")]
@@ -74,7 +72,8 @@ def run(db: Db, hist_dir: str | None) -> int:
 
     unit = {}
     for c in cx:
-        u = lz.unit_of(c["station_name"], c["station_m"], c["adm_cd"])
+        st = c["station_name"] and lz.station_key(c["station_name"], float(c["lat"]), float(c["lng"]), stations)
+        u = lz.unit_of(st, c["station_m"], c["adm_cd"])
         if u:
             unit[c["apt_seq"]] = u
     members: dict[str, list[dict]] = defaultdict(list)
@@ -121,7 +120,7 @@ def run(db: Db, hist_dir: str | None) -> int:
     db.query("\n".join(stmts))
     print(f"  생활권 {len(zones)}개(단위 수별 {sorted(sizes.items())}), 단지 {len(zone_of)}개 연결. "
           f"후보 쌍 {len(pairs)}, 가격 비교 {len(scored)}. 서울 지역생활권 일치 P{p:.2f} R{r:.2f} F{f:.2f}")
-    for s in ("녹번", "홍제", "무악재", "잠실", "대치", "고덕"):
+    for s in ("녹번", "홍제", "무악재", "잠실", "대치", "고덕", "양평~1", "양평~2"):
         z = zone_of.get(next((k for k, u in unit.items() if u == "S:" + s), ""), None)
         if z:
             print(f"    {s} → {zname[z]}")

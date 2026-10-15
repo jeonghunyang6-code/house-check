@@ -19,7 +19,7 @@ def _db():
     for m in ("0001_deals.sql", "0005_snapshot_runs.sql", "0006_rents.sql", "0007_rent_archive.sql", "0010_metrics.sql",
               "0009_rone_weekly.sql", "0011_market.sql", "0012_macro.sql", "0013_macro_annual.sql", "0014_complex_phase.sql", "0015_quadrant_strength.sql",
               "0016_reverse_real.sql", "0008_complexes.sql", "0019_deal_anchor.sql", "0020_turnover_e3.sql",
-              "0022_complex_geo.sql", "0023_adm_dong.sql", "0030_lifezone.sql"):
+              "0022_complex_geo.sql", "0023_adm_dong.sql", "0030_lifezone.sql", "0031_e2.sql"):
         db.query((ROOT / "db" / "migrations" / m).read_text(encoding="utf-8"))
     return db
 
@@ -129,3 +129,25 @@ def test_metrics_e3_lifezone():
     db.query(render(TODAY, 4000))
     a = {r["apt_seq"]: r for r in select(db, "SELECT * FROM complex_metrics")}["A"]
     assert a["e3_seqs"] == "F,P1,P2"          # 같은 생활권 F 먼저, 그다음 가까운 P1·P2 (R 은 한강 건너, P3 는 4번째)
+
+
+def test_metrics_e2():
+    """E2: 같은 생활권 다른 단지 ㎡당 기준 시세 중앙값 대비. 3곳 안 되면 1.5km 안(한강 같은 쪽)."""
+    if not URL:
+        return
+    db = _db()
+    db.query("INSERT INTO adm_dong (adm_cd, adm_nm, year, han_side) VALUES ('S1', 's', 2025, '남'), ('N1', 'n', 2025, '북');")
+    rows = [("A", 37.5000, 127.0000, "Z1", "S1", 100000), ("B", 37.5000, 127.0300, "Z1", "S1", 120000),
+            ("C", 37.5000, 127.0350, "Z1", "S1", 140000), ("D", 37.5000, 127.0400, "Z1", "S1", 130000),
+            ("X", 37.6000, 127.0000, "Z9", "S1", 100000), ("Y", 37.6050, 127.0000, "Z8", "S1", 150000),
+            ("W", 37.6080, 127.0000, "Z7", "S1", 150000), ("V", 37.6100, 127.0000, "Z6", "S1", 150000),
+            ("R", 37.6020, 127.0000, "Z5", "N1", 300000)]
+    db.query("INSERT INTO complexes (apt_seq, apt_name, region_code, umd_name, updated_at, lat, lng, lifezone_id, adm_cd) VALUES " + ", ".join(
+        f"({lit(s)}, 'x', '11680', '역삼동', '2026-10-01', {la}, {lo}, {lit(z)}, {lit(ad)})" for s, la, lo, z, ad, _ in rows) + ";")
+    for d in ("2026-09-01", "2026-09-10", "2026-10-01"):
+        for s, *_, p in rows:
+            _deal(db, s, d, p)
+    db.query(render(TODAY, 4000))
+    m = {r["apt_seq"]: r for r in select(db, "SELECT * FROM complex_metrics")}
+    assert (float(m["A"]["e2_ratio"]), m["A"]["e2_n"], m["A"]["e2_basis"]) == (0.769, 3, "생활권")     # 10억 ÷ 13억
+    assert (float(m["X"]["e2_ratio"]), m["X"]["e2_n"], m["X"]["e2_basis"]) == (0.667, 3, "반경 1.5km")  # R 은 한강 건너
