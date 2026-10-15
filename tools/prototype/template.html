@@ -811,6 +811,18 @@ function drawCx(c) {
   if (c.e3 && c.e3.length) notes.push(`바로 위 급지 비교(E3): ${c.e3.join(', ')}. 목표 시세 ${eok(c.m.e3_target_10k)} (비교 단지 ㎡당 기준 시세 × 이 면적, 📖 미래 시세 = 바로 위 급지 현재 시세 p.358~359)`
     + (c.m.rel_strength_e3 != null ? `. 12개월 변화 비교 단지 ${(+c.m.e3_chg_12m).toFixed(1)}% 대비 ${(+c.m.rel_strength_e3 > 0 ? '+' : '') + (+c.m.rel_strength_e3).toFixed(1)}%p` : '')
     + '. 🔧 같은 생활권 또는 5km 안(한강 같은 쪽)에서 ㎡당 10~40% 비싼 단지 중 같은 생활권 먼저, 가까운 3곳.');
+  if (c.m && c.m.e4_cap_10k != null) notes.push(`한계 시세(E4): 바로 위 급지 비교 단지의 59㎡ 기준 시세 ${eok(c.m.e4_cap_10k)}(${c.m.e4_cap_n}곳) = 이 단지 84㎡의 천장. 지금 기준 시세는 천장의 <b>${(c.C / c.m.e4_cap_10k).toFixed(2)}배</b> `
+    + `(${c.C >= c.m.e4_cap_10k ? '천장에 닿음 — 위 급지가 올라야 더 오를 수 있음' : '천장까지 여유'}, 📖 하급지 84㎡ 천장 = 상급지 59㎡ 가격, 상급지가 오르면 천장도 오른다 p.217~219).`);
+  if (c.m && c.m.e4_compress != null) notes.push(`평형 압축(E4): ${c.m.e4_sizes} (최근 1년 중앙가). 큰 평형의 ㎡당 추가 가격이 59→84의 <b>${(+c.m.e4_compress).toFixed(2)}배</b>`
+    + ` — 작을수록 큰 평형 값이 덜 붙음(📖 예: 24평 11억 / 32평 13억 / 42평 14억이면 약 0.4, p.231). 🔧 기준선 없음(수도권 중앙값 약 0.7).`);
+  if (c.zone && (c.zone.e5_ratio != null || c.zone.e7_new_ppm != null)) {
+    const pp = v => v == null ? '–' : `${Math.round(+v * 3.3058).toLocaleString()}만`;
+    const z = c.zone, nn = (z.e7_n || '0/0/0').split('/');
+    if (z.e5_ratio != null) notes.push(`대형/중형(E5, 생활권 ${z.name}): 40평대(전용 100~135㎡) 평당가가 30평대의 <b>${(+z.e5_ratio).toFixed(2)}배</b>(단지 ${z.e5_n}곳 중앙값). 1에 가까울수록 큰 평형도 제값(📖 대형 평형 평당가는 눌린다 p.247~250). 수도권 생활권 중앙값 약 0.85.`);
+    if (z.e7_new_ppm != null || z.e7_mid_ppm != null || z.e7_old_ppm != null) notes.push(`연식대별 평당가(E7, 생활권 ${z.name}): 신축(5년 이내) ${pp(z.e7_new_ppm)} · 준신축(6~15년) ${pp(z.e7_mid_ppm)} · 구축(16년+) ${pp(z.e7_old_ppm)} (단지 ${nn.join('/')}곳, 2곳 미만 구간은 –)`
+      + (z.e7_new_ppm != null && z.e7_old_ppm != null ? `. 구축 ÷ 신축 <b>${(z.e7_old_ppm / z.e7_new_ppm).toFixed(2)}</b>` : '')
+      + ` (📖 신축 5천 → 준신축 4천 → 구축 3천, 신축이 시세를 이끈다 p.56).`);
+  }
   if (c.grade) {
     const g = c.grade, i = g.grade - 1;
     const rng = i === 0 ? `${GRADE_CUTS[0]}억 이상` : i === 7 ? `${GRADE_CUTS[6]}억 미만` : `${GRADE_CUTS[i]}~${GRADE_CUTS[i - 1]}억`;

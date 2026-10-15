@@ -19,16 +19,16 @@ def _db():
     for m in ("0001_deals.sql", "0005_snapshot_runs.sql", "0006_rents.sql", "0007_rent_archive.sql", "0010_metrics.sql",
               "0009_rone_weekly.sql", "0011_market.sql", "0012_macro.sql", "0013_macro_annual.sql", "0014_complex_phase.sql", "0015_quadrant_strength.sql",
               "0016_reverse_real.sql", "0008_complexes.sql", "0019_deal_anchor.sql", "0020_turnover_e3.sql",
-              "0022_complex_geo.sql", "0023_adm_dong.sql", "0030_lifezone.sql", "0031_e2.sql"):
+              "0022_complex_geo.sql", "0023_adm_dong.sql", "0030_lifezone.sql", "0031_e2.sql", "0032_e4_e5_e7.sql"):
         db.query((ROOT / "db" / "migrations" / m).read_text(encoding="utf-8"))
     return db
 
 
-def _deal(db, seq, d, price, dtype="중개", cancelled=False, n=[0]):
+def _deal(db, seq, d, price, dtype="중개", cancelled=False, n=[0], area=84.9):
     n[0] += 1
     db.query("INSERT INTO deals (deal_key, apt_seq, apt_name, region_code, contract_month, contract_date, area_m2, floor, "
              "price_10k, deal_type, is_cancelled, last_seen_date) VALUES "
-             f"({lit(f'k{n[0]}')}, {lit(seq)}, 'x', '11680', {lit(d.replace('-', '')[:6])}, {lit(date.fromisoformat(d))}, 84.9, 5, "
+             f"({lit(f'k{n[0]}')}, {lit(seq)}, 'x', '11680', {lit(d.replace('-', '')[:6])}, {lit(date.fromisoformat(d))}, {area}, 5, "
              f"{price}, {lit(dtype)}, {lit(cancelled)}, {lit(TODAY)});")
 
 
@@ -151,3 +151,49 @@ def test_metrics_e2():
     m = {r["apt_seq"]: r for r in select(db, "SELECT * FROM complex_metrics")}
     assert (float(m["A"]["e2_ratio"]), m["A"]["e2_n"], m["A"]["e2_basis"]) == (0.769, 3, "생활권")     # 10억 ÷ 13억
     assert (float(m["X"]["e2_ratio"]), m["X"]["e2_n"], m["X"]["e2_basis"]) == (0.667, 3, "반경 1.5km")  # R 은 한강 건너
+
+
+def test_metrics_e4():
+    """E4 ① 84㎡ 천장 = E3 비교 단지 59㎡ 기준 시세, ② 단지 안 평형 압축 (작가 예 24평 11억 / 32평 13억 / 42평 14억)."""
+    if not URL:
+        return
+    db = _db()
+    db.query("INSERT INTO complexes (apt_seq, apt_name, region_code, umd_name, updated_at) VALUES "
+             "('A', 'a', '11680', '역삼동', '2026-10-01'), ('B', 'b', '11680', '역삼동', '2026-10-01');")
+    for d in ("2026-09-01", "2026-09-10", "2026-10-01"):
+        _deal(db, "A", d, 110000, area=59.9)
+        _deal(db, "A", d, 130000, area=84.9)
+        _deal(db, "A", d, 140000, area=114.9)
+        _deal(db, "B", d, 156000, area=84.9)        # ㎡당 20% 비쌈 → A 84 의 E3
+        _deal(db, "B", d, 125000, area=59.9)        # B 59㎡ 12.5억 = A 84㎡ 천장
+    db.query(render(TODAY, 4000))
+    m = {(r["apt_seq"], r["area_group"]): r for r in select(db, "SELECT * FROM complex_metrics")}
+    a = m[("A", 84)]
+    assert a["e3_seqs"] == "B" and (a["e4_cap_10k"], a["e4_cap_n"]) == (125000, 1)
+    assert m[("A", 59)]["e4_cap_10k"] is None                     # 84㎡ 행만
+    assert float(a["e4_compress"]) == 0.417 and float(m[("A", 114)]["e4_compress"]) == 0.417   # (1억/30㎡) ÷ (2억/25㎡)
+    assert a["e4_sizes"] == "59㎡ 11.0억 / 84㎡ 13.0억 / 114㎡ 14.0억"
+    assert m[("B", 84)]["e4_compress"] is None                    # 대형 거래 없음
+
+
+def test_metrics_e5_e7():
+    """E5 생활권 대형/중형 ㎡당 비율(단지 3곳+), E7 신축·준신축·구축 ㎡당 중앙가(구간 단지 2곳+)."""
+    if not URL:
+        return
+    db = _db()
+    db.query("INSERT INTO lifezone (zone_id, name, units, n_complex, built) VALUES ('Z1', 'z', 'S:a', 5, '2026-10-01');")
+    cx = [("N1", 2023, 120000), ("N2", 2022, 100000), ("M1", 2015, 90000), ("M2", 2012, 80000), ("O1", 2000, 60000)]
+    db.query("INSERT INTO complexes (apt_seq, apt_name, region_code, umd_name, updated_at, build_year, lifezone_id) VALUES " + ", ".join(
+        f"({lit(s)}, 'x', '11680', '역삼동', '2026-10-01', {y}, 'Z1')" for s, y, _ in cx) + ";")
+    for d in ("2026-09-01", "2026-10-01"):
+        for i, (s, _, p) in enumerate(cx):
+            _deal(db, s, d, p, area=84.0)
+            if i < 3:
+                _deal(db, s, d, round(p * 120 / 84 * (0.8 + 0.05 * i)), area=120.0)   # ㎡당 비율 0.80 / 0.85 / 0.90
+    db.query(render(TODAY, 4000))
+    z = select(db, "SELECT * FROM lifezone")[0]
+    assert (float(z["e5_ratio"]), z["e5_n"]) == (0.85, 3)
+    # 신축 N1·N2: 84㎡ 와 120㎡ 섞인 단지 중앙가 → 두 단지 중앙값. 구축은 1곳이라 없음
+    assert z["e7_n"] == "2/2/1" and z["e7_old_ppm"] is None
+    assert float(z["e7_mid_ppm"]) == round((90000 * (1 + 0.9) / 2 / 84 + 80000 / 84) / 2, 1)
+    assert z["e7_new_ppm"] is not None

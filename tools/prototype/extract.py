@@ -56,10 +56,12 @@ out['cx_rent'] = select(db, f"""SELECT apt_seq, contract_month m, area_group, n_
  FROM rent_monthly WHERE apt_seq IN ({sl}) AND area_group IN (84,85) ORDER BY contract_month""")
 out['cx_phase'] = select(db, f"""SELECT apt_seq, area_group, phase, chg_12m, up_months, down_months, last3, region_chg_12m, rel_strength,
  jeonse_10k, jeonse_24m_10k, jeonse_24m_n, reverse_risk, reserve_10k, real_ref_10k, base2020_10k, real_chg_2020,
- households, turnover_pct, turnover_state, e3_seqs, e3_target_10k, e3_chg_12m, rel_strength_e3, e2_ratio, e2_n, e2_basis
+ households, turnover_pct, turnover_state, e3_seqs, e3_target_10k, e3_chg_12m, rel_strength_e3, e2_ratio, e2_n, e2_basis, e4_cap_10k, e4_cap_n, e4_compress, e4_sizes
  FROM complex_metrics WHERE apt_seq IN ({sl}) AND area_group IN (84,85)""")
 out['e3_names'] = select(db, f"""SELECT apt_seq, apt_name FROM complexes WHERE apt_seq IN (
  SELECT unnest(string_to_array(e3_seqs, ',')) FROM complex_metrics WHERE apt_seq IN ({sl}) AND area_group IN (84,85))""")
+out['cx_zone'] = select(db, f"""SELECT c.apt_seq, z.name, z.e5_ratio, z.e5_n, z.e7_new_ppm, z.e7_mid_ppm, z.e7_old_ppm, z.e7_n
+ FROM complexes c JOIN lifezone z ON z.zone_id = c.lifezone_id WHERE c.apt_seq IN ({sl})""")
 # D2. 급지 E1 (dong_grade 최신): 예시 단지의 동 급지·표시 3개
 G = "(SELECT * FROM dong_grade WHERE asof = (SELECT max(asof) FROM dong_grade))"
 out['cx_grade'] = select(db, f"""SELECT c.apt_seq, c.umd_name, g.grade, g.value_10k, g.q1_10k, g.q3_10k, g.n_complex, g.old_share,
