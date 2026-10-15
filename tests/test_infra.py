@@ -75,3 +75,18 @@ def test_schoolinfo_match_and_rate():
     assert "B3" not in m
     assert schoolinfo.net_in_rate({"STDNT_SUM": 886, "MVIN_SUM": 41, "MVT_SUM": 59}) == -2.0
     assert schoolinfo.net_in_rate({"STDNT_SUM": 0, "MVIN_SUM": 1, "MVT_SUM": 0}) is None
+
+
+def test_drop_strays():
+    from collector.infra import drop_strays
+    st = lambda name, lines, lat, lng, w=1.0: {"name": name, "lines": lines, "lat": lat, "lng": lng, "n": 1, "w": w}
+    rows = [st("수서", ["3호선"], 37.4872, 127.1017, 2), st("대모산입구", ["수인분당"], 37.4914, 127.0727), st("일원", ["3호선"], 37.4836, 127.0846),
+            st("수서", ["수인분당"], 37.2915, 127.676),                        # 이천에 찍힌 틀린 좌표
+            st("양평", ["5호선"], 37.5256, 126.8862, 2), st("영등포구청", ["5호선"], 37.5246, 126.8960),
+            st("양평", ["경의중앙"], 37.4927, 127.4919), st("오빈", ["경의중앙"], 37.5061, 127.4734),
+            st("용답", ["2호선"], 37.5621, 127.0509, 2), st("용답", ["2호선"], 37.5664, 126.9779)]
+    out = drop_strays(rows)
+    names = [(s["name"], tuple(s["lines"])) for s in out]
+    assert ("수서", ("3호선", "수인분당")) in names and len([n for n in names if n[0] == "수서"]) == 1
+    assert len([n for n in names if n[0] == "양평"]) == 2
+    assert len([n for n in names if n[0] == "용답"]) == 1
