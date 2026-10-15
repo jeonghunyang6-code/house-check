@@ -99,9 +99,13 @@ ph AS (  -- collector/market.py phase() 와 같은 규칙: 🔧 ±3%, 8개월 / 
          WHEN abs(chg) < 3 THEN '보합장' WHEN l3up THEN '일시 반등' WHEN l3dn THEN '일시 조정' ELSE '추세 불명확' END AS phase
   FROM ph0
 ),
-rs AS (  -- B6 상대강도 (📖 상승의 차이 p.420~421): 같은 시군구(생활권 E0 전까지 대용) 판정 단지들의 12개월 변화 중앙값
+rs AS (  -- B6 상대강도 (📖 상승의 차이 p.420~421): 같은 시군구 판정 단지들의 12개월 변화 중앙값 (생활권에 판정 단지가 적을 때 대신 쓴다)
   SELECT x.region_code, percentile_cont(0.5) WITHIN GROUP (ORDER BY ph.chg) AS region_chg, count(*) AS region_n
   FROM ph JOIN (SELECT DISTINCT apt_seq, region_code FROM deals) x USING (apt_seq) GROUP BY 1
+),
+rz AS (  -- B6: 같은 생활권(E0, jobs/lifezone.py) 판정 단지들의 12개월 변화 중앙값
+  SELECT x.lifezone_id, percentile_cont(0.5) WITHIN GROUP (ORDER BY ph.chg) AS zone_chg, count(*) AS zone_n
+  FROM ph JOIN complexes x USING (apt_seq) WHERE x.lifezone_id IS NOT NULL GROUP BY 1
 ),
 j24 AS (  -- D3: 24개월 전 ±1개월 전세 계약 (건수 가중 근사)
   SELECT apt_seq, area_group,
@@ -121,8 +125,8 @@ cpi AS (
 ),
 d AS (
   SELECT c.*, ph.phase, j24.j24, j24.n24, coalesce(c.p20_10k, b20.p20) AS p20, cpi.now_ AS cpi_now, cpi.q120 AS cpi_20, ph.chg, ph.up, ph.down, ph.last3,
-    -- 🔧 판정 단지 5개 이상인 시군구만
-    CASE WHEN ph.chg IS NOT NULL AND rs.region_n >= 5 THEN rs.region_chg END AS region_chg,
+    -- 🔧 판정 단지 5개 이상인 생활권, 없으면 같은 조건의 시군구
+    CASE WHEN ph.chg IS NULL THEN NULL WHEN rz.zone_n >= 5 THEN rz.zone_chg WHEN rs.region_n >= 5 THEN rs.region_chg END AS region_chg,
     round(cur)::int AS ref,
     CASE WHEN cur IS NOT NULL AND peak IS NOT NULL AND trough IS NOT NULL AND peak > trough THEN (cur - trough) / (peak - trough) END AS rec,
     round(coalesce(jnew, jall))::int AS j, CASE WHEN jnew IS NOT NULL THEN nnew ELSE nall END AS jn,
@@ -130,6 +134,7 @@ d AS (
   FROM c LEFT JOIN ph USING (apt_seq, area_group)
   LEFT JOIN (SELECT DISTINCT ON (apt_seq) apt_seq, region_code FROM deals ORDER BY apt_seq, contract_date DESC) rc USING (apt_seq)
   LEFT JOIN rs ON rs.region_code = rc.region_code
+  LEFT JOIN complexes cz USING (apt_seq) LEFT JOIN rz ON rz.lifezone_id = cz.lifezone_id
   LEFT JOIN j24 USING (apt_seq, area_group) LEFT JOIN b20 USING (apt_seq, area_group) CROSS JOIN cpi
 )
 SELECT apt_seq, area_group, {TODAY},
@@ -179,17 +184,29 @@ UPDATE complex_metrics m SET households = hh.households,
 FROM hh LEFT JOIN tv USING (apt_seq) WHERE m.apt_seq = hh.apt_seq;
 
 -- 4) E3 바로 위 급지 비교 단지 (📖 미래 시세 = 바로 위 급지 현재 시세 p.358~359, 과도한 비교 금지 p.362) + B6 위 급지 대비 상대강도.
---    생활권(E0)·좌표가 아직 없어 🔧 같은 시군구 안에서, 같은 동을 먼저, ㎡당 기준 시세가 10~40% 높은 단지 중 가장 덜 비싼 3곳.
---    면적군 차이 15㎡ 이내(비슷한 평형끼리)
+--    명세: 같은 생활권 또는 인접 생활권에서 ㎡당 기준 시세가 🔧 10~40% 높은 단지 중 가장 가까운 3곳.
+--    → 같은 생활권(E0) 또는 🔧 직선 5km 안·한강 같은 쪽, 같은 생활권 먼저·가까운 순. 좌표 없는 단지는 같은 시군구.
+--    (3km 로는 작가 사다리 고덕 → 올림픽파크포레온(약 5km)이 빠져 5km. 띠는 ±2(약 7km))
+--    면적군 차이 15㎡ 이내(비슷한 평형끼리). 위도 띠(약 3.7km)로 나눠 가까운 띠끼리만 비교한다(속도)
 WITH b AS (
-  SELECT m.apt_seq, m.area_group, m.ref_10k::numeric / m.area_group AS ppm, m.chg_12m, x.region_code, x.umd_name
-  FROM complex_metrics m JOIN complexes x USING (apt_seq)
+  SELECT m.apt_seq, m.area_group, m.ref_10k::numeric / m.area_group AS ppm, m.chg_12m, x.region_code,
+    x.lifezone_id AS z, x.lat, x.lng, ad.han_side AS side, floor(x.lat * 30)::int AS band
+  FROM complex_metrics m JOIN complexes x USING (apt_seq) LEFT JOIN adm_dong ad ON ad.adm_cd = x.adm_cd
   WHERE m.ref_10k IS NOT NULL AND m.area_group BETWEEN 40 AND 135
-), p AS (
-  SELECT a.apt_seq, a.area_group, o.apt_seq AS o_seq, o.ppm, o.chg_12m,
-    row_number() OVER (PARTITION BY a.apt_seq, a.area_group ORDER BY (o.umd_name = a.umd_name) DESC, o.ppm, o.apt_seq) AS rn
-  FROM b a JOIN b o ON o.region_code = a.region_code AND o.apt_seq <> a.apt_seq
+), pc AS (
+  SELECT a.apt_seq, a.area_group, o.apt_seq AS o_seq, o.ppm, o.chg_12m, a.z = o.z AS same_z,
+    111320 * sqrt(power(o.lat - a.lat, 2) + power((o.lng - a.lng) * 0.7934, 2)) AS dist,
+    coalesce(o.side, '') = coalesce(a.side, '') AS same_side
+  FROM b a CROSS JOIN generate_series(-2, 2) g(k) JOIN b o ON o.band = a.band + g.k
+  WHERE a.lat IS NOT NULL AND o.apt_seq <> a.apt_seq
     AND o.ppm BETWEEN a.ppm * 1.1 AND a.ppm * 1.4 AND abs(o.area_group - a.area_group) <= 15
+  UNION ALL
+  SELECT a.apt_seq, a.area_group, o.apt_seq, o.ppm, o.chg_12m, false, NULL, true
+  FROM b a JOIN b o ON o.region_code = a.region_code AND o.apt_seq <> a.apt_seq
+  WHERE a.lat IS NULL AND o.ppm BETWEEN a.ppm * 1.1 AND a.ppm * 1.4 AND abs(o.area_group - a.area_group) <= 15
+), p AS (
+  SELECT pc.*, row_number() OVER (PARTITION BY apt_seq, area_group ORDER BY same_z DESC NULLS LAST, dist NULLS LAST, ppm, o_seq) AS rn
+  FROM pc WHERE dist IS NULL OR same_z OR (dist <= 5000 AND same_side)
 ), e AS (
   SELECT apt_seq, area_group, percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm) AS e_ppm,
     percentile_cont(0.5) WITHIN GROUP (ORDER BY chg_12m) AS e_chg, string_agg(DISTINCT o_seq, ',') AS seqs

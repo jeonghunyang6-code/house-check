@@ -808,7 +808,7 @@ function drawCx(c) {
   if (c.m && c.m.turnover_pct != null) notes.push(`월 거래 회전율(C2): 단지 전체 월 거래 ÷ 세대수 = ${(+c.m.turnover_pct).toFixed(2)}% (집계 끝난 최근 12개월 평균). 📖 0.5~0.8%면 꽤 괜찮은 거래량(p.137) → <b>${c.m.turnover_state}</b>.`);
   if (c.e3 && c.e3.length) notes.push(`바로 위 급지 비교(E3): ${c.e3.join(', ')}. 목표 시세 ${eok(c.m.e3_target_10k)} (비교 단지 ㎡당 기준 시세 × 이 면적, 📖 미래 시세 = 바로 위 급지 현재 시세 p.358~359)`
     + (c.m.rel_strength_e3 != null ? `. 12개월 변화 비교 단지 ${(+c.m.e3_chg_12m).toFixed(1)}% 대비 ${(+c.m.rel_strength_e3 > 0 ? '+' : '') + (+c.m.rel_strength_e3).toFixed(1)}%p` : '')
-    + '. 🔧 생활권 대신 같은 시군구, 같은 동 먼저, ㎡당 10~40% 비싼 단지 중 가장 덜 비싼 3곳.');
+    + '. 🔧 같은 생활권 또는 5km 안(한강 같은 쪽)에서 ㎡당 10~40% 비싼 단지 중 같은 생활권 먼저, 가까운 3곳.');
   if (c.grade) {
     const g = c.grade, i = g.grade - 1;
     const rng = i === 0 ? `${GRADE_CUTS[0]}억 이상` : i === 7 ? `${GRADE_CUTS[6]}억 미만` : `${GRADE_CUTS[i]}~${GRADE_CUTS[i - 1]}억`;

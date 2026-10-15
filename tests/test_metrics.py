@@ -14,10 +14,12 @@ TODAY = date(2026, 10, 12)
 def _db():
     db = PsqlDb(URL)
     db.query("DROP TABLE IF EXISTS deal_events, deals, rent_events, rents, snapshot_runs, rent_monthly, archive_cells, complex_metrics, "
-             "macro_monthly, deal_anchor, deal_region_month, region_phase, market_signals, rone_weekly, rone_regions, complexes, kapt_complexes CASCADE;")
+             "macro_monthly, deal_anchor, deal_region_month, region_phase, market_signals, rone_weekly, rone_regions, complexes, kapt_complexes, "
+             "adm_dong, adm_adjacent, lifezone CASCADE;")
     for m in ("0001_deals.sql", "0005_snapshot_runs.sql", "0006_rents.sql", "0007_rent_archive.sql", "0010_metrics.sql",
               "0009_rone_weekly.sql", "0011_market.sql", "0012_macro.sql", "0013_macro_annual.sql", "0014_complex_phase.sql", "0015_quadrant_strength.sql",
-              "0016_reverse_real.sql", "0008_complexes.sql", "0019_deal_anchor.sql", "0020_turnover_e3.sql"):
+              "0016_reverse_real.sql", "0008_complexes.sql", "0019_deal_anchor.sql", "0020_turnover_e3.sql",
+              "0022_complex_geo.sql", "0023_adm_dong.sql", "0030_lifezone.sql"):
         db.query((ROOT / "db" / "migrations" / m).read_text(encoding="utf-8"))
     return db
 
@@ -106,3 +108,24 @@ def test_metrics_turnover_e3():
     assert m["B"]["turnover_state"] == "적음" and m["C"]["turnover_pct"] is None
     assert (a["e3_seqs"], a["e3_target_10k"]) == ("B", 120000)
     assert m["B"]["e3_seqs"] is None          # C 는 B 보다 67% 비싸 범위 밖
+
+
+def test_metrics_e3_lifezone():
+    """E3: 같은 생활권 먼저, 아니면 5km 안·한강 같은 쪽 가까운 순. 한강 건너는 가까워도 뺀다."""
+    if not URL:
+        return
+    db = _db()
+    db.query("INSERT INTO adm_dong (adm_cd, adm_nm, year, han_side) VALUES ('S1', 's', 2025, '남'), ('N1', 'n', 2025, '북');")
+    rows = [("A", 37.5000, 127.0000, "Z1", "S1"), ("F", 37.5000, 127.0700, "Z1", "S1"),   # F: 약 6.2km 지만 같은 생활권
+            ("P1", 37.5050, 127.0000, "Z2", "S1"), ("P2", 37.5100, 127.0000, "Z2", "S1"),   # 0.6km·1.1km, 다른 생활권
+            ("R", 37.5020, 127.0000, "Z3", "N1"),                                              # 0.2km 지만 한강 건너
+            ("P3", 37.5000, 127.0300, "Z2", "S1")]                                             # 2.6km
+    db.query("INSERT INTO complexes (apt_seq, apt_name, region_code, umd_name, updated_at, lat, lng, lifezone_id, adm_cd) VALUES " + ", ".join(
+        f"({lit(s)}, 'x', '11680', '역삼동', '2026-10-01', {la}, {lo}, {lit(z)}, {lit(ad)})" for s, la, lo, z, ad in rows) + ";")
+    for d in ("2026-09-01", "2026-09-10", "2026-10-01"):
+        _deal(db, "A", d, 100000)
+        for s in ("F", "P1", "P2", "R", "P3"):
+            _deal(db, s, d, 120000)
+    db.query(render(TODAY, 4000))
+    a = {r["apt_seq"]: r for r in select(db, "SELECT * FROM complex_metrics")}["A"]
+    assert a["e3_seqs"] == "F,P1,P2"          # 같은 생활권 F 먼저, 그다음 가까운 P1·P2 (R 은 한강 건너, P3 는 4번째)
