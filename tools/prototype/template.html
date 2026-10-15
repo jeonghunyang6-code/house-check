@@ -278,6 +278,40 @@ footer.foot { color: var(--ink-3); font-size: 12px; max-width: 90ch; display: gr
         <p class="src" id="candSrc"></p>
       </div>
     </section>
+
+    <section class="col" aria-label="거주 방식과 갈아타기">
+      <div class="label"><span>⑧ 실거주 vs 분리 · 갈아타기</span><span>계산기</span></div>
+      <div class="screen">
+        <div class="appbar"><h2>어떻게 살고, 언제 갈아탈까</h2></div>
+        <form class="calc" id="ls" autocomplete="off">
+          <p class="calc-intro">같은 집을 사서 <b>직접 사는 경우(실거주)</b>와 <b>전세를 주고 나는 월세로 사는 경우(거주·투자 분리)</b>의 매달 나가는 돈을 비교합니다. 기본값은 책 예시입니다(📖 p.36).</p>
+          <label class="calc-row" for="l_seed"><span>종잣돈</span><span class="calc-in"><input id="l_seed" inputmode="numeric" value="40000"><span class="unit">만원</span></span></label>
+          <label class="calc-row" for="l_price"><span>살 집 매매가</span><span class="calc-in"><input id="l_price" inputmode="numeric" value="100000"><span class="unit">만원</span></span></label>
+          <label class="calc-row" for="l_jeonse"><span>그 집 전세가</span><span class="calc-in"><input id="l_jeonse" inputmode="numeric" value="60000"><span class="unit">만원</span></span></label>
+          <label class="calc-row" for="l_rent"><span>분리 시 내가 낼 월세</span><span class="calc-in"><input id="l_rent" inputmode="numeric" value="95"><span class="unit">만원</span></span></label>
+          <label class="calc-row" for="l_deposit"><span>그 월세 보증금</span><span class="calc-in"><input id="l_deposit" inputmode="numeric" value="0"><span class="unit">만원</span></span></label>
+          <label class="calc-row" for="l_income"><span>세후 월소득 (선택)</span><span class="calc-in"><input id="l_income" inputmode="numeric" value=""><span class="unit">만원</span></span></label>
+          <label class="calc-row" for="l_rate"><span>대출 금리</span><span class="calc-in"><input id="l_rate" inputmode="decimal" value=""><span class="unit">%</span></span></label>
+          <label class="calc-row" for="l_years"><span>상환 기간</span><span class="calc-in"><input id="l_years" inputmode="numeric" value="30"><span class="unit">년</span></span></label>
+          <div class="calc-foot"><button type="button" class="chip" id="lsReset">초기화</button><span class="muted">원리금균등 상환 기준</span></div>
+        </form>
+        <div class="kpis" id="lsOut"></div>
+        <div class="sec" id="lsNotes"></div>
+
+        <form class="calc" id="mv" autocomplete="off" style="margin-top:14px">
+          <p class="calc-intro"><b>갈아타기</b>: 지금 집을 팔고 더 비싼 집으로 옮길 때 더 필요한 돈입니다. 기본값은 예시입니다.</p>
+          <label class="calc-row" for="m_cur"><span>지금 집 시세</span><span class="calc-in"><input id="m_cur" inputmode="numeric" value="100000"><span class="unit">만원</span></span></label>
+          <label class="calc-row" for="m_debt"><span>지금 집 남은 대출</span><span class="calc-in"><input id="m_debt" inputmode="numeric" value="30000"><span class="unit">만원</span></span></label>
+          <label class="calc-row" for="m_cash"><span>따로 모은 현금</span><span class="calc-in"><input id="m_cash" inputmode="numeric" value="0"><span class="unit">만원</span></span></label>
+          <label class="calc-row" for="m_target"><span>목표 집 매매가</span><span class="calc-in"><input id="m_target" inputmode="numeric" value="150000"><span class="unit">만원</span></span></label>
+          <label class="calc-row" for="m_tjeonse"><span>목표 집 전세가</span><span class="calc-in"><input id="m_tjeonse" inputmode="numeric" value="80000"><span class="unit">만원</span></span></label>
+          <label class="calc-row" for="m_rent"><span>분리 시 내가 낼 월세</span><span class="calc-in"><input id="m_rent" inputmode="numeric" value="150"><span class="unit">만원</span></span></label>
+          <div class="calc-foot"><button type="button" class="chip" id="mvReset">초기화</button><span class="muted">금리·기간은 위 값을 씀</span></div>
+        </form>
+        <div class="kpis" id="mvOut"></div>
+        <div class="sec" id="mvNotes"></div>
+      </div>
+    </section>
   </div>
 
   <footer class="foot">
@@ -715,6 +749,78 @@ const Calc = {
       + '같은 급지 안에서는 신축 대단지·재건축 기대 표시가 있는 곳을 먼저 보여줍니다(미래가치는 급지를 바꾸지 않는다). 주담대 상한은 수도권·규제지역 기준이고 실제 한도는 LTV·DSR 과 중 작은 값입니다.';
   }
   if (window.calcPrice) fromCalc(); else draw();
+})();
+
+/* ⑧ 실거주 vs 거주·투자 분리(I2, 📖 p.33~44, p.293~294), 갈아타기(I3, 📖 1.5배 p.436~438, p.441).
+   I2 검증: 종잣돈 4억·매매 10억·전세 6억 → 실거주 대출 6억 원리금 월 약 304만, 분리는 대출 0 + 월세 95만 (📖 p.36 "300만 vs 95만").
+   두 방식 모두 같은 집을 사므로 부대비용은 월 지출 비교에서 빼고 따로 보여 준다(책 예시와 같은 방식).
+   분리 방식(전세 낀 매수)은 서울 전역·경기 12곳 토지거래허가구역에서 막혀 있다(2025-10-15 대책, 2026-05 유예 확대도 갭투자 허용 아님) → 경고만 붙이고 계산은 한다.
+   갈아타기 재개발 시나리오는 정비사업 데이터(H5) 전이라 뺐다. 세금은 1주택 기준(분리 갈아타기도 지금 집을 팔아 1주택 유지 가정), 양도세는 1주택 비과세 가정 */
+const Move = {
+  // I2: 실거주 = 매매가 − 종잣돈 만큼 대출, 분리 = (매매가 − 전세가) + 월세 보증금 − 종잣돈 이 모자라면 대출(만원)
+  live(seed, price, jeonse, rent, deposit, rate, years) {
+    const loanOwn = Math.max(0, price - seed);
+    const loanSplit = Math.max(0, price - jeonse + deposit - seed);
+    const payOwn = Calc.payment(loanOwn * 10000, rate, years) / 10000;
+    const paySplit = Calc.payment(loanSplit * 10000, rate, years) / 10000;
+    return { loanOwn, loanSplit, payOwn, paySplit, monthOwn: payOwn, monthSplit: paySplit + rent, costs: Calc.costs(price) };
+  },
+  // I3: 지금 집을 판 돈(− 매도 중개보수 − 남은 대출) + 현금으로 목표 집 + 부대비용
+  move(cur, debt, cash, target, tjeonse, rent, rate, years) {
+    const net = cur - Calc.brokerFee(cur) - debt + cash;
+    const need = target + Calc.costs(target);
+    const loanOwn = Math.max(0, need - net);
+    const loanSplit = Math.max(0, need - tjeonse - net);
+    return { net, need, ratio: cur > 0 ? target / cur : 0, loanOwn, loanSplit, spare: Math.max(0, net - (need - tjeonse)),
+             payOwn: Calc.payment(loanOwn * 10000, rate, years) / 10000, paySplit: Calc.payment(loanSplit * 10000, rate, years) / 10000 + rent };
+  },
+};
+(function () {
+  const $v = (id) => { const x = parseFloat(String($(id).value).replace(/,/g, '')); return isFinite(x) ? x : 0; };
+  const man = (v) => Math.abs(v) >= 10000 ? (v / 10000).toFixed(2).replace(/\.?0+$/, '') + '억' : Math.round(v).toLocaleString() + '만';
+  const rateSig = (D.signals || {}).g3_mortgage_rate;
+  const IDS = ['l_seed', 'l_price', 'l_jeonse', 'l_rent', 'l_deposit', 'l_income', 'l_rate', 'l_years', 'm_cur', 'm_debt', 'm_cash', 'm_target', 'm_tjeonse', 'm_rent'];
+  const defaults = Object.fromEntries(IDS.map(k => [k, $('#' + k).value]));
+  defaults.l_rate = rateSig && rateSig.value != null ? Number(rateSig.value).toFixed(2) : '4.5';
+  $('#l_rate').value = defaults.l_rate;
+  const KEY = 'hc-move';
+  try { const saved = JSON.parse(localStorage.getItem(KEY) || 'null'); if (saved) for (const k of IDS) if (saved[k] != null) $('#' + k).value = saved[k]; } catch (e) {}
+  const P = (ps) => ps.map(n => `<p class="muted" style="margin:0">${n}</p>`).join('');
+  const TOH = '분리(전세 끼고 사기)는 지금 서울 전역과 경기 12곳(토지거래허가구역)에서 막혀 있습니다. 허가구역에서는 4개월 안에 들어가 2년 살아야 하고, 2026년 5월 유예 확대도 갭투자를 허용한 것은 아닙니다. 허가구역 밖이거나 규제가 풀릴 때를 위한 계산입니다.';
+  function draw() {
+    try { localStorage.setItem(KEY, JSON.stringify(Object.fromEntries(IDS.map(k => [k, $('#' + k).value])))); } catch (e) {}
+    const rate = $v('#l_rate'), yrs = Math.max(1, $v('#l_years')), inc = $v('#l_income');
+    const r = Move.live($v('#l_seed'), $v('#l_price'), $v('#l_jeonse'), $v('#l_rent'), $v('#l_deposit'), rate, yrs);
+    $('#lsOut').innerHTML = `
+      <div class="kpi"><span class="k">실거주 월 지출</span><span class="v">${man(r.monthOwn)}</span><span class="d">대출 ${man(r.loanOwn)} 원리금</span></div>
+      <div class="kpi"><span class="k">분리 월 지출</span><span class="v">${man(r.monthSplit)}</span><span class="d">${r.loanSplit > 0 ? `대출 ${man(r.loanSplit)} 원리금 ${man(r.paySplit)} + ` : ''}월세 ${man($v('#l_rent'))}</span></div>
+      <div class="kpi"><span class="k">매달 차이</span><span class="v">${man(Math.abs(r.monthOwn - r.monthSplit))}</span><span class="d">${r.monthOwn >= r.monthSplit ? '분리가 덜 듦' : '실거주가 덜 듦'}</span></div>
+      <div class="kpi"><span class="k">부대비용 (두 방식 같음)</span><span class="v">${man(r.costs)}</span><span class="d">취득세·중개보수·법무사·이사, 위 비교에서 뺌</span></div>`;
+    const ns = [];
+    if (inc > 0) {
+      const ok = r.monthOwn <= inc * 0.3;
+      ns.push(`실거주 원리금 ${man(r.monthOwn)}은 세후 월소득 ${man(inc)}의 <b>${(r.monthOwn / inc * 100).toFixed(0)}%</b>. 작가 기준 30% 이내(📖 p.474) ${ok ? '→ <b>실거주로 감당 가능</b>' : '→ <b>넘음, 분리 쪽이 맞음</b>'}. 📖 종잣돈보다 소득이 넉넉하면 최대 대출 실거주, 소득보다 종잣돈이 많으면 전세를 지렛대로 쓰는 분리(p.293~294).`);
+    } else ns.push('세후 월소득을 넣으면 작가 기준(원리금 ≤ 세후 소득 30%, 📖 p.474)으로 어느 쪽이 맞는지 알려 줍니다.');
+    ns.push(`분리는 종잣돈으로 매매가와 전세가의 차이(${man(Math.max(0, $v('#l_price') - $v('#l_jeonse')))})${$v('#l_deposit') ? '와 월세 보증금' : ''}을 내는 방식입니다. 전세가가 내려가면 돌려줄 돈이 모자랄 수 있습니다(역전세, 📖 대비금 전세가의 10% p.153 = ${man($v('#l_jeonse') * 0.1)}).`);
+    ns.push(TOH);
+    $('#lsNotes').innerHTML = P(ns);
+
+    const m = Move.move($v('#m_cur'), $v('#m_debt'), $v('#m_cash'), $v('#m_target'), $v('#m_tjeonse'), $v('#m_rent'), rate, yrs);
+    $('#mvOut').innerHTML = `
+      <div class="kpi"><span class="k">목표 ÷ 지금 집</span><span class="v">${m.ratio.toFixed(2)}배</span><span class="d">${m.ratio >= 1.5 ? '1.5배 이상 — 갈아탈 만함' : '<b>1.5배 미만 — 거래비용에 묻힘</b>'}</span></div>
+      <div class="kpi"><span class="k">쓸 수 있는 돈</span><span class="v">${man(m.net)}</span><span class="d">판 돈 − 매도 중개보수 − 남은 대출 + 현금</span></div>
+      <div class="kpi"><span class="k">실거주로 갈아타기</span><span class="v">대출 ${man(m.loanOwn)}</span><span class="d">월 원리금 ${man(m.payOwn)}</span></div>
+      <div class="kpi"><span class="k">분리로 갈아타기</span><span class="v">${m.loanSplit > 0 ? '대출 ' + man(m.loanSplit) : '대출 없음'}</span><span class="d">월 ${man(m.paySplit)}(월세 포함)${m.spare > 0 ? ` · 남는 돈 ${man(m.spare)}` : ''}</span></div>`;
+    $('#mvNotes').innerHTML = P([
+      `📖 갈아타기는 최소 1.5배. 1.2배는 취득세·중개보수 같은 거래비용으로 상쇄되는 돈 낭비이고, 같은 단지·동네 안 수평 이동은 하지 않는다(p.436~438). 목표 집 부대비용 ${man(m.need - $v('#m_target'))}을 넣어 계산했습니다.`,
+      '📖 갈아탈 때는 두 집의 가격 차이가 줄어든 때를 노린다(상승 초반엔 비싼 집이 먼저 올라 벌어지고, 후반에 좁혀진다 p.438~439). 격차 추이(E6)는 아직 만들지 않았습니다.',
+      `세금은 1주택 기준입니다(지금 집을 팔고 사므로 1주택 유지, 양도세는 1주택 비과세 가정). 먼저 사고 나중에 파는 일시적 2주택은 처분 기한이 바뀌는 중(조정대상지역 3년 → 2년)이라 넣지 않았습니다. 재개발로 갈아타기는 정비사업 데이터를 붙인 뒤에 추가합니다. ${TOH}`,
+    ]);
+  }
+  for (const f of ['#ls', '#mv']) { $(f).addEventListener('input', draw); $(f).addEventListener('submit', (e) => e.preventDefault()); }
+  $('#lsReset').addEventListener('click', () => { for (const k of IDS.filter(k => k.startsWith('l_'))) $('#' + k).value = defaults[k]; draw(); });
+  $('#mvReset').addEventListener('click', () => { for (const k of IDS.filter(k => k.startsWith('m_'))) $('#' + k).value = defaults[k]; draw(); });
+  draw();
 })();
 
 /* ② 오늘의 실거래 */
