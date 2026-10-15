@@ -15,11 +15,11 @@ def _db():
     db = PsqlDb(URL)
     db.query("DROP TABLE IF EXISTS deal_events, deals, rent_events, rents, snapshot_runs, rent_monthly, archive_cells, complex_metrics, "
              "macro_monthly, deal_anchor, deal_region_month, region_phase, market_signals, rone_weekly, rone_regions, complexes, kapt_complexes, "
-             "adm_dong, adm_adjacent, lifezone, presale CASCADE;")
+             "adm_dong, adm_adjacent, lifezone, presale, ipju_plan CASCADE;")
     for m in ("0001_deals.sql", "0005_snapshot_runs.sql", "0006_rents.sql", "0007_rent_archive.sql", "0010_metrics.sql",
               "0009_rone_weekly.sql", "0011_market.sql", "0012_macro.sql", "0013_macro_annual.sql", "0014_complex_phase.sql", "0015_quadrant_strength.sql",
               "0016_reverse_real.sql", "0008_complexes.sql", "0019_deal_anchor.sql", "0020_turnover_e3.sql",
-              "0022_complex_geo.sql", "0023_adm_dong.sql", "0030_lifezone.sql", "0031_e2.sql", "0032_e4_e5_e7.sql", "0034_presale.sql", "0035_presale_total.sql"):
+              "0022_complex_geo.sql", "0023_adm_dong.sql", "0030_lifezone.sql", "0031_e2.sql", "0032_e4_e5_e7.sql", "0034_presale.sql", "0035_presale_total.sql", "0037_ipju_plan.sql"):
         db.query((ROOT / "db" / "migrations" / m).read_text(encoding="utf-8"))
     return db
 
@@ -219,3 +219,24 @@ def test_metrics_f1():
     assert (a["f1_zone_24m"], a["f1_sgg_24m"]) == (1700, 2000)          # 2026-10 ~ 2028-09: 다음 800 + 작은 100 (+ 옆생활권 300 은 시군구만)
     assert a["f1_ipju"] == "입주중(2026.06, 500세대)"                  # 2026-05 ~ 2026-10 입주
     assert a["f1_next"] == "다음(2027.03, 1600세대)"
+
+
+def test_metrics_f1_plan():
+    """한국부동산원 입주 예정 물량이 다루는 달(2026-07~2027-06)은 그 표만, 범위 밖 달은 청약홈."""
+    if not URL:
+        return
+    db = _db()
+    db.query("INSERT INTO complexes (apt_seq, apt_name, region_code, umd_name, updated_at, lifezone_id) VALUES ('A', 'a', '11680', '역삼동', '2026-10-01', 'Z1');")
+    for d in ("2026-09-01", "2026-10-01"):
+        _deal(db, "A", d, 100000)
+    db.query("INSERT INTO presale (house_no, name, address, households, move_in_ym, region_code, lifezone_id, updated, total_hh) VALUES "
+             "('p1', '청약홈안', 'x', 100, '202703', '11680', 'Z1', '2026-10-12', 230), "      # 부동산원 범위 안 → 무시
+             "('p2', '청약홈밖', 'x', 300, '202801', '11680', 'Z1', '2026-10-12', NULL);")    # 범위 밖 → 사용
+    db.query("INSERT INTO ipju_plan (name, address, area, kind, households, move_in_ym, region_code, lifezone_id, file_name, loaded) VALUES "
+             "('부동산원', 'x', '서울', '분양임대', 3064, '202703', '11680', 'Z1', 'f', '2026-10-12'), "
+             "('지난입주', 'x', '서울', '분양', 500, '202607', '11680', 'Z1', 'f', '2026-10-12'), "
+             "('끝', 'x', '서울', '임대', 10, '202706', '11680', 'Z2', 'f', '2026-10-12');")
+    db.query(render(TODAY, 4000))
+    a = select(db, "SELECT * FROM complex_metrics WHERE apt_seq = 'A'")[0]
+    assert (a["f1_zone_24m"], a["f1_sgg_24m"]) == (3364, 3374)
+    assert a["f1_ipju"] == "지난입주(2026.07, 500세대)" and a["f1_next"] == "부동산원(2027.03, 3064세대)"

@@ -125,3 +125,48 @@ def total_households(rows: list[dict], matched: dict[str, tuple[int, str]]) -> t
         else:
             out[h] = (r["households"], "공급")
     return ratio, out
+
+
+# 한국부동산원 주택공급정보 입주 예정 물량 (공공데이터포털 15111714, 반기마다 새 파일, 2026-10-16 확인: 2026-06-30 기준
+# 2026-07~2028-06 입주, 칸 입주예정월·지역·사업유형·주소·아파트명·세대수). 세대수는 조합원·임대 포함 총 세대(부동산원·R114 공표)
+PLAN_FILE = "15111714"
+SIDO = {"서울특별시": "서울", "경기도": "경기", "인천광역시": "인천"}
+
+
+def parse_plan(text: str) -> list[dict]:
+    import csv
+    import io
+    out = []
+    for r in csv.DictReader(io.StringIO(text)):
+        if (r.get("지역") or "").strip() not in AREAS:
+            continue
+        ym = (r.get("입주예정월") or "").replace("-", "").strip()
+        try:
+            hh = int(float(r.get("세대수") or 0))
+        except ValueError:
+            continue
+        if not re.fullmatch(r"20\d{2}(0[1-9]|1[0-2])", ym) or hh <= 0:
+            continue
+        out.append({"name": (r.get("아파트명") or "").strip(), "address": (r.get("주소") or "").strip(), "area": r["지역"].strip(),
+                    "kind": (r.get("사업유형") or "").strip(), "households": hh, "move_in_ym": ym})
+    return out
+
+
+def locate(addr: str, dong_index: dict, regions: dict) -> tuple[str | None, str | None]:
+    """주소 → (시군구 코드, 생활권). dong_index: (시도 약칭, 법정동 이름) → Counter((region_code, lifezone_id)).
+    법정동 이름은 '반포동'처럼 한 낱말이거나 '동탄면 영천리'처럼 두 낱말. 시군구 이름(특례시 → 시)이 주소에 있는 것만."""
+    a = re.sub(r"특례시", "시", addr or "")
+    toks = a.split()
+    if not toks or toks[0] not in SIDO:
+        return None, None
+    sd = SIDO[toks[0]]
+    for i in range(1, len(toks)):
+        for j in (i + 2, i + 1):
+            hit = dong_index.get((sd, " ".join(toks[i:j])))
+            if not hit:
+                continue
+            ok = [(k, n) for k, n in hit.items() if all(t in a for t in regions.get(k[0], "").split()[1:])]
+            if ok:
+                (rc, z), _ = max(ok, key=lambda x: x[1])
+                return rc, z
+    return None, None

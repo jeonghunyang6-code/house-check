@@ -15,10 +15,14 @@ import sys
 import time
 import urllib.parse
 import urllib.request
+from collections import Counter
 
 from collector.db import Db, DbError, connect, lit, select
 from collector.infra import dist_m
-from collector.presale import AREAS, address_candidates, match_complex, parse_item, total_households
+from collector.presale import (AREAS, PLAN_FILE, address_candidates, locate, match_complex, name_overlap, parse_item, parse_plan,
+                              total_households)
+from collector.datagokr_file import CaptchaRequired, DownloadError, download
+from collector.regions import REGIONS
 from collector.sgis import Sgis, SgisError
 
 URL = "https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancDetail"
@@ -98,7 +102,43 @@ def run(db: Db, geo_limit: int) -> int:
             print(f"  좌표 {i}/{len(todo)} {geo_n}", flush=True)
     left = select(db, "SELECT count(*) AS n FROM presale WHERE geo_method IS NULL")[0]["n"]
     print(f"  공고 {len(rows)}건 저장, 이번에 좌표 {geo_n}, 남은 {left}건")
-    return link_totals(db) or react(db)
+    return link_totals(db) or react(db) or load_plan(db, None)
+
+
+def load_plan(db: Db, path: str | None) -> int:
+    """한국부동산원 입주 예정 물량 파일 → ipju_plan (전부 바꿔 넣는다). 생활권은 이름이 맞는 청약홈 공고(🔧 4글자+, 입주월 ±12개월,
+    같은 시군구)의 것, 없으면 같은 법정동 단지들의 다수 생활권."""
+    try:
+        name, data = (os.path.basename(path), open(path, "rb").read()) if path else download(PLAN_FILE)
+    except (CaptchaRequired, DownloadError) as e:
+        print(f"  입주 예정 물량 파일 실패: {e}", file=sys.stderr)
+        return 2
+    rows = parse_plan(data.decode("utf-8-sig", "replace"))
+    idx: dict = {}
+    for c in select(db, "SELECT region_code, umd_name, lifezone_id FROM complexes WHERE umd_name IS NOT NULL AND lifezone_id IS NOT NULL"):
+        sd = REGIONS.get(c["region_code"], " ").split()[0]
+        idx.setdefault((sd, c["umd_name"]), Counter())[(c["region_code"], c["lifezone_id"])] += 1
+    ps = select(db, "SELECT name, move_in_ym, region_code, lifezone_id FROM presale WHERE lifezone_id IS NOT NULL")
+    ym = lambda x: int(x[:4]) * 12 + int(x[4:6])
+    by = Counter()
+    for r in rows:
+        rc, z = locate(r["address"], idx, REGIONS)
+        best = max((p for p in ps if (rc is None or p["region_code"] == rc) and abs(ym(p["move_in_ym"]) - ym(r["move_in_ym"])) <= 12),
+                   key=lambda p: name_overlap(p["name"], r["name"]), default=None)
+        if best and name_overlap(best["name"], r["name"]) >= 4:
+            r.update(region_code=best["region_code"], lifezone_id=best["lifezone_id"], locate_by="presale")
+        else:
+            r.update(region_code=rc, lifezone_id=z, locate_by="dong" if rc else None)
+        by[r["locate_by"]] += 1
+    today = time.strftime("%Y-%m-%d")
+    vals = [f"({lit(r['name'])}, {lit(r['address'])}, {lit(r['area'])}, {lit(r['kind'])}, {r['households']}, {lit(r['move_in_ym'])}, "
+            f"{lit(r['region_code'])}, {lit(r['lifezone_id'])}, {lit(r['locate_by'])}, {lit(name)}, {lit(today)})" for r in rows]
+    db.query("BEGIN;\nDELETE FROM ipju_plan;\n" + "".join(
+        "INSERT INTO ipju_plan (name, address, area, kind, households, move_in_ym, region_code, lifezone_id, locate_by, file_name, loaded) VALUES "
+        + ", ".join(vals[i:i + 500]) + ";\n" for i in range(0, len(vals), 500)) + "COMMIT;")
+    span = (min(r["move_in_ym"] for r in rows), max(r["move_in_ym"] for r in rows)) if rows else None
+    print(f"  입주 예정 물량({name}): 수도권 {len(rows)}개 단지 {sum(r['households'] for r in rows):,}세대, {span}, 위치 {dict(by)}")
+    return 0
 
 
 def react(db: Db) -> int:
@@ -143,12 +183,13 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--db", choices=["api", "psql"])
     ap.add_argument("--geo-limit", type=int, default=1500, help="이번에 좌표를 찾을 공고 수 (SGIS 약 1초/건)")
-    ap.add_argument("--link-only", action="store_true", help="API 없이 총 세대 보정 + 과거 입주 반응만 (DB 만 필요)")
+    ap.add_argument("--link-only", action="store_true", help="API 없이 총 세대 보정 + 과거 입주 반응 + 입주 예정 물량 (DB 만 필요)")
+    ap.add_argument("--plan-file", help="입주 예정 물량 파일을 미리 받아 둔 경로 (없으면 공공데이터포털에서 받음)")
     a = ap.parse_args(argv)
     t0 = time.monotonic()
     try:
         db = connect(a.db)
-        rc = (link_totals(db) or react(db)) if a.link_only else run(db, a.geo_limit)
+        rc = (link_totals(db) or react(db) or load_plan(db, a.plan_file)) if a.link_only else run(db, a.geo_limit)
     except (DbError, OSError, KeyError) as e:
         print(f"[presale] 실패: {type(e).__name__} {e}", file=sys.stderr)
         rc = 1

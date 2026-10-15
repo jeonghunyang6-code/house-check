@@ -1,5 +1,8 @@
 from collector.infra import dist_m
-from collector.presale import address_candidates, match_complex, month_add, name_overlap, parse_item, total_households
+from collections import Counter
+
+from collector.presale import (address_candidates, locate, match_complex, month_add, name_overlap, parse_item, parse_plan,
+                               total_households)
 
 
 def test_parse_item():
@@ -39,3 +42,16 @@ def test_match_and_total():
     ratio, tot = total_households(rows, matched)
     assert ratio == 2.75 and tot["new"] == (550, "추정 ×2.75") and tot["plain"] == (300, "공급") and tot["h0"] == (250, "K-apt")
     assert tot["h0b"] == (0, "중복") and tot["h1b"] == (0, "중복")      # 취소분 이름, 같은 단지 두 번째 공고
+
+
+def test_parse_plan_and_locate():
+    text = ("입주예정월,지역,사업유형,주소,아파트명,세대수\n2027-12,서울,분양임대,서울특별시 서초구 반포동 810-0,반포디에이치클래스트,5007\n"
+            "2026-12,강원,분양,강원특별자치도 강릉시 견소동 219-0,강릉,561\n2027-01,경기,분양,경기도 화성특례시 동탄구 영천동 1-1,동탄,900\n")
+    rows = parse_plan(text)
+    assert [(r["name"], r["move_in_ym"], r["households"], r["kind"]) for r in rows] == [
+        ("반포디에이치클래스트", "202712", 5007, "분양임대"), ("동탄", "202701", 900, "분양")]
+    idx = {("서울", "반포동"): Counter({("11650", "Z9"): 5, ("11650", "Z8"): 2}), ("경기", "영천동"): Counter({("41597", "Z3"): 1})}
+    regions = {"11650": "서울 서초구", "41597": "경기 화성시 동탄구"}
+    assert locate(rows[0]["address"], idx, regions) == ("11650", "Z9")
+    assert locate(rows[1]["address"], idx, regions) == ("41597", "Z3")        # 특례시 → 시
+    assert locate("서울특별시 강남구 반포동 1", idx, regions) == (None, None)   # 시군구가 다르면 아님
