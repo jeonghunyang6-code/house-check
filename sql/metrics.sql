@@ -245,4 +245,83 @@ WITH b AS (
 UPDATE complex_metrics m SET e2_ratio = round(e.ratio::numeric, 3), e2_n = e.n, e2_basis = e.basis
 FROM e WHERE m.apt_seq = e.apt_seq AND m.area_group = e.area_group AND e.ratio IS NOT NULL;
 
+-- 6) E4 한계 시세 (📖 하급지 84㎡ 천장 = 상급지 59㎡ 가격, 상급지가 오르면 천장도 오른다 p.217~219, p.228).
+--    ① 84㎡(면적군 80~89) 행: E3 비교 단지들의 59㎡(55~64) 기준 시세 중앙값 = 천장. 2026-10-16 전체로 보면 84 ÷ 천장 중앙값 0.99
+--    ② 단지 안 평형 압축 (📖 예: 24평 11억 / 32평 13억 / 42평 14억 p.231): 최근 1년 중개 거래로 59(55~64)·84(80~89)·대형(100~135)
+--       각 🔧 2건 이상일 때 (대형-84 ㎡당 추가 가격) ÷ (84-59 ㎡당 추가 가격). 작을수록 큰 평형 값이 덜 붙음. 작가 예는 약 0.5,
+--       경계 숫자는 없어 🔧 기준선 없이 값만 (2026-10-16 중앙값 약 0.6이라 예시 수준이 흔하다)
+WITH c AS (
+  SELECT a.apt_seq, a.area_group, percentile_cont(0.5) WITHIN GROUP (ORDER BY o.ref_10k) AS cap, count(DISTINCT o.apt_seq) AS n
+  FROM complex_metrics a JOIN complex_metrics o ON o.apt_seq = ANY(string_to_array(a.e3_seqs, ','))
+    AND o.area_group BETWEEN 55 AND 64 AND o.ref_10k IS NOT NULL
+  WHERE a.area_group BETWEEN 80 AND 89 AND a.e3_seqs IS NOT NULL
+  GROUP BY 1, 2
+)
+UPDATE complex_metrics m SET e4_cap_10k = round(c.cap)::int, e4_cap_n = c.n
+FROM c WHERE m.apt_seq = c.apt_seq AND m.area_group = c.area_group;
+
+WITH d AS (
+  SELECT apt_seq, CASE WHEN area_m2 >= 55 AND area_m2 < 65 THEN 's' WHEN area_m2 >= 80 AND area_m2 < 90 THEN 'm'
+    WHEN area_m2 >= 100 AND area_m2 <= 135 THEN 'l' END AS k, area_m2, price_10k
+  FROM deals WHERE NOT is_cancelled AND deal_type = '중개' AND contract_date > {TODAY} - 365
+), g AS (
+  SELECT apt_seq,
+    percentile_cont(0.5) WITHIN GROUP (ORDER BY price_10k) FILTER (WHERE k = 's') AS ps, percentile_cont(0.5) WITHIN GROUP (ORDER BY area_m2) FILTER (WHERE k = 's') AS as_,
+    percentile_cont(0.5) WITHIN GROUP (ORDER BY price_10k) FILTER (WHERE k = 'm') AS pm, percentile_cont(0.5) WITHIN GROUP (ORDER BY area_m2) FILTER (WHERE k = 'm') AS am,
+    percentile_cont(0.5) WITHIN GROUP (ORDER BY price_10k) FILTER (WHERE k = 'l') AS pl, percentile_cont(0.5) WITHIN GROUP (ORDER BY area_m2) FILTER (WHERE k = 'l') AS al
+  FROM d WHERE k IS NOT NULL GROUP BY 1
+  HAVING count(*) FILTER (WHERE k = 's') >= 2 AND count(*) FILTER (WHERE k = 'm') >= 2 AND count(*) FILTER (WHERE k = 'l') >= 2
+), e AS (
+  SELECT apt_seq, ((pl - pm) / (al - am)) / ((pm - ps) / (am - as_)) AS k,
+    format('%s㎡ %s억 / %s㎡ %s억 / %s㎡ %s억', floor(as_), round((ps / 1e4)::numeric, 1), floor(am), round((pm / 1e4)::numeric, 1),
+      floor(al), round((pl / 1e4)::numeric, 1)) AS sizes
+  FROM g WHERE pm > ps AND am > as_ AND al > am
+)
+UPDATE complex_metrics m SET e4_compress = round(greatest(least(e.k, 99), -99)::numeric, 3), e4_sizes = e.sizes
+FROM e WHERE m.apt_seq = e.apt_seq;
+
+-- 7) E5·E7 생활권 단위 (lifezone 표). 최근 1년 중개 거래, 단지별 ㎡당 중앙가.
+--    E5 (📖 대형 평형 평당가는 눌린다, 비싼 지역일수록 소형·대형 평당가가 비슷 p.247~250, p.468):
+--       단지별 (전용 100~135 ㎡당) ÷ (75~100 ㎡당), 각 🔧 2건 이상. 생활권 중앙값, 🔧 단지 3곳 이상
+--    E7 (📖 신축 5천 → 준신축 4천 → 구축 3천 p.56, 2016년 이후 표준 p.467): 준공 5년 이내 / 6~15년 / 16년+,
+--       전용 40~135, 단지 🔧 2건 이상. 구간별 단지 중앙가의 중앙값, 🔧 구간에 단지 2곳 이상일 때만
+UPDATE lifezone SET e5_ratio = NULL, e5_n = NULL, e7_new_ppm = NULL, e7_mid_ppm = NULL, e7_old_ppm = NULL, e7_n = NULL;
+
+WITH d AS (
+  SELECT d.apt_seq, x.lifezone_id AS z, d.area_m2, d.price_10k / d.area_m2 AS ppm
+  FROM deals d JOIN complexes x USING (apt_seq)
+  WHERE NOT d.is_cancelled AND d.deal_type = '중개' AND d.contract_date > {TODAY} - 365 AND x.lifezone_id IS NOT NULL
+), c AS (
+  SELECT apt_seq, z,
+    percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm) FILTER (WHERE area_m2 >= 75 AND area_m2 < 100) AS p30,
+    percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm) FILTER (WHERE area_m2 >= 100 AND area_m2 <= 135) AS p40
+  FROM d GROUP BY 1, 2
+  HAVING count(*) FILTER (WHERE area_m2 >= 75 AND area_m2 < 100) >= 2 AND count(*) FILTER (WHERE area_m2 >= 100 AND area_m2 <= 135) >= 2
+), e AS (
+  SELECT z, percentile_cont(0.5) WITHIN GROUP (ORDER BY p40 / p30) AS r, count(*) AS n FROM c GROUP BY 1 HAVING count(*) >= 3
+)
+UPDATE lifezone l SET e5_ratio = round(e.r::numeric, 3), e5_n = e.n FROM e WHERE l.zone_id = e.z;
+
+WITH d AS (
+  SELECT d.apt_seq, x.lifezone_id AS z, x.build_year, d.price_10k / d.area_m2 AS ppm
+  FROM deals d JOIN complexes x USING (apt_seq)
+  WHERE NOT d.is_cancelled AND d.deal_type = '중개' AND d.area_m2 BETWEEN 40 AND 135 AND d.contract_date > {TODAY} - 365
+    AND x.lifezone_id IS NOT NULL AND x.build_year IS NOT NULL
+), c AS (
+  SELECT apt_seq, z, CASE WHEN extract(year FROM {TODAY}) - max(build_year) <= 5 THEN 'new'
+    WHEN extract(year FROM {TODAY}) - max(build_year) <= 15 THEN 'mid' ELSE 'old' END AS k,
+    percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm) AS p
+  FROM d GROUP BY 1, 2 HAVING count(*) >= 2
+), e AS (
+  SELECT z, count(*) FILTER (WHERE k = 'new') AS nn, count(*) FILTER (WHERE k = 'mid') AS nm, count(*) FILTER (WHERE k = 'old') AS no,
+    percentile_cont(0.5) WITHIN GROUP (ORDER BY p) FILTER (WHERE k = 'new') AS pn,
+    percentile_cont(0.5) WITHIN GROUP (ORDER BY p) FILTER (WHERE k = 'mid') AS pm,
+    percentile_cont(0.5) WITHIN GROUP (ORDER BY p) FILTER (WHERE k = 'old') AS po
+  FROM c GROUP BY 1
+)
+UPDATE lifezone l SET e7_new_ppm = CASE WHEN e.nn >= 2 THEN round(e.pn::numeric, 1) END,
+  e7_mid_ppm = CASE WHEN e.nm >= 2 THEN round(e.pm::numeric, 1) END, e7_old_ppm = CASE WHEN e.no >= 2 THEN round(e.po::numeric, 1) END,
+  e7_n = e.nn || '/' || e.nm || '/' || e.no
+FROM e WHERE l.zone_id = e.z;
+
 COMMIT;
