@@ -348,10 +348,45 @@ def run_hospital(db: Db) -> int:
     return 0
 
 
+CLOSED = ("폐점", "예정")   # 이름에 이 말이 있으면 문을 닫았거나 아직 안 연 곳
+
+
+def run_mart(db: Db, path: str | None) -> int:
+    """대형마트 TSV(place_id, 이름, 위도, 경도, 브랜드; 입지톡 커넥터로 모은 카카오 '대형마트 > 브랜드') → mart, 단지별 가장 가까운 곳."""
+    if not path or not os.path.exists(path):
+        print("  --file 로 대형마트 TSV 를 넘겨야 한다 (커넥터로 모은 것, 저장소에 두지 않음)", file=sys.stderr)
+        return 2
+    marts, seen = [], set()
+    for line in open(path, encoding="utf-8"):
+        pid, name, lat, lng, brand = line.rstrip("\n").split("\t")
+        if pid in seen or any(w in name for w in CLOSED):
+            continue
+        seen.add(pid)
+        marts.append({"id": pid, "name": name, "brand": brand, "lat": float(lat), "lng": float(lng)})
+    today = time.strftime("%Y-%m-%d")
+    cx = select(db, "SELECT apt_seq, lat, lng FROM complexes WHERE lat IS NOT NULL")
+    vals = []
+    for c in cx:
+        m, d = nearest(float(c["lat"]), float(c["lng"]), marts)
+        vals.append(f"({lit(c['apt_seq'])}, {lit(m['name'] if m else None)}, {d if d is not None else 'NULL'}::int)")
+    stmts = ["BEGIN;", "DELETE FROM mart;",
+             "INSERT INTO mart (place_id, name, brand, lat, lng, collected) VALUES " + ", ".join(
+                 f"({lit(m['id'])}, {lit(m['name'])}, {lit(m['brand'])}, {m['lat']}, {m['lng']}, {lit(today)})" for m in marts) + ";"]
+    for i in range(0, len(vals), 1000):
+        stmts.append("UPDATE complexes AS c SET mart_name = v.n, mart_m = v.d "
+                     f"FROM (VALUES {', '.join(vals[i:i + 1000])}) AS v(a, n, d) WHERE c.apt_seq = v.a;")
+    stmts.append("COMMIT;")
+    db.query("\n".join(stmts))
+    near = sum(1 for v in vals if "NULL::int" not in v)
+    print(f"  대형마트 {len(marts)}곳, 좌표 단지 {len(cx)}개 중 5km 안 {near}개")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("mode", choices=["stations", "schoolzone", "midzone", "academy", "hospital"])
+    ap.add_argument("mode", choices=["stations", "schoolzone", "midzone", "academy", "hospital", "mart"])
     ap.add_argument("--dir", help="stations: 미리 받아 둔 st_<번호>.csv 폴더")
+    ap.add_argument("--file", help="mart: 대형마트 TSV")
     ap.add_argument("--db", choices=["api", "psql"])
     a = ap.parse_args(argv)
     t0 = time.monotonic()
@@ -359,7 +394,7 @@ def main(argv: list[str] | None = None) -> int:
         db = connect(a.db)
         rc = {"stations": lambda: run_stations(db, a.dir), "schoolzone": lambda: run_schoolzone(db),
               "midzone": lambda: run_midzone(db),
-              "academy": lambda: run_academy(db), "hospital": lambda: run_hospital(db)}[a.mode]()
+              "academy": lambda: run_academy(db), "hospital": lambda: run_hospital(db), "mart": lambda: run_mart(db, a.file)}[a.mode]()
     except DbError as e:
         print(f"[infra] DB 오류: {e}", file=sys.stderr)
         rc = 1
