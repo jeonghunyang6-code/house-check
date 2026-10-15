@@ -3,7 +3,8 @@
     python -m jobs.presale
 
 api.odcloud.kr·SGIS 는 이 클라우드 세션에서 막혀 있어 Actions(presale.yml)에서 돈다. 좌표는 새 공고만 SGIS 로 찾고(지번 → 동),
-시군구·생활권은 가장 가까운 단지(🔧 3km 안)에서 가져온다.
+시군구·생활권은 가장 가까운 단지(🔧 3km 안)에서 가져온다. 공고를 먼저 저장하고 좌표는 100건씩 저장해, 중간에 끊기면 다음 실행이 잇는다.
+주소가 바뀐 공고만 좌표를 다시 찾는다. 단지 생활권이 다시 만들어지면(lifezone) 생활권 연결은 다음 좌표 찾기 때까지 옛 값이다.
 """
 
 from __future__ import annotations
@@ -47,57 +48,56 @@ def fetch(area: str, key: str) -> list[dict]:
         page += 1
 
 
-def run(db: Db) -> int:
+def run(db: Db, geo_limit: int) -> int:
     key = os.environ["DATA_GO_KR_SERVICE_KEY"]
     rows = {}
     for area in AREAS:
         got = [p for p in (parse_item(it) for it in fetch(area, key)) if p]
         rows.update({p["house_no"]: p for p in got})
         print(f"  {area}: 공고 {len(got)}건", flush=True)
-    have = {r["house_no"]: r for r in select(db, "SELECT house_no, lat, lng, geo_method FROM presale")}
+    today = time.strftime("%Y-%m-%d")
+    vals = [f"({lit(p['house_no'])}, {lit(p['name'])}, {lit(p['address'])}, {lit(p['area'])}, {p['households']}, {lit(p['move_in_ym'])}, "
+            f"{lit(p['notice_date'])}, {lit(p['house_type'])}, {lit(today)})" for p in rows.values()]
+    stmts = ["BEGIN;"]
+    for i in range(0, len(vals), 500):     # 공고부터 저장 (좌표는 아래에서 나눠 채운다)
+        stmts.append("INSERT INTO presale (house_no, name, address, area, households, move_in_ym, notice_date, house_type, updated) VALUES "
+                     + ", ".join(vals[i:i + 500]) + " ON CONFLICT (house_no) DO UPDATE SET name = EXCLUDED.name, households = EXCLUDED.households, "
+                     "move_in_ym = EXCLUDED.move_in_ym, updated = EXCLUDED.updated, "
+                     "geo_method = CASE WHEN presale.address = EXCLUDED.address THEN presale.geo_method END, address = EXCLUDED.address;")
+    stmts.append("COMMIT;")
+    db.query("\n".join(stmts))
+    todo = select(db, f"SELECT house_no, address FROM presale WHERE geo_method IS NULL ORDER BY move_in_ym DESC LIMIT {int(geo_limit)}")
     sg = Sgis()
+    cx = [(float(c["lat"]), float(c["lng"]), c["region_code"], c["lifezone_id"])
+          for c in select(db, "SELECT lat, lng, region_code, lifezone_id FROM complexes WHERE lat IS NOT NULL")]
     geo_n = {"jibun": 0, "dong": 0, "none": 0}
-    for p in rows.values():
-        h = have.get(p["house_no"])
-        if h and h["geo_method"]:
-            p.update(lat=h["lat"], lng=h["lng"], geo_method=h["geo_method"])
-            continue
-        p.update(lat=None, lng=None, geo_method="none")
-        for method, addr in address_candidates(p["address"]):
+    batch = []
+    for i, p in enumerate(todo, 1):
+        lat = lng = rc = z = None
+        method = "none"
+        for m, addr in address_candidates(p["address"]):
             try:
                 hit = sg.geocode(addr)
             except SgisError:
                 hit = None
             if hit and hit.get("x") and hit.get("y"):
-                p.update(lat=float(hit["y"]), lng=float(hit["x"]), geo_method=method)
+                lat, lng, method = float(hit["y"]), float(hit["x"]), m
                 break
-        geo_n[p["geo_method"]] += 1
-    cx = [(float(c["lat"]), float(c["lng"]), c["region_code"], c["lifezone_id"])
-          for c in select(db, "SELECT lat, lng, region_code, lifezone_id FROM complexes WHERE lat IS NOT NULL")]
-    for p in rows.values():
-        p["region_code"] = p["lifezone_id"] = None
-        if p["lat"] is None:
-            continue
-        near = [c for c in cx if abs(c[0] - p["lat"]) < 0.03 and abs(c[1] - p["lng"]) < 0.04]
-        if near:
-            d, c = min((dist_m(p["lat"], p["lng"], c[0], c[1]), c) for c in near)
-            if d <= NEAR_M:
-                p["region_code"], p["lifezone_id"] = c[2], c[3]
-    today = time.strftime("%Y-%m-%d")
-    vals = [f"({lit(p['house_no'])}, {lit(p['name'])}, {lit(p['address'])}, {lit(p['area'])}, {p['households']}, {lit(p['move_in_ym'])}, "
-            f"{lit(p['notice_date'])}, {lit(p['house_type'])}, {lit(p['lat'])}, {lit(p['lng'])}, {lit(p['geo_method'])}, "
-            f"{lit(p['region_code'])}, {lit(p['lifezone_id'])}, {lit(today)})" for p in rows.values()]
-    stmts = ["BEGIN;"]
-    for i in range(0, len(vals), 500):
-        stmts.append("INSERT INTO presale (house_no, name, address, area, households, move_in_ym, notice_date, house_type, lat, lng, geo_method, "
-                     "region_code, lifezone_id, updated) VALUES " + ", ".join(vals[i:i + 500]) +
-                     " ON CONFLICT (house_no) DO UPDATE SET name = EXCLUDED.name, address = EXCLUDED.address, households = EXCLUDED.households, "
-                     "move_in_ym = EXCLUDED.move_in_ym, lat = EXCLUDED.lat, lng = EXCLUDED.lng, geo_method = EXCLUDED.geo_method, "
-                     "region_code = EXCLUDED.region_code, lifezone_id = EXCLUDED.lifezone_id, updated = EXCLUDED.updated;")
-    stmts.append("COMMIT;")
-    db.query("\n".join(stmts))
-    linked = sum(1 for p in rows.values() if p["region_code"])
-    print(f"  공고 {len(rows)}건 저장, 새로 좌표 찾기 {geo_n}, 시군구 연결 {linked}건")
+        if lat is not None:
+            near = [c for c in cx if abs(c[0] - lat) < 0.03 and abs(c[1] - lng) < 0.04]
+            if near:
+                d, c = min((dist_m(lat, lng, c[0], c[1]), c) for c in near)
+                if d <= NEAR_M:
+                    rc, z = c[2], c[3]
+        geo_n[method] += 1
+        batch.append(f"UPDATE presale SET lat = {lit(lat)}, lng = {lit(lng)}, geo_method = {lit(method)}, region_code = {lit(rc)}, "
+                     f"lifezone_id = {lit(z)} WHERE house_no = {lit(p['house_no'])};")
+        if len(batch) >= 100 or i == len(todo):
+            db.query("BEGIN;\n" + "\n".join(batch) + "\nCOMMIT;")
+            batch.clear()
+            print(f"  좌표 {i}/{len(todo)} {geo_n}", flush=True)
+    left = select(db, "SELECT count(*) AS n FROM presale WHERE geo_method IS NULL")[0]["n"]
+    print(f"  공고 {len(rows)}건 저장, 이번에 좌표 {geo_n}, 남은 {left}건")
     return 0
 
 
@@ -105,10 +105,11 @@ def main(argv: list[str] | None = None) -> int:
     import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument("--db", choices=["api", "psql"])
+    ap.add_argument("--geo-limit", type=int, default=1500, help="이번에 좌표를 찾을 공고 수 (SGIS 약 1초/건)")
     a = ap.parse_args(argv)
     t0 = time.monotonic()
     try:
-        rc = run(connect(a.db))
+        rc = run(connect(a.db), a.geo_limit)
     except (DbError, OSError, KeyError) as e:
         print(f"[presale] 실패: {type(e).__name__} {e}", file=sys.stderr)
         rc = 1

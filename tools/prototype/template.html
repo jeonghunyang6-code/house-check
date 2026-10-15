@@ -566,6 +566,15 @@ $('#notice').innerHTML = `<b>데이터 범위</b><span>서울 실거래는 2020�
     mrow('주담대 금리 (G3)', S.g3_mortgage_rate, M.mortgage_rate, '%', S.g3_mortgage_rate ? num(S.g3_mortgage_rate.value, 2) + '%' : '–'),
     mrow('가계대출 증가율 (G4)', S.g4_household_loans, hl.length > 13 ? yoy(hl) : null, '%', S.g4_household_loans ? '+' + num(S.g4_household_loans.value, 2) + '%' : '–'),
     mrow('실업률 (G5)', S.g5_unemployment, M.unemployment_sa, '%', S.g5_unemployment ? num(S.g5_unemployment.value, 1) + '%' : '–'),
+    (() => {   // G6 경매 낙찰가율: 기사 2건 이상이 같은 값일 때만 확정한 달만 있다(빈 달 있음)
+      const A = D.auction || {}, se = A['서울'] || [];
+      if (!se.length) return mrow('서울 아파트 경매 낙찰가율 (G6)', null, null, '%', '–');
+      const mi = (ym) => +ym.slice(0, 4) * 12 + +ym.slice(4) - 1, last = se[se.length - 1];
+      const prev = se.filter(p => mi(p[0]) <= mi(last[0]) - 3).pop();   // 3개월 전(그 달이 없으면 그 전 확정값)
+      const st = prev ? (last[1] > prev[1] ? '상승' : last[1] < prev[1] ? '하락' : '보합') : '판정 보류';
+      const others = ['경기', '인천', '전국'].map(k => (A[k] || []).length ? `${k} ${A[k][A[k].length - 1][1].toFixed(1)}%(${A[k][A[k].length - 1][0].slice(4)}월)` : '').filter(Boolean).join(', ');
+      return mrow('서울 아파트 경매 낙찰가율 (G6)', { state: st, detail: `${last[0].slice(0, 4)}년 ${+last[0].slice(4)}월 ${last[1].toFixed(1)}%${prev ? `, 3개월 전 ${prev[1].toFixed(1)}%보다 ${st}` : ''}. ${others ? '최근 확정값: ' + others + '. ' : ''}📖 낙찰가율이 오르면 상승장 초입, 내리면 하락·보합(p.160~161). 🔧 3개월 전과 비교. 출처: 지지옥션 월간 경매동향 보도(네이버 뉴스 검색 요약문, 기사 2건 이상 같은 값만).` }, se, '%', last[1].toFixed(1) + '%');
+    })(),
   ].join('') + '<p class="src">주담대 금리: 예금은행 신규취급액 기준, ▶ 3~5% 심리적 한계·7%면 체감이 완전히 다르다. 가계대출: 예금취급기관 잔액 전년비, ▶ 증가율 둔화 → 거래 감소(🔧 3개월 전보다 낮으면 둔화). 실업률: 계절조정, 📖 4% 경기침체·6% 경제 위기(p.143~144). 금리는 단독 판정에 쓰지 않는다(📖 p.48~49). 출처: 한국은행 ECOS, 통계청 KOSIS.</p>';
 })();
 
@@ -917,6 +926,13 @@ function drawCx(c) {
   if (c.e3 && c.e3.length) notes.push(`바로 위 급지 비교(E3): ${c.e3.join(', ')}. 목표 시세 ${eok(c.m.e3_target_10k)} (비교 단지 ㎡당 기준 시세 × 이 면적, 📖 미래 시세 = 바로 위 급지 현재 시세 p.358~359)`
     + (c.m.rel_strength_e3 != null ? `. 12개월 변화 비교 단지 ${(+c.m.e3_chg_12m).toFixed(1)}% 대비 ${(+c.m.rel_strength_e3 > 0 ? '+' : '') + (+c.m.rel_strength_e3).toFixed(1)}%p` : '')
     + '. 🔧 같은 생활권 또는 5km 안(한강 같은 쪽)에서 ㎡당 10~40% 비싼 단지 중 같은 생활권 먼저, 가까운 3곳.');
+  if (c.m && (c.m.f1_zone_24m != null || c.m.f1_sgg_24m)) {
+    const m = c.m;
+    notes.push(`입주 물량(F1): 앞으로 24개월 같은 생활권 ${m.f1_zone_24m != null ? `<b>${Number(m.f1_zone_24m).toLocaleString()}세대</b>` : '–'}, 같은 시군구 ${Number(m.f1_sgg_24m || 0).toLocaleString()}세대`
+      + (m.f1_next ? ` (가장 큰 입주: ${m.f1_next})` : '') + '. '
+      + (m.f1_ipju ? `<b>지금 입주장</b>: ${m.f1_ipju} — 📖 입주 시작 후 5~6개월은 전세·매매가 눌린다(p.55). ` : '같은 생활권에 지금 입주장 없음. ')
+      + '청약홈 공급 세대 기준이라 재건축·재개발 조합원 몫은 빠져 실제 입주보다 적다.');
+  }
   if (c.acc && c.acc.h2_cbd_min != null) {
     const a = c.acc, f = (m, t) => m == null ? '–' : `<b>${m}분</b>${t ? ` (환승 ${t})` : ' (직통)'}`;
     notes.push(`업무지구 접근(H2): 사대문 ${f(a.h2_cbd_min, a.h2_cbd_tr)} · 여의도 ${f(a.h2_ybd_min, a.h2_ybd_tr)} · 강남 ${f(a.h2_gbd_min, a.h2_gbd_tr)}. `

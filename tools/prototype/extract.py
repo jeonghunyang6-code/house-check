@@ -56,7 +56,8 @@ out['cx_rent'] = select(db, f"""SELECT apt_seq, contract_month m, area_group, n_
  FROM rent_monthly WHERE apt_seq IN ({sl}) AND area_group IN (84,85) ORDER BY contract_month""")
 out['cx_phase'] = select(db, f"""SELECT apt_seq, area_group, phase, chg_12m, up_months, down_months, last3, region_chg_12m, rel_strength,
  jeonse_10k, jeonse_24m_10k, jeonse_24m_n, reverse_risk, reserve_10k, real_ref_10k, base2020_10k, real_chg_2020,
- households, turnover_pct, turnover_state, e3_seqs, e3_target_10k, e3_chg_12m, rel_strength_e3, e2_ratio, e2_n, e2_basis, e4_cap_10k, e4_cap_n, e4_compress, e4_sizes
+ households, turnover_pct, turnover_state, e3_seqs, e3_target_10k, e3_chg_12m, rel_strength_e3, e2_ratio, e2_n, e2_basis, e4_cap_10k, e4_cap_n, e4_compress, e4_sizes,
+ f1_zone_24m, f1_sgg_24m, f1_ipju, f1_next
  FROM complex_metrics WHERE apt_seq IN ({sl}) AND area_group IN (84,85)""")
 out['e3_names'] = select(db, f"""SELECT apt_seq, apt_name FROM complexes WHERE apt_seq IN (
  SELECT unnest(string_to_array(e3_seqs, ',')) FROM complex_metrics WHERE apt_seq IN ({sl}) AND area_group IN (84,85))""")
@@ -88,6 +89,8 @@ out['rone_series'] = select(db, """SELECT stat, cls_id, week_date::text d, value
 out['signals'] = select(db, "SELECT key, asof::text asof, value, state, detail FROM market_signals")
 out['macro'] = select(db, """SELECT series, period, value FROM macro_monthly
  WHERE period >= to_char(now() - interval '26 months', 'YYYYMM') ORDER BY series, period""")
+out['auction'] = select(db, """SELECT period_month, area_code, sale_ratio, source_url FROM auction_stats
+ WHERE source = 'ggi_news' AND use_type = '아파트' ORDER BY period_month""")
 # G. 유동성·소득·집값 (G1): 2005년부터 전체
 out['g1'] = select(db, """SELECT series, period, value FROM macro_monthly
  WHERE series IN ('m2', 'household_income', 'apt_kb_nat', 'apt_kb_seoul', 'base_rate') AND period >= '2004' ORDER BY series, period""")
