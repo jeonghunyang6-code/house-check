@@ -55,7 +55,7 @@ out['cx_deals'].sort(key=lambda r: r['cd'])
 out['cx_rent'] = select(db, f"""SELECT apt_seq, contract_month m, area_group, n_jeonse, jeonse_median_10k, n_jeonse_new, jeonse_new_median_10k, n_jeonse_renew
  FROM rent_monthly WHERE apt_seq IN ({sl}) AND area_group IN (84,85) ORDER BY contract_month""")
 out['cx_phase'] = select(db, f"""SELECT apt_seq, area_group, phase, pattern, chg_12m, up_months, down_months, last3, region_chg_12m, rel_strength,
- jeonse_10k, jeonse_n, jeonse_src, jeonse_24m_10k, jeonse_24m_n, reverse_risk, reserve_10k, real_ref_10k, base2020_10k, real_chg_2020,
+ jeonse_10k, jeonse_n, jeonse_src, jeonse_24m_10k, jeonse_24m_n, jeonse_24m_approx, reverse_risk, reserve_10k, real_ref_10k, base2020_10k, real_chg_2020,
  households, turnover_pct, turnover_state, e3_seqs, e3_target_10k, e3_chg_12m, rel_strength_e3, e2_ratio, e2_n, e2_basis, e4_cap_10k, e4_cap_n, e4_compress, e4_sizes,
  f1_zone_24m, f1_sgg_24m, f1_ipju, f1_next
  FROM complex_metrics WHERE apt_seq IN ({sl}) AND area_group IN (84,85)""")

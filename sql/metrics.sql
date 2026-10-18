@@ -115,13 +115,18 @@ rz AS (  -- B6: 같은 생활권(E0, jobs/lifezone.py) 판정 단지들의 12개
   SELECT x.lifezone_id, percentile_cont(0.5) WITHIN GROUP (ORDER BY ph.chg) AS zone_chg, count(*) AS zone_n
   FROM ph JOIN complexes x USING (apt_seq) WHERE x.lifezone_id IS NOT NULL GROUP BY 1
 ),
-j24 AS (  -- D3: 24개월 전 ±1개월 전세 계약. 원본이 보관 파일에 있어 월별 중앙값(rent_monthly)의 건수 가중 평균으로 근사
-  SELECT apt_seq, area_group,
-    sum(n_jeonse * jeonse_median_10k)::numeric / nullif(sum(n_jeonse) FILTER (WHERE jeonse_median_10k IS NOT NULL), 0) AS j24,
-    sum(n_jeonse) FILTER (WHERE jeonse_median_10k IS NOT NULL) AS n24
-  FROM rent_monthly
-  WHERE contract_month BETWEEN to_char({TODAY}::date - INTERVAL '25 months', 'YYYYMM') AND to_char({TODAY}::date - INTERVAL '23 months', 'YYYYMM')
-  GROUP BY 1, 2
+j24 AS (  -- D3: 24개월 전 ±1개월 전세 계약(신규·갱신). rent_j24(보관 파일 원본의 실제 중앙값, jobs/rent_archive.py)를 먼저 쓰고,
+          --     그 창의 값이 없으면 월별 중앙값(rent_monthly)의 건수 가중 평균으로 근사
+  SELECT apt_seq, area_group, coalesce(t.median_10k, a.j24) AS j24, CASE WHEN t.n IS NOT NULL THEN t.n ELSE a.n24 END AS n24
+  FROM (
+    SELECT apt_seq, area_group,
+      sum(n_jeonse * jeonse_median_10k)::numeric / nullif(sum(n_jeonse) FILTER (WHERE jeonse_median_10k IS NOT NULL), 0) AS j24,
+      sum(n_jeonse) FILTER (WHERE jeonse_median_10k IS NOT NULL) AS n24
+    FROM rent_monthly
+    WHERE contract_month BETWEEN to_char({TODAY}::date - INTERVAL '25 months', 'YYYYMM') AND to_char({TODAY}::date - INTERVAL '23 months', 'YYYYMM')
+    GROUP BY 1, 2) a
+  FULL JOIN (SELECT apt_seq, area_group, n, median_10k FROM rent_j24
+             WHERE from_month = to_char({TODAY}::date - INTERVAL '25 months', 'YYYYMM')) t USING (apt_seq, area_group)
 ),
 b20 AS (  -- A6: 2020년 1분기 중개 거래 중앙값 (수집 시작 시점)
   SELECT apt_seq, area_group, percentile_cont(0.5) WITHIN GROUP (ORDER BY price_10k) AS p20
@@ -173,6 +178,11 @@ SELECT apt_seq, area_group, {TODAY},
   round(p20)::int,
   CASE WHEN ref IS NOT NULL AND p20 > 0 AND cpi_now > 0 AND cpi_20 > 0 THEN round((((ref / cpi_now) / (p20 / cpi_20) - 1) * 100)::numeric, 1) END
 FROM d;
+
+UPDATE complex_metrics m SET jeonse_24m_approx = NOT EXISTS (
+  SELECT 1 FROM rent_j24 t WHERE t.apt_seq = m.apt_seq AND t.area_group = m.area_group
+    AND t.from_month = to_char({TODAY}::date - INTERVAL '25 months', 'YYYYMM'))
+WHERE jeonse_24m_10k IS NOT NULL;
 
 -- 3) C2 월 거래 회전율 (📖 0.5~0.8% = 꽤 괜찮은 거래량 p.137): 단지 단위라 모든 면적군에 같은 값.
 --    집계 끝난 달 = 지지난 달까지(신고 기한 30일), 최근 12개월 평균. 세대수는 K-apt (0008)

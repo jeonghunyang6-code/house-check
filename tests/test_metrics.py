@@ -15,11 +15,12 @@ def _db():
     db = PsqlDb(URL)
     db.query("DROP TABLE IF EXISTS deal_events, deals, rent_events, rents, snapshot_runs, rent_monthly, archive_cells, complex_metrics, "
              "macro_monthly, deal_anchor, deal_region_month, region_phase, market_signals, rone_weekly, rone_regions, complexes, kapt_complexes, "
-             "adm_dong, adm_adjacent, lifezone, presale, ipju_plan CASCADE;")
+             "adm_dong, adm_adjacent, lifezone, presale, ipju_plan, rent_j24 CASCADE;")
     for m in ("0001_deals.sql", "0005_snapshot_runs.sql", "0006_rents.sql", "0007_rent_archive.sql", "0010_metrics.sql",
               "0009_rone_weekly.sql", "0011_market.sql", "0012_macro.sql", "0013_macro_annual.sql", "0014_complex_phase.sql", "0015_quadrant_strength.sql",
               "0016_reverse_real.sql", "0008_complexes.sql", "0019_deal_anchor.sql", "0020_turnover_e3.sql",
-              "0022_complex_geo.sql", "0023_adm_dong.sql", "0030_lifezone.sql", "0031_e2.sql", "0032_e4_e5_e7.sql", "0034_presale.sql", "0035_presale_total.sql", "0037_ipju_plan.sql"):
+              "0022_complex_geo.sql", "0023_adm_dong.sql", "0030_lifezone.sql", "0031_e2.sql", "0032_e4_e5_e7.sql", "0034_presale.sql", "0035_presale_total.sql", "0037_ipju_plan.sql",
+              "0039_rent_j24.sql"):
         db.query((ROOT / "db" / "migrations" / m).read_text(encoding="utf-8"))
     return db
 
@@ -52,6 +53,10 @@ def test_metrics_end_to_end():
                  "deposit_10k, monthly_rent_10k, contract_type, used_renewal_right, last_seen_date, disappeared) "
                  f"VALUES ('r{i}', 'A', 'x', '11680', '202610', '2026-10-0{i + 1}', 84.9, {dep}, {rent}, '{typ}', FALSE, "
                  f"'2026-10-10', {gone});")
+    # D3 2년 전 전세: A 는 보관 파일 실제 중앙값(rent_j24) 85,000(3건), 근사(rent_monthly) 70,000 보다 우선. C 는 근사만
+    db.query("INSERT INTO rent_j24 VALUES ('A', 84, '202409', '202411', 3, 85000), ('A', 59, '202312', '202402', 5, 1);")
+    db.query("INSERT INTO rent_monthly VALUES ('A', 84, '202410', '11680', 'x', 4, 70000, 0, NULL, 4, 0, NULL, NULL, 0, 0), "
+             "('C', 84, '202410', '11680', 'x', 2, 60000, 0, NULL, 2, 0, NULL, NULL, 0, 0);")
     # B: 최근 거래 2건뿐 → 기준 시세 없음
     _deal(db, "B", "2026-10-01", 50000); _deal(db, "B", "2026-10-05", 51000)
     # C: 최근 60·90일엔 없고 100~180일 전 3건 → 180일 창, 신뢰도 낮음. 전고점 20억, 저점 10억, 현재 14억 → 회복 40% 지연
@@ -70,6 +75,8 @@ def test_metrics_end_to_end():
     assert b["ref_10k"] is None and b["pattern"] is None and b["jeonse_ratio"] is None
     assert (c["ref_10k"], c["ref_days"], c["confidence"], c["pattern"], float(c["recovery"])) == (140000, 180, "낮음", "회복 지연", 0.4)
     assert c["no_rebound"] is False
+    assert (a["jeonse_24m_10k"], a["jeonse_24m_n"], a["reverse_risk"], a["jeonse_24m_approx"]) == (85000, 3, True, False)
+    assert (c["jeonse_24m_10k"], c["jeonse_24m_n"], c["jeonse_24m_approx"]) == (60000, 2, True)
     # 전고점: 18억 거래 직전 최고가는 17억 (직거래 999,999 와 해제 990,000 은 제외)
     ph = {r["price_10k"]: r["prev_high_10k"] for r in select(db, "SELECT price_10k, prev_high_10k FROM deals WHERE apt_seq = 'A'")}
     assert ph[180000] == 170000 and ph[160000] == 150000 and ph[150000] in (None, 150000)

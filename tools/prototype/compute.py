@@ -78,7 +78,7 @@ for seq in d['seqs']:
     ratio = J / C * 100 if (J and C) else None
     cx.append({'grade': gr and gr['grade'] is not None and {k: gr[k] for k in ('umd_name', 'grade', 'value_10k', 'q1_10k', 'q3_10k', 'n_complex', 'old_share', 'flag_rebuild', 'flag_gap', 'new_big_name', 'new_big_10k', 'asof')},
                'hh': gr and gr['households'],
-               'm': m84 and {k: m84[k] for k in ('jeonse_24m_10k', 'jeonse_24m_n', 'reverse_risk', 'reserve_10k', 'real_ref_10k', 'base2020_10k', 'real_chg_2020',
+               'm': m84 and {k: m84.get(k) for k in ('jeonse_24m_10k', 'jeonse_24m_n', 'jeonse_24m_approx', 'reverse_risk', 'reserve_10k', 'real_ref_10k', 'base2020_10k', 'real_chg_2020',
                'turnover_pct', 'turnover_state', 'e3_target_10k', 'e3_chg_12m', 'rel_strength_e3', 'e2_ratio', 'e2_n', 'e2_basis', 'e4_cap_10k', 'e4_cap_n', 'e4_compress', 'e4_sizes', 'f1_zone_24m', 'f1_sgg_24m', 'f1_ipju', 'f1_next')},
                'acc': next(({k: z[k] for k in ('station_name', 'station_m', 'h2_cbd_min', 'h2_cbd_tr', 'h2_ybd_min', 'h2_ybd_tr', 'h2_gbd_min', 'h2_gbd_tr')} for z in d.get('cx_access', []) if z['apt_seq'] == seq), None),
                'zone': next(({k: z[k] for k in ('name', 'e5_ratio', 'e5_n', 'e7_new_ppm', 'e7_mid_ppm', 'e7_old_ppm', 'e7_n', 'f1_react_rel', 'f1_react_n')} for z in d.get('cx_zone', []) if z['apt_seq'] == seq), None),
