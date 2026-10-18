@@ -58,8 +58,9 @@ def test_summarize_counts():
 def _db():
     db = PsqlDb(URL)
     db.query("DROP TABLE IF EXISTS deal_events, deals, rent_events, rents, snapshot_runs, rent_monthly, "
-             "archive_cells CASCADE;")
-    for m in ("0001_deals.sql", "0005_snapshot_runs.sql", "0006_rents.sql", "0007_rent_archive.sql"):
+             "archive_cells, rent_j24 CASCADE;")
+    for m in ("0001_deals.sql", "0005_snapshot_runs.sql", "0006_rents.sql", "0007_rent_archive.sql",
+              "0038_archive_recheck.sql"):
         db.query((ROOT / "db" / "migrations" / m).read_text(encoding="utf-8"))
     return db
 
@@ -107,3 +108,64 @@ def test_daily_rolls_old_month_to_file_and_deletes():
     assert select(db, "SELECT source FROM archive_cells")[0]["source"] == "db_rollover"
     assert select(db, "SELECT sum(n_jeonse + n_wolse) AS n FROM rent_monthly")[0]["n"] == 5
     assert daily(db, store, date(2026, 11, 4)) == 0  # 다시 돌려도 문제없다
+
+
+def test_recheck_rows_keeps_first_seen_adds_late_and_marks_gone():
+    from jobs.rent_archive import recheck_rows
+    rents = _rents()
+    old = [rent_to_row(k, "11680", "202601", x, "2026-01-20", "2026-02-28") for k, x in keyed(rents[:4]).items()]
+    got = rents[1:]  # 첫 건은 빠지고 마지막 건은 늦게 들어옴
+    rows, added, gone = recheck_rows(old, got, "11680", "202601", date(2026, 10, 18))
+    assert (added, gone) == (1, 1) and len(rows) == 6 - 1
+    by = {r["rent_key"]: r for r in rows}
+    assert sum(r["disappeared"] is True for r in rows) == 1
+    assert sum(r["first_seen_date"] == "2026-10-18" for r in rows) == 1
+    assert sum(r["first_seen_date"] == "2026-01-20" for r in by.values()) == 4
+    again, a2, g2 = recheck_rows(rows, got, "11680", "202601", date(2026, 10, 28))
+    assert (a2, g2) == (0, 0) and len(again) == len(rows)
+
+
+def test_recheck_updates_file_and_summary():
+    if not URL:
+        return
+    from jobs.daily import recheck_month
+    from jobs.rent_archive import recheck
+    db, store = _db(), LocalDirStore(tempfile.mkdtemp())
+    today = date(2026, 10, 18)
+    m = recheck_month(today)
+    rents = _rents()
+    assert backfill(db, store, ["11680"], [m], today, fetch=lambda c, mm: rents[:3]) == 0
+    assert recheck(db, store, today, fetch=lambda c, mm: rents) == 0
+    f = decode(store.get(asset_name("rent", m)))
+    assert len(f) == 5 and sum(r["first_seen_date"] == "2026-10-18" for r in f) == 2
+    assert select(db, "SELECT sum(n_jeonse + n_wolse) AS n FROM rent_monthly")[0]["n"] == 5
+    assert select(db, "SELECT source FROM archive_cells")[0]["source"] == "recheck"
+    assert recheck(db, store, today, fetch=lambda c, mm: []) == 0  # 빈 응답은 기존 유지
+    assert len(decode(store.get(asset_name("rent", m)))) == 5
+
+
+def test_j24_months_and_rows():
+    from jobs.rent_archive import j24_months, j24_rows
+    assert j24_months(date(2026, 10, 18)) == ["202409", "202410", "202411"]
+    assert j24_months(date(2026, 1, 3)) == ["202312", "202401", "202402"]
+    rows = _rows()
+    out = j24_rows(rows)
+    jeonse = [r for r in rows if int(r["monthly_rent_10k"]) == 0]
+    assert sum(x["n"] for x in out) == len(jeonse)
+    gone = [dict(r, disappeared="1") if r is jeonse[0] else r for r in rows]
+    assert sum(x["n"] for x in j24_rows(gone)) == len(jeonse) - 1
+
+
+def test_refresh_j24_writes_table():
+    if not URL:
+        return
+    from jobs.rent_archive import refresh_j24
+    db, store = _db(), LocalDirStore(tempfile.mkdtemp())
+    db.query((ROOT / "db" / "migrations" / "0039_rent_j24.sql").read_text(encoding="utf-8").split("ALTER TABLE complex_metrics")[0])
+    today = date(2026, 10, 18)
+    assert refresh_j24(db, store, today) == 0          # 파일 없음 → 건너뜀
+    for m in ("202409", "202410", "202411"):
+        store.put(asset_name("rent", m), encode(_rows(month=m)))
+    assert refresh_j24(db, store, today) == 0
+    got = select(db, "SELECT sum(n) AS n, min(from_month) AS fm, max(to_month) AS tm FROM rent_j24")[0]
+    assert (got["fm"], got["tm"]) == ("202409", "202411") and got["n"] > 0

@@ -3,18 +3,24 @@ BEGIN;
 
 -- 1) 최근 계약 거래의 전고점 (ARCHITECTURE 4.3: 이전 계약일의 중개·비해제 최고가)
 --    DB 밖으로 보관한 과거 거래의 최고가(deal_anchor)와 합친다 (저장 구조 C, GREATEST 는 NULL 을 무시)
+--    최근 🔧 14일 안에 해제가 확인된 단지·면적군은 기간과 상관없이 모두 다시 계산한다(해제된 거래가 전고점으로 남지 않게,
+--    jobs/daily.py recheck_month 가 지난 1년 달을 돌아가며 다시 받는다)
 UPDATE deals d SET prev_high_10k = GREATEST((
   SELECT max(p.price_10k) FROM deals p
   WHERE p.apt_seq = d.apt_seq AND p.area_group = d.area_group AND p.contract_date < d.contract_date
     AND NOT p.is_cancelled AND p.deal_type = '중개'),
   (SELECT a.hist_high_10k FROM deal_anchor a WHERE a.apt_seq = d.apt_seq AND a.area_group = d.area_group))
-WHERE d.contract_date >= {TODAY} - {PREV_DAYS};
+WHERE d.contract_date >= {TODAY} - {PREV_DAYS}
+   OR (d.apt_seq, d.area_group) IN (
+     SELECT x.apt_seq, x.area_group FROM deal_events e JOIN deals x USING (deal_key)
+     WHERE e.event = 'cancelled' AND e.event_date >= {TODAY} - 14);
 
 -- 2) 단지 × 면적군 지표
 DELETE FROM complex_metrics;
 INSERT INTO complex_metrics
-WITH base AS (
-  SELECT apt_seq, area_group, contract_date, price_10k FROM deals WHERE NOT is_cancelled AND deal_type = '중개'
+WITH base AS (  -- 기준 시세용: 중개·비해제, 1층 제외 (📖 P1 "1층 제외, 중층 이상" 영상 1:33. 2026-10-18 실측 1층 약 8% 낮음)
+  SELECT apt_seq, area_group, contract_date, price_10k FROM deals
+  WHERE NOT is_cancelled AND deal_type = '중개' AND floor IS DISTINCT FROM 1
 ),
 a1 AS (
   SELECT apt_seq, area_group,
@@ -24,13 +30,15 @@ a1 AS (
     percentile_cont(0.5) WITHIN GROUP (ORDER BY price_10k) FILTER (WHERE contract_date > {TODAY} - 60)  AS m60,
     percentile_cont(0.5) WITHIN GROUP (ORDER BY price_10k) FILTER (WHERE contract_date > {TODAY} - 90)  AS m90,
     percentile_cont(0.5) WITHIN GROUP (ORDER BY price_10k) FILTER (WHERE contract_date > {TODAY} - 180) AS m180,
-    count(*) FILTER (WHERE contract_date > {TODAY} - 365) AS n_365,
-    max(contract_date) AS last_date
-  FROM base GROUP BY 1, 2
+    max(n_365) AS n_365, max(last_date) AS last_date
+  FROM base RIGHT JOIN (  -- 거래 수·마지막 거래일은 1층 포함
+    SELECT apt_seq, area_group, count(*) FILTER (WHERE contract_date > {TODAY} - 365) AS n_365, max(contract_date) AS last_date
+    FROM deals WHERE NOT is_cancelled AND deal_type = '중개' GROUP BY 1, 2) al USING (apt_seq, area_group)
+  GROUP BY 1, 2
 ),
 hi AS (  -- 역대 최고 = DB 구간 + 보관 구간(deal_anchor)
   SELECT DISTINCT ON (apt_seq, area_group) apt_seq, area_group, high_10k, high_date FROM (
-    SELECT apt_seq, area_group, price_10k AS high_10k, contract_date AS high_date FROM base
+    SELECT apt_seq, area_group, price_10k AS high_10k, contract_date AS high_date FROM deals WHERE NOT is_cancelled AND deal_type = '중개'
     UNION ALL SELECT apt_seq, area_group, hist_high_10k, hist_high_date FROM deal_anchor) x
   ORDER BY apt_seq, area_group, high_10k DESC, high_date
 ),
@@ -48,13 +56,13 @@ tr AS (
   SELECT DISTINCT ON (apt_seq, area_group) apt_seq, area_group, v AS trough, m AS trough_m
   FROM ref WHERE m >= DATE '2022-07-01' ORDER BY apt_seq, area_group, v, m
 ),
-js AS (  -- 당월·전월 전세 (rent_monthly 는 월별 중앙값이라 건수 가중 평균으로 근사)
+js AS (  -- 당월·전월 전세: DB 원본(rents)의 실제 중앙값. 신규가 있으면 신규, 없으면 전체(갱신·유형 공백 포함). 사라진 신고 제외
   SELECT apt_seq, area_group,
-    sum(n_jeonse_new * jeonse_new_median_10k)::numeric / nullif(sum(n_jeonse_new) FILTER (WHERE jeonse_new_median_10k IS NOT NULL), 0) AS jnew,
-    sum(n_jeonse_new) FILTER (WHERE jeonse_new_median_10k IS NOT NULL) AS nnew,
-    sum(n_jeonse * jeonse_median_10k)::numeric / nullif(sum(n_jeonse) FILTER (WHERE jeonse_median_10k IS NOT NULL), 0) AS jall,
-    sum(n_jeonse) FILTER (WHERE jeonse_median_10k IS NOT NULL) AS nall
-  FROM rent_monthly WHERE contract_month IN ({CUR_M}, {PREV_M}) GROUP BY 1, 2
+    percentile_cont(0.5) WITHIN GROUP (ORDER BY deposit_10k) FILTER (WHERE contract_type = '신규') AS jnew,
+    count(*) FILTER (WHERE contract_type = '신규') AS nnew,
+    percentile_cont(0.5) WITHIN GROUP (ORDER BY deposit_10k) AS jall, count(*) AS nall
+  FROM rents WHERE contract_month IN ({CUR_M}, {PREV_M}) AND monthly_rent_10k = 0 AND NOT disappeared
+  GROUP BY 1, 2
 ),
 c AS (
   -- B2 고점·저점: 보관 파일에서 계산한 값(deal_anchor)이 있으면 그것, 없으면 DB 의 거래로 계산한 값
@@ -107,13 +115,18 @@ rz AS (  -- B6: 같은 생활권(E0, jobs/lifezone.py) 판정 단지들의 12개
   SELECT x.lifezone_id, percentile_cont(0.5) WITHIN GROUP (ORDER BY ph.chg) AS zone_chg, count(*) AS zone_n
   FROM ph JOIN complexes x USING (apt_seq) WHERE x.lifezone_id IS NOT NULL GROUP BY 1
 ),
-j24 AS (  -- D3: 24개월 전 ±1개월 전세 계약 (건수 가중 근사)
-  SELECT apt_seq, area_group,
-    sum(n_jeonse * jeonse_median_10k)::numeric / nullif(sum(n_jeonse) FILTER (WHERE jeonse_median_10k IS NOT NULL), 0) AS j24,
-    sum(n_jeonse) FILTER (WHERE jeonse_median_10k IS NOT NULL) AS n24
-  FROM rent_monthly
-  WHERE contract_month BETWEEN to_char({TODAY}::date - INTERVAL '25 months', 'YYYYMM') AND to_char({TODAY}::date - INTERVAL '23 months', 'YYYYMM')
-  GROUP BY 1, 2
+j24 AS (  -- D3: 24개월 전 ±1개월 전세 계약(신규·갱신). rent_j24(보관 파일 원본의 실제 중앙값, jobs/rent_archive.py)를 먼저 쓰고,
+          --     그 창의 값이 없으면 월별 중앙값(rent_monthly)의 건수 가중 평균으로 근사
+  SELECT apt_seq, area_group, coalesce(t.median_10k, a.j24) AS j24, CASE WHEN t.n IS NOT NULL THEN t.n ELSE a.n24 END AS n24
+  FROM (
+    SELECT apt_seq, area_group,
+      sum(n_jeonse * jeonse_median_10k)::numeric / nullif(sum(n_jeonse) FILTER (WHERE jeonse_median_10k IS NOT NULL), 0) AS j24,
+      sum(n_jeonse) FILTER (WHERE jeonse_median_10k IS NOT NULL) AS n24
+    FROM rent_monthly
+    WHERE contract_month BETWEEN to_char({TODAY}::date - INTERVAL '25 months', 'YYYYMM') AND to_char({TODAY}::date - INTERVAL '23 months', 'YYYYMM')
+    GROUP BY 1, 2) a
+  FULL JOIN (SELECT apt_seq, area_group, n, median_10k FROM rent_j24
+             WHERE from_month = to_char({TODAY}::date - INTERVAL '25 months', 'YYYYMM')) t USING (apt_seq, area_group)
 ),
 b20 AS (  -- A6: 2020년 1분기 중개 거래 중앙값 (수집 시작 시점)
   SELECT apt_seq, area_group, percentile_cont(0.5) WITHIN GROUP (ORDER BY price_10k) AS p20
@@ -165,6 +178,22 @@ SELECT apt_seq, area_group, {TODAY},
   round(p20)::int,
   CASE WHEN ref IS NOT NULL AND p20 > 0 AND cpi_now > 0 AND cpi_20 > 0 THEN round((((ref / cpi_now) / (p20 / cpi_20) - 1) * 100)::numeric, 1) END
 FROM d;
+
+-- 2-1) A1 자료 충분도 근거: 기준 시세 창 안 거래(1층 제외)의 가격 범위, 뺀 1층 건수
+UPDATE complex_metrics m SET ref_lo_10k = x.lo, ref_hi_10k = x.hi, ref_floor1_n = x.f1
+FROM (
+  SELECT d.apt_seq, d.area_group,
+    min(d.price_10k) FILTER (WHERE d.floor IS DISTINCT FROM 1) AS lo, max(d.price_10k) FILTER (WHERE d.floor IS DISTINCT FROM 1) AS hi,
+    count(*) FILTER (WHERE d.floor = 1) AS f1
+  FROM deals d JOIN complex_metrics c USING (apt_seq, area_group)
+  WHERE c.ref_days IS NOT NULL AND NOT d.is_cancelled AND d.deal_type = '중개' AND d.contract_date > {TODAY} - c.ref_days
+  GROUP BY 1, 2) x
+WHERE m.apt_seq = x.apt_seq AND m.area_group = x.area_group;
+
+UPDATE complex_metrics m SET jeonse_24m_approx = NOT EXISTS (
+  SELECT 1 FROM rent_j24 t WHERE t.apt_seq = m.apt_seq AND t.area_group = m.area_group
+    AND t.from_month = to_char({TODAY}::date - INTERVAL '25 months', 'YYYYMM'))
+WHERE jeonse_24m_10k IS NOT NULL;
 
 -- 3) C2 월 거래 회전율 (📖 0.5~0.8% = 꽤 괜찮은 거래량 p.137): 단지 단위라 모든 면적군에 같은 값.
 --    집계 끝난 달 = 지지난 달까지(신고 기한 30일), 최근 12개월 평균. 세대수는 K-apt (0008)
@@ -263,7 +292,7 @@ FROM c WHERE m.apt_seq = c.apt_seq AND m.area_group = c.area_group;
 WITH d AS (
   SELECT apt_seq, CASE WHEN area_m2 >= 55 AND area_m2 < 65 THEN 's' WHEN area_m2 >= 80 AND area_m2 < 90 THEN 'm'
     WHEN area_m2 >= 100 AND area_m2 <= 135 THEN 'l' END AS k, area_m2, price_10k
-  FROM deals WHERE NOT is_cancelled AND deal_type = '중개' AND contract_date > {TODAY} - 365
+  FROM deals WHERE NOT is_cancelled AND deal_type = '중개' AND floor IS DISTINCT FROM 1 AND contract_date > {TODAY} - 365
 ), g AS (
   SELECT apt_seq,
     percentile_cont(0.5) WITHIN GROUP (ORDER BY price_10k) FILTER (WHERE k = 's') AS ps, percentile_cont(0.5) WITHIN GROUP (ORDER BY area_m2) FILTER (WHERE k = 's') AS as_,
@@ -290,7 +319,7 @@ UPDATE lifezone SET e5_ratio = NULL, e5_n = NULL, e7_new_ppm = NULL, e7_mid_ppm 
 WITH d AS (
   SELECT d.apt_seq, x.lifezone_id AS z, d.area_m2, d.price_10k / d.area_m2 AS ppm
   FROM deals d JOIN complexes x USING (apt_seq)
-  WHERE NOT d.is_cancelled AND d.deal_type = '중개' AND d.contract_date > {TODAY} - 365 AND x.lifezone_id IS NOT NULL
+  WHERE NOT d.is_cancelled AND d.deal_type = '중개' AND d.floor IS DISTINCT FROM 1 AND d.contract_date > {TODAY} - 365 AND x.lifezone_id IS NOT NULL
 ), c AS (
   SELECT apt_seq, z,
     percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm) FILTER (WHERE area_m2 >= 75 AND area_m2 < 100) AS p30,
@@ -305,7 +334,7 @@ UPDATE lifezone l SET e5_ratio = round(e.r::numeric, 3), e5_n = e.n FROM e WHERE
 WITH d AS (
   SELECT d.apt_seq, x.lifezone_id AS z, x.build_year, d.price_10k / d.area_m2 AS ppm
   FROM deals d JOIN complexes x USING (apt_seq)
-  WHERE NOT d.is_cancelled AND d.deal_type = '중개' AND d.area_m2 BETWEEN 40 AND 135 AND d.contract_date > {TODAY} - 365
+  WHERE NOT d.is_cancelled AND d.deal_type = '중개' AND d.floor IS DISTINCT FROM 1 AND d.area_m2 BETWEEN 40 AND 135 AND d.contract_date > {TODAY} - 365
     AND x.lifezone_id IS NOT NULL AND x.build_year IS NOT NULL
 ), c AS (
   SELECT apt_seq, z, CASE WHEN extract(year FROM {TODAY}) - max(build_year) <= 5 THEN 'new'

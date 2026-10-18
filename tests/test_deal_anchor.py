@@ -1,9 +1,9 @@
 from collector.deal_anchor import anchors, region_months
 
 
-def _r(d, p, area="84.9", t="중개", c="0", seq="11-1"):
+def _r(d, p, area="84.9", t="중개", c="0", seq="11-1", fl="5"):
     return {"apt_seq": seq, "area_m2": area, "contract_date": d, "contract_month": d[:4] + d[5:7], "price_10k": str(p),
-            "deal_type": t, "is_cancelled": c, "region_code": "11680"}
+            "deal_type": t, "is_cancelled": c, "region_code": "11680", "floor": fl}
 
 
 def test_anchors_peak_trough_hist_p20():
@@ -11,7 +11,8 @@ def test_anchors_peak_trough_hist_p20():
             _r("2021-09-10", 100000), _r("2021-10-10", 120000),   # 3개월 창: 2021-10·11 = 110000, 2021-12 = 120000
             _r("2022-12-01", 80000),                               # 2022-12~2023-02 ref 80000
             _r("2023-03-01", 90000),
-            _r("2021-11-01", 999999, t="직거래"), _r("2021-11-02", 888888, c="1")]
+            _r("2021-11-01", 999999, t="직거래"), _r("2021-11-02", 888888, c="1"),
+            _r("2023-01-05", 10000, fl="1"), _r("2020-02-10", 1000, fl="1")]   # 1층은 기준 시세(trough·p20)에서 뺀다
     a = anchors(rows)
     assert len(a) == 1
     x = a[0]

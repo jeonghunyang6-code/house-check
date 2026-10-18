@@ -32,9 +32,10 @@ cx = []
 for seq in d['seqs']:
     deals = [r for r in d['cx_deals'] if r['apt_seq'] == seq]
     ok = [r for r in deals if not r['is_cancelled'] and r['deal_type'] == '중개']
+    okr = [r for r in ok if r['floor'] != 1]  # 기준 시세용: 1층 제외 (sql/metrics.sql base)
     name = deals[-1]['apt_name']
     bym = {}
-    for r in ok: bym.setdefault(r['cd'][:7].replace('-', ''), []).append(r['price_10k'])
+    for r in okr: bym.setdefault(r['cd'][:7].replace('-', ''), []).append(r['price_10k'])
     ref = []  # 3개월 이동 중앙값 (B1·B2 의 월별 기준 시세)
     for i, m in enumerate(ALL):
         win = sum((bym.get(x, []) for x in ALL[max(0, i - 2):i + 1]), [])
@@ -44,10 +45,15 @@ for seq in d['seqs']:
         return f(vs) if vs else None
     P, T = rng('202101', '202206', max), rng('202207', '202306', min)
     # A1 기준 시세: 최근 60일 중앙값, 3건 미만이면 90→180일
-    C = conf = None
+    C = conf = cdays = None
     for days, c in ((60, '높음'), (90, '보통'), (180, '낮음')):
-        w = [r['price_10k'] for r in ok if date.fromisoformat(r['cd']) > TODAY - timedelta(days=days)]
-        if len(w) >= 3: C, conf, cn = round(st.median(w)), c, len(w); break
+        w = [r['price_10k'] for r in okr if date.fromisoformat(r['cd']) > TODAY - timedelta(days=days)]
+        if len(w) >= 3: C, conf, cn, cdays = round(st.median(w)), c, len(w), days; break
+    # 자료 충분도 근거 (sql/metrics.sql 2-1): 창 안 가격 범위, 뺀 1층 건수, 마지막 거래일(1층 포함)
+    cwin = [r for r in ok if cdays and date.fromisoformat(r['cd']) > TODAY - timedelta(days=cdays)]
+    cspread = cdays and {'days': cdays, 'lo': min(r['price_10k'] for r in cwin if r['floor'] != 1),
+                         'hi': max(r['price_10k'] for r in cwin if r['floor'] != 1),
+                         'f1': sum(r['floor'] == 1 for r in cwin), 'last': max(r['cd'] for r in ok)}
     rec = (C - T) / (P - T) if (C and P and T and P > T) else None
     # B2 회복 패턴은 서버(sql/metrics.sql, 국면 조건 포함) 값을 그대로 쓴다. 위 P·T·rec 는 차트 표시용
     srv = [r for r in d.get('cx_phase', []) if r['apt_seq'] == seq and r['area_group'] in (84, 85) and r.get('pattern')]
@@ -61,10 +67,6 @@ for seq in d['seqs']:
     cur = [r for r in rents if r['m'] in ('202609', '202610')]
     new = [(r['n_jeonse_new'], r['jeonse_new_median_10k']) for r in cur if r['n_jeonse_new'] and r['jeonse_new_median_10k']]
     allj = [(r['n_jeonse'], r['jeonse_median_10k']) for r in cur if r['n_jeonse'] and r['jeonse_median_10k']]
-    src = new or allj
-    J = round(sum(n * v for n, v in src) / sum(n for n, _ in src)) if src else None
-    jn = sum(n for n, _ in src) if src else 0
-    ratio = J / C * 100 if (J and C) else None
     nb = band(C) if C else None
     n12 = sum(1 for r in ok if date.fromisoformat(r['cd']) > TODAY - timedelta(days=365))
     phs = [r for r in d.get('cx_phase', []) if r['apt_seq'] == seq and r['phase']]
@@ -72,15 +74,22 @@ for seq in d['seqs']:
     m84 = [r for r in d.get('cx_phase', []) if r['apt_seq'] == seq and r['area_group'] in (84, 85)]
     m84 = max(m84, key=lambda r: r['area_group'] == 84) if m84 else None
     gr = next((g for g in d.get('cx_grade', []) if g['apt_seq'] == seq), None)
+    if m84 and m84.get('jeonse_n'):  # 서버(sql/metrics.sql js)가 원본 계약으로 계산한 실제 중앙값
+        J, jn, jsrc, japprox = m84['jeonse_10k'], m84['jeonse_n'], m84['jeonse_src'], False
+    else:  # 서버 값이 없으면 월별 중앙값의 건수 가중 평균(근사)
+        src = new or allj
+        J = round(sum(n * v for n, v in src) / sum(n for n, _ in src)) if src else None
+        jn, jsrc, japprox = sum(n for n, _ in src) if src else 0, '신규' if new else '전체', True
+    ratio = J / C * 100 if (J and C) else None
     cx.append({'grade': gr and gr['grade'] is not None and {k: gr[k] for k in ('umd_name', 'grade', 'value_10k', 'q1_10k', 'q3_10k', 'n_complex', 'old_share', 'flag_rebuild', 'flag_gap', 'new_big_name', 'new_big_10k', 'asof')},
                'hh': gr and gr['households'],
-               'm': m84 and {k: m84[k] for k in ('jeonse_24m_10k', 'jeonse_24m_n', 'reverse_risk', 'reserve_10k', 'real_ref_10k', 'base2020_10k', 'real_chg_2020',
+               'm': m84 and {k: m84.get(k) for k in ('jeonse_24m_10k', 'jeonse_24m_n', 'jeonse_24m_approx', 'reverse_risk', 'reserve_10k', 'real_ref_10k', 'base2020_10k', 'real_chg_2020',
                'turnover_pct', 'turnover_state', 'e3_target_10k', 'e3_chg_12m', 'rel_strength_e3', 'e2_ratio', 'e2_n', 'e2_basis', 'e4_cap_10k', 'e4_cap_n', 'e4_compress', 'e4_sizes', 'f1_zone_24m', 'f1_sgg_24m', 'f1_ipju', 'f1_next')},
                'acc': next(({k: z[k] for k in ('station_name', 'station_m', 'h2_cbd_min', 'h2_cbd_tr', 'h2_ybd_min', 'h2_ybd_tr', 'h2_gbd_min', 'h2_gbd_tr')} for z in d.get('cx_access', []) if z['apt_seq'] == seq), None),
                'zone': next(({k: z[k] for k in ('name', 'e5_ratio', 'e5_n', 'e7_new_ppm', 'e7_mid_ppm', 'e7_old_ppm', 'e7_n', 'f1_react_rel', 'f1_react_n')} for z in d.get('cx_zone', []) if z['apt_seq'] == seq), None),
                'e3': m84 and m84['e3_seqs'] and [n['apt_name'] for n in d.get('e3_names', []) if n['apt_seq'] in m84['e3_seqs'].split(',')],
-               'phase': ph and {k: ph[k] for k in ('phase', 'chg_12m', 'up_months', 'down_months', 'last3', 'region_chg_12m', 'rel_strength')}, 'seq': seq, 'name': name, 'region': REG[seq[:5]], 'P': P, 'T': T, 'C': C, 'conf': conf, 'cn': cn if C else 0,
-               'rec': rec, 'pattern': pattern, 'J': J, 'jn': jn, 'jsrc': '신규' if new else '전체', 'ratio': ratio, 'band': nb,
+               'phase': ph and {k: ph[k] for k in ('phase', 'chg_12m', 'up_months', 'down_months', 'last3', 'region_chg_12m', 'rel_strength')}, 'seq': seq, 'name': name, 'region': REG[seq[:5]], 'P': P, 'T': T, 'C': C, 'conf': conf, 'cn': cn if C else 0, 'cs': cspread,
+               'rec': rec, 'pattern': pattern, 'J': J, 'jn': jn, 'jsrc': jsrc, 'japprox': japprox, 'ratio': ratio, 'band': nb,
                'n12': n12, 'ref': ref,
                'pts': [[r['cd'], r['price_10k'], r['floor']] for r in ok],
                'jser': jser})

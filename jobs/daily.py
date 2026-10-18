@@ -1,6 +1,8 @@
 """일일 실거래 스냅샷: 매매·전월세 (docs/ARCHITECTURE.md 4.1).
 
 매일 06:00 KST 에 수도권 시군구 × [당월, 전월] 을 받아 deals·rents / *_events / snapshot_runs 에 반영한다.
+매매는 여기에 2~11개월 전 달 중 하나를 날마다 돌아가며 더 받는다(recheck_month): 계약 몇 달 뒤 신고되는 해제가
+전고점·신고가에 남지 않도록, 지난 1년 안 모든 달을 10일에 한 번씩 다시 확인한다(시군구당 하루 1회 추가 호출).
 
     python -m jobs.daily                       # 수도권 전체, 매매+전월세, 당월·전월, DB 경로는 HC_DB_BACKEND (기본 api)
     python -m jobs.daily --regions seoul --kinds trade --db psql
@@ -35,6 +37,18 @@ def default_months(today: date) -> list[str]:
     return [today.strftime("%Y%m"), prev.strftime("%Y%m")]
 
 
+RECHECK_FROM, RECHECK_SPAN = 2, 10   # 🔧 2~11개월 전, 10일 주기
+
+
+def recheck_month(today: date) -> str:
+    """해제 재확인용으로 오늘 더 받을 지난달(2~11개월 전 중 하나, 날짜마다 돌아감)."""
+    k = RECHECK_FROM + today.toordinal() % RECHECK_SPAN
+    y, m = today.year, today.month - k
+    while m < 1:
+        y, m = y - 1, m + 12
+    return f"{y}{m:02d}"
+
+
 def parse_months(spec: str) -> list[str]:
     """'202609' | '202608,202609' | '202001-202512'"""
     out: list[str] = []
@@ -53,7 +67,7 @@ def parse_months(spec: str) -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--regions", default="sudogwon", help="sudogwon | seoul | gyeonggi | incheon | 5자리 코드 쉼표 목록")
-    ap.add_argument("--months", help="기본: KST 기준 당월·전월")
+    ap.add_argument("--months", help="기본: KST 기준 당월·전월 (매매는 해제 재확인용 지난달 하나 더)")
     ap.add_argument("--kinds", default="trade,rent", help="trade,rent 중 쉼표 목록")
     ap.add_argument("--skip-done", action="store_true", help="snapshot_runs 에 이미 있는 칸은 건너뛴다 (과거 이력 이어받기)")
     ap.add_argument("--db", choices=["api", "psql"], help="기본: HC_DB_BACKEND 또는 api")
@@ -68,15 +82,17 @@ def main(argv: list[str] | None = None) -> int:
     kinds = [KINDS[k.strip()] for k in a.kinds.split(",")]
     db = None if a.dry_run else connect(a.db)
     print(f"[daily] today={today} kinds={[k.name for k in kinds]} regions={len(regions)} "
-          f"months={months[0]}..{months[-1]}({len(months)}) dry_run={a.dry_run} skip_done={a.skip_done}")
+          f"months={months[0]}..{months[-1]}({len(months)}){'' if a.months else ' +매매 재확인 ' + recheck_month(today)} "
+          f"dry_run={a.dry_run} skip_done={a.skip_done}")
 
     failures = skipped = 0
     totals = {"rows": 0, "registered": 0, "cancelled": 0, "disappeared": 0}
     t0 = time.monotonic()
     for kind in kinds:
-        done = done_cells(db, kind, regions, months) if (db is not None and a.skip_done) else set()
+        kmonths = months + ([recheck_month(today)] if not a.months and kind.name == "trade" else [])
+        done = done_cells(db, kind, regions, kmonths) if (db is not None and a.skip_done) else set()
         for code in regions:
-            for ym in months:
+            for ym in kmonths:
                 if (code, ym) in done:
                     skipped += 1
                     continue

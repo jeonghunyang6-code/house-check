@@ -1,7 +1,7 @@
 """보관 파일(deals_YYYYMM.csv.gz)에서 과거 고정값 계산 (저장 구조 C, 2026-10-14).
 
 DB 에는 매매 원본을 최근 2년만 둔다. 그 이전 거래가 필요한 지표는 여기서 한 번 계산해 deal_anchor 표로 둔다.
-sql/metrics.sql 의 정의와 같게 계산한다 (중개·비해제, area_group = floor(전용)):
+sql/metrics.sql 의 정의와 같게 계산한다 (중개·비해제, area_group = floor(전용), 기준 시세는 1층 제외):
 - hist_high: 보관 구간의 최고가(같으면 이른 계약일) → 전고점(prev_high)·역대 최고(high_10k)에 DB 구간과 합친다
 - peak / trough: 월별 기준 시세(그 달 포함 3개월 중앙값) 2021-01~2022-06 최고, 2022-07~2023-06 최저 (B2)
 - p20: 2020년 1분기 중앙값 (A6)
@@ -52,6 +52,8 @@ def anchors(rows: list[dict]) -> list[dict]:
         p, d = int(r["price_10k"]), r["contract_date"]
         if k not in hi or p > hi[k][0] or (p == hi[k][0] and d < hi[k][1]):
             hi[k] = (p, d)
+        if r.get("floor") == "1":  # 기준 시세(peak·trough·p20)는 1층 제외, 최고가는 포함 (sql/metrics.sql base 와 같게)
+            continue
         y, m = int(d[:4]), int(d[5:7])
         by_month[k][(y, m)].append(p)
         if d < "2020-04-01" and d >= "2020-01-01":
