@@ -29,6 +29,7 @@ def band(price):  # D1 정상 범위 (책 p.152), 사이 가격대는 선형 보
             return [round(r0[0] + (r1[0] - r0[0]) * t), round(r0[1] + (r1[1] - r0[1]) * t)]
 
 
+CANDP = {r['apt_seq'] for r in d.get('cand_proj', [])}
 RM = {}
 for _r in d.get('region_monthly', []):
     RM.setdefault((_r['series'], _r['region']), []).append((_r['period'], float(_r['value'])))
@@ -111,7 +112,8 @@ for seq in d['seqs']:
     cx.append({'grade': gr and gr['grade'] is not None and {k: gr[k] for k in ('umd_name', 'grade', 'value_10k', 'q1_10k', 'q3_10k', 'n_complex', 'old_share', 'flag_rebuild', 'flag_gap', 'new_big_name', 'new_big_10k', 'asof')},
                'hh': gr and gr['households'],
                'm': m84 and {k: m84.get(k) for k in ('jeonse_24m_10k', 'jeonse_24m_n', 'jeonse_24m_approx', 'reverse_risk', 'reserve_10k', 'real_ref_10k', 'base2020_10k', 'real_chg_2020',
-               'turnover_pct', 'turnover_state', 'e3_target_10k', 'e3_chg_12m', 'rel_strength_e3', 'e2_ratio', 'e2_n', 'e2_basis', 'e4_cap_10k', 'e4_cap_n', 'e4_compress', 'e4_sizes', 'f1_zone_24m', 'f1_sgg_24m', 'f1_ipju', 'f1_next')},
+               'turnover_pct', 'turnover_state', 'e3_target_10k', 'e3_chg_12m', 'rel_strength_e3', 'e2_ratio', 'e2_n', 'e2_basis', 'e4_cap_10k', 'e4_cap_n', 'e4_compress', 'e4_sizes', 'f1_zone_24m', 'f1_sgg_24m', 'f1_ipju', 'f1_next', 'd4_jeonse_chg', 'd4_n', 'd4_cause', 'a5_est_10k', 'a5_from_ag', 'a5_n')},
+               'proj_st': [[z['name'], z['status'], z['st'], int(float(z['m']))] for z in d.get('cx_proj', []) if z['apt_seq'] == seq],
                'acc': next(({k: z[k] for k in ('station_name', 'station_m', 'h2_cbd_min', 'h2_cbd_tr', 'h2_ybd_min', 'h2_ybd_tr', 'h2_gbd_min', 'h2_gbd_tr')} for z in d.get('cx_access', []) if z['apt_seq'] == seq), None),
                'liq': liq(seq, gr),
                'reg': reg(seq[:5]),
@@ -222,11 +224,12 @@ json.dump({'monthly': monthly, 'cx': cx, 'today': today,
                        for e in sorted({r['e'] for r in d.get('balloon', [])})},
            'auction': {a: [[r['period_month'].replace('-', ''), float(r['sale_ratio']) * 100] for r in d.get('auction', []) if r['area_code'] == a]
                        for a in ('서울', '경기', '인천', '전국')},
-           # ⑦ 후보 단지: [단지, 시군구, 동, 면적군, 기준 시세(만원), 신뢰도, 국면, 급지, 재건축 기대, 동 안 격차, 신축 대단지, 세대수, 준공, 월 회전율 %, 하락기 거래 시군구 안 분위(C3)]
+           # ⑦ 후보 단지: [단지, 시군구, 동, 면적군, 기준 시세(만원), 신뢰도, 국면, 급지, 재건축 기대, 동 안 격차, 신축 대단지, 세대수, 준공, 월 회전율 %, 하락기 거래 시군구 안 분위(C3), 추정가(A5) 여부, 착공·확정 철도 역 700m 안(H4)]
            'cand': [[r['apt_name'], r['region_code'], r['umd_name'], r['area_group'], r['ref_10k'], r['confidence'], r['phase'], r['grade'],
                      bool(r['flag_rebuild']), bool(r['flag_gap']), r['new_big_name'] == r['apt_name'] if r['new_big_name'] else False,
                      r['households'], r['build_year'], r['turnover_pct'] and float(r['turnover_pct']),
-                     r.get('down_rank') and float(r['down_rank'])] for r in d.get('cand', [])],
+                     r.get('down_rank') and float(r['down_rank']), bool(r.get('est')), r['apt_seq'] in CANDP] for r in d.get('cand', [])],
+           'price_bands': d.get('price_bands', []),
            'geo': json.load(open(ROOT / 'data/geo/sudogwon_sgg_20260701.json')),
            'region_names': REGIONS, 'asof': TODAY.isoformat()}, open(OUT / 'data.json', 'w'), ensure_ascii=False)
 for c in cx: print(c['name'], c['region'], c['P'], c['T'], c['C'], c['conf'], c['cn'], c['pattern'], c['rec'] and round(c['rec'],2), c['J'], c['jn'], c['ratio'] and round(c['ratio']), c['band'], c['n12'])

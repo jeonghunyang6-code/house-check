@@ -379,4 +379,62 @@ v AS (SELECT cx.apt_seq, coalesce(z.hh, 0) AS zh, coalesce(g.hh, 0) AS gh, ip.t 
 UPDATE complex_metrics m SET f1_zone_24m = CASE WHEN v.z IS NOT NULL THEN v.zh END, f1_sgg_24m = v.gh, f1_ipju = v.ip, f1_next = v.nx
 FROM v WHERE m.apt_seq = v.apt_seq;
 
+-- 9) D4 전세 하락 원인 (📖 전세가 하락 원인 두 가지: 주변 신규 입주, 매매가 하락 p.153~154, p.423 / 명세 D4).
+--    전세 1년 변화 = 지지난 달까지 3개월 vs 1년 전 같은 3개월, 월별 중앙값의 건수 가중 평균(근사). 양쪽 🔧 3건 이상.
+--    🔧 -3% 이하이면 원인 표시: ① 같은 생활권 입주장(f1_ipju) 또는 앞으로 6개월 입주 🔧 500세대 이상 ② B1 하락장·일시 조정 또는 12개월 변화 < 0
+UPDATE complex_metrics SET d4_jeonse_chg = NULL, d4_n = NULL, d4_cause = NULL, a5_est_10k = NULL, a5_from_ag = NULL, a5_n = NULL;
+WITH w AS (SELECT to_char({TODAY}::date - INTERVAL '4 month', 'YYYYMM') AS a, to_char({TODAY}::date - INTERVAL '2 month', 'YYYYMM') AS b,
+                  to_char({TODAY}::date - INTERVAL '16 month', 'YYYYMM') AS a0, to_char({TODAY}::date - INTERVAL '14 month', 'YYYYMM') AS b0),
+j AS (
+  SELECT r.apt_seq, r.area_group,
+    sum(r.n_jeonse * r.jeonse_median_10k) FILTER (WHERE r.contract_month BETWEEN w.a AND w.b)::numeric
+      / nullif(sum(r.n_jeonse) FILTER (WHERE r.contract_month BETWEEN w.a AND w.b), 0) AS now_,
+    sum(r.n_jeonse * r.jeonse_median_10k) FILTER (WHERE r.contract_month BETWEEN w.a0 AND w.b0)::numeric
+      / nullif(sum(r.n_jeonse) FILTER (WHERE r.contract_month BETWEEN w.a0 AND w.b0), 0) AS old_,
+    coalesce(sum(r.n_jeonse) FILTER (WHERE r.contract_month BETWEEN w.a AND w.b), 0) AS n_now,
+    coalesce(sum(r.n_jeonse) FILTER (WHERE r.contract_month BETWEEN w.a0 AND w.b0), 0) AS n_old
+  FROM rent_monthly r, w WHERE r.jeonse_median_10k IS NOT NULL AND r.n_jeonse > 0 AND r.contract_month BETWEEN w.a0 AND w.b
+  GROUP BY 1, 2
+),
+pr AS (SELECT min(move_in_ym) AS a, max(move_in_ym) AS b FROM ipju_plan),
+p AS (   -- 8) 과 같은 입주 출처
+  SELECT move_in_ym, households AS hh, lifezone_id FROM ipju_plan
+  UNION ALL
+  SELECT q.move_in_ym, coalesce(q.total_hh, q.households), q.lifezone_id FROM presale q, pr
+  WHERE pr.a IS NULL OR q.move_in_ym < pr.a OR q.move_in_ym > pr.b),
+z6 AS (SELECT lifezone_id AS z, sum(hh) AS hh FROM p
+       WHERE move_in_ym BETWEEN to_char({TODAY}::date, 'YYYYMM') AND to_char({TODAY}::date + INTERVAL '5 month', 'YYYYMM') GROUP BY 1),
+v AS (
+  SELECT m.apt_seq, m.area_group, round((j.now_ / j.old_ - 1) * 100, 2) AS chg, j.n_now || ' / ' || j.n_old AS n,
+    (m.f1_ipju IS NOT NULL OR coalesce(z6.hh, 0) >= 500) AS supply,
+    (m.phase IN ('하락장', '일시 조정') OR m.chg_12m < 0) AS sale
+  FROM complex_metrics m JOIN j USING (apt_seq, area_group) LEFT JOIN complexes x USING (apt_seq) LEFT JOIN z6 ON z6.z = x.lifezone_id
+  WHERE j.n_now >= 3 AND j.n_old >= 3
+)
+UPDATE complex_metrics m SET d4_jeonse_chg = v.chg, d4_n = v.n,
+  d4_cause = CASE WHEN v.chg > -3 THEN NULL WHEN v.supply AND v.sale THEN '입주 물량+매매 하락' WHEN v.supply THEN '입주 물량'
+                  WHEN v.sale THEN '매매 하락' ELSE '둘 다 아님' END
+FROM v WHERE m.apt_seq = v.apt_seq AND m.area_group = v.area_group;
+
+-- 10) A5 거래 없는 평형 추정 (📖 거래 없는 평형은 같은 단지 대체 평형으로 p.472~473, ▶ P3 "도대체 얼마야?" 0:54).
+--     기준 시세가 없는 면적군 = 같은 단지에서 기준 시세가 있는 가장 가까운 면적군의 ㎡당 기준 시세 × (최근 2년 두 면적군 ㎡당 중앙가 비율) × 면적.
+--     두 면적군 모두 최근 2년 🔧 2건 이상(1층 제외 중개). 대체 평형이 없으면 비워 둔다(화면에 '대체 평형 없음')
+WITH pp AS (
+  SELECT apt_seq, area_group, percentile_cont(0.5) WITHIN GROUP (ORDER BY price_10k::numeric / area_m2) AS ppm, count(*) AS n
+  FROM deals WHERE NOT is_cancelled AND deal_type = '중개' AND floor IS DISTINCT FROM 1 AND contract_date > {TODAY}::date - 730
+  GROUP BY 1, 2 HAVING count(*) >= 2
+),
+c AS (
+  SELECT DISTINCT ON (t.apt_seq, t.area_group) t.apt_seq, t.area_group, o.area_group AS o_ag, o.ref_10k AS o_ref,
+    pa.ppm / pb.ppm AS ratio, least(pa.n, pb.n) AS n
+  FROM complex_metrics t
+  JOIN complex_metrics o ON o.apt_seq = t.apt_seq AND o.ref_10k IS NOT NULL AND o.area_group <> t.area_group
+  JOIN pp pa ON pa.apt_seq = t.apt_seq AND pa.area_group = t.area_group
+  JOIN pp pb ON pb.apt_seq = o.apt_seq AND pb.area_group = o.area_group
+  WHERE t.ref_10k IS NULL
+  ORDER BY t.apt_seq, t.area_group, abs(o.area_group - t.area_group), o.area_group
+)
+UPDATE complex_metrics m SET a5_est_10k = round(c.o_ref::numeric / c.o_ag * c.ratio * c.area_group), a5_from_ag = c.o_ag, a5_n = c.n
+FROM c WHERE m.apt_seq = c.apt_seq AND m.area_group = c.area_group;
+
 COMMIT;

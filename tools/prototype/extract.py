@@ -57,7 +57,7 @@ out['cx_rent'] = select(db, f"""SELECT apt_seq, contract_month m, area_group, n_
 out['cx_phase'] = select(db, f"""SELECT apt_seq, area_group, phase, pattern, chg_12m, up_months, down_months, last3, region_chg_12m, rel_strength,
  jeonse_10k, jeonse_n, jeonse_src, jeonse_24m_10k, jeonse_24m_n, jeonse_24m_approx, reverse_risk, reserve_10k, real_ref_10k, base2020_10k, real_chg_2020,
  households, turnover_pct, turnover_state, e3_seqs, e3_target_10k, e3_chg_12m, rel_strength_e3, e2_ratio, e2_n, e2_basis, e4_cap_10k, e4_cap_n, e4_compress, e4_sizes,
- f1_zone_24m, f1_sgg_24m, f1_ipju, f1_next
+ f1_zone_24m, f1_sgg_24m, f1_ipju, f1_next, d4_jeonse_chg, d4_n, d4_cause, a5_est_10k, a5_from_ag, a5_n
  FROM complex_metrics WHERE apt_seq IN ({sl}) AND area_group IN (84,85)""")
 out['e3_names'] = select(db, f"""SELECT apt_seq, apt_name FROM complexes WHERE apt_seq IN (
  SELECT unnest(string_to_array(e3_seqs, ',')) FROM complex_metrics WHERE apt_seq IN ({sl}) AND area_group IN (84,85))""")
@@ -77,13 +77,13 @@ out['cx_grade'] = select(db, f"""SELECT c.apt_seq, c.umd_name, g.grade, g.value_
  FROM complexes c LEFT JOIN {G} g ON g.region_code = c.region_code AND g.umd_name = c.umd_name
  LEFT JOIN kapt_complexes k ON k.kapt_code = c.kapt_code WHERE c.apt_seq IN ({sl})""")
 # D3. 후보 단지 찾기 (⑦): 기준 시세가 있는 단지·면적 전체 + 급지·표시
-out['cand'] = select(db, f"""SELECT m.apt_seq, m.area_group, m.ref_10k, m.confidence, m.phase, m.pattern, m.turnover_pct, c.apt_name, c.region_code, c.umd_name,
+out['cand'] = select(db, f"""SELECT m.apt_seq, m.area_group, coalesce(m.ref_10k, m.a5_est_10k) AS ref_10k, m.ref_10k IS NULL AS est, m.confidence, m.phase, m.pattern, m.turnover_pct, c.apt_name, c.region_code, c.umd_name,
   c.build_year, k.households, g.grade, g.flag_rebuild, g.flag_gap, g.new_big_name, l.down_rank
  FROM complex_metrics m JOIN complexes c USING (apt_seq)
  LEFT JOIN kapt_complexes k ON k.kapt_code = c.kapt_code
  LEFT JOIN complex_liquidity l ON l.apt_seq = m.apt_seq
  LEFT JOIN {G} g ON g.region_code = c.region_code AND g.umd_name = c.umd_name
- WHERE m.ref_10k IS NOT NULL AND m.area_group BETWEEN 40 AND 135""")
+ WHERE (m.ref_10k IS NOT NULL OR m.a5_est_10k IS NOT NULL) AND m.area_group BETWEEN 40 AND 135""")
 # E. R-ONE 주간 지수 (rone_weekly, jobs/rone.py)
 out['rone'] = select(db, """SELECT w.stat, w.cls_id, r.full_name, r.region_code, w.week_id, w.week_date::text d, w.value
  FROM rone_weekly w JOIN rone_regions r USING (cls_id)
@@ -110,6 +110,15 @@ ip AS (SELECT u.sido, u.name, sum(i.households) AS hh FROM u JOIN ipju_plan i ON
 SELECT (SELECT p FROM lp) AS period, u.sido, u.name, u.unsold, u0.u0, u.unsold_done, pr.n, pr.r, pr.rn, ip.hh
 FROM u LEFT JOIN u0 USING (sido, name) LEFT JOIN pr USING (sido, name) LEFT JOIN ip USING (sido, name)
 WHERE u.region_codes IS NOT NULL ORDER BY u.unsold DESC""")
+# H4 역 단위: 철도 사업 역(기존 좌표가 있는 역) 700m 안 단지 (📖 역세권 p.220)
+PS = """(SELECT p.name, p.status, s.name AS st, s.lat, s.lng FROM transit_projects p
+  CROSS JOIN unnest(string_to_array(p.stations, ',')) u(n) JOIN station s ON s.name = u.n)"""
+NEAR = "c.lat IS NOT NULL AND abs(c.lat - ps.lat) < 0.007 AND abs(c.lng - ps.lng) < 0.009 AND 111320 * sqrt(power(c.lat - ps.lat, 2) + power((c.lng - ps.lng) * 0.7934, 2)) <= 700"
+out['cx_proj'] = select(db, f"""SELECT c.apt_seq, ps.name, ps.status, ps.st,
+  round(111320 * sqrt(power(c.lat - ps.lat, 2) + power((c.lng - ps.lng) * 0.7934, 2))) AS m
+ FROM complexes c JOIN {PS} ps ON {NEAR} WHERE c.apt_seq IN ({sl}) ORDER BY 1, 5""")
+out['cand_proj'] = select(db, f"""SELECT DISTINCT c.apt_seq FROM complexes c JOIN {PS} ps ON {NEAR} WHERE ps.status IN ('착공', '확정')""")
+out['price_bands'] = __import__('jobs.market', fromlist=['price_bands']).price_bands(db)
 # 지역 월별 (region_monthly, jobs/region_stats.py): 소비심리 2년, 전세가율 서울·수도권 2년 + 시군구 최신, 예시 단지 시군구 인구(12월)
 out['region_monthly'] = select(db, f"""SELECT series, region, period, value FROM region_monthly
  WHERE (series IN ('sentiment', 'jeonse_ratio') AND region IN ('11', '28', '41', 'SUDO', 'KR') AND period >= to_char(now() - interval '26 months', 'YYYYMM'))

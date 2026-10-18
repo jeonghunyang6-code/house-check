@@ -20,7 +20,7 @@ def _db():
               "0009_rone_weekly.sql", "0011_market.sql", "0012_macro.sql", "0013_macro_annual.sql", "0014_complex_phase.sql", "0015_quadrant_strength.sql",
               "0016_reverse_real.sql", "0008_complexes.sql", "0019_deal_anchor.sql", "0020_turnover_e3.sql",
               "0022_complex_geo.sql", "0023_adm_dong.sql", "0030_lifezone.sql", "0031_e2.sql", "0032_e4_e5_e7.sql", "0034_presale.sql", "0035_presale_total.sql", "0037_ipju_plan.sql",
-              "0039_rent_j24.sql", "0040_ref_spread.sql"):
+              "0039_rent_j24.sql", "0040_ref_spread.sql", "0047_d4_a5.sql"):
         db.query((ROOT / "db" / "migrations" / m).read_text(encoding="utf-8"))
     return db
 
@@ -276,3 +276,29 @@ def test_metrics_prev_high_after_cancel():
              f"INSERT INTO deal_events (deal_key, event, event_date) VALUES ({lit(key)}, 'cancelled', {lit(TODAY)});")
     db.query(render(TODAY, 30))
     assert pick()["2026-05-10"] == 120000             # 해제된 15억이 빠지고 3월 12억
+
+
+def test_metrics_d4_a5():
+    if not URL:
+        return
+    db = _db()
+    # P: 84㎡ 기준 시세 15억(최근 60일 3건), 59㎡ 는 최근 180일 거래 1건뿐 → 기준 시세 없음 → A5 로 추정
+    for d in ("2026-09-01", "2026-09-10", "2026-10-01"):
+        _deal(db, "P", d, 150000)
+    for d in ("2025-03-01", "2025-04-01"):                       # 2년 안 59㎡ 2건: ㎡당 100,000/59.9
+        _deal(db, "P", d, 100000, area=59.9)
+    _deal(db, "P", "2026-01-05", 105000, area=59.9)
+    for d in ("2025-03-02", "2025-04-02"):                       # 같은 시기 84㎡: ㎡당 140,000/84.9
+        _deal(db, "P", d, 140000)
+    # 전세: 2026-06~08 평균 50,000(4건) vs 2025-06~08 60,000(4건) → -16.7% 하락, 매매는 판정 없음, 입주 없음 → '둘 다 아님'
+    for ym, v in (("202506", 60000), ("202507", 60000), ("202606", 50000), ("202607", 50000)):
+        db.query(f"INSERT INTO rent_monthly VALUES ('P', 84, '{ym}', '11680', 'x', 2, {v}, 0, NULL, 2, 0, NULL, NULL, 0, 0);")
+    db.query(render(TODAY, 120))
+    r = {(x["area_group"]): x for x in select(db, "SELECT area_group, ref_10k, a5_est_10k, a5_from_ag, a5_n, d4_jeonse_chg, d4_n, d4_cause "
+                                                  "FROM complex_metrics WHERE apt_seq = 'P'")}
+    assert r[84]["ref_10k"] == 150000 and r[84]["a5_est_10k"] is None
+    m59, m84 = 100000 / 59.9, 150000 / 84.9                        # 2년 ㎡당 중앙가: 59㎡ 3건(10·10·10.5억), 84㎡ 5건(14·14·15·15·15억)
+    assert r[59]["a5_from_ag"] == 84 and r[59]["a5_n"] >= 2
+    assert abs(r[59]["a5_est_10k"] - round(150000 / 84 * (m59 / m84) * 59)) <= 1
+    assert float(r[84]["d4_jeonse_chg"]) == round((50000 / 60000 - 1) * 100, 2) and r[84]["d4_n"] == "4 / 4"
+    assert r[84]["d4_cause"] == "둘 다 아님"
