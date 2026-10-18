@@ -1,0 +1,21 @@
+# 임시(PR 전에 삭제): 0038 적용 + A1 층 측정
+name: probe-tmp2
+on:
+  push:
+    branches: [claude/brave-lamport-gkzeao]
+    paths: [.github/workflows/probe_tmp2.yml]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - run: command -v psql || (sudo apt-get update -q && sudo apt-get install -y -q postgresql-client)
+      - env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f db/migrations/0038_archive_recheck.sql
+          psql "$DATABASE_URL" -c "SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = 'archive_cells_source_check'"
+          PGOPTIONS='-c statement_timeout=600000 -c default_transaction_read_only=on' psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tools/probe/a1_floor.sql
