@@ -1,4 +1,4 @@
-"""규제 이력: 토지거래허가구역(토허)·규제지역(조정대상지역·투기과열지구) (0043, jobs/policy.py).
+"""규제 이력: 토지거래허가구역(토허)·규제지역(조정대상지역·투기과열지구)·대출 규제 (0043, jobs/policy.py).
 
 📖 토허제는 거래를 줄여 상승 속도를 늦추지만 가격을 떨어뜨리진 않는다 p.269~270 / 풍선효과 p.288~292 / 지정 여부로 우열을 판단하지 마라 p.270.
 쓰임: 차트 사건 표시, C4 거래 유지율 해석(토허 구역은 상승기 거래가 눌림), 풍선효과(규제 경계 안팎 비교).
@@ -65,7 +65,28 @@ ZONES: tuple[Zone, ...] = (
          S_2025_10_REG),
 )
 
+S_LOAN_2019 = "https://www.dailian.co.kr/news/view/853146/"
+S_LOAN_2022 = "https://mobile.newsis.com/view/NISX20221110_0002080430"
+S_LOAN_DSR3 = "https://fsc.go.kr/eng/pr010101/84620"
+S_LOAN_0627 = "https://www.korea.kr/news/policyNewsView.do?newsId=148945077"
+S_LOAN_1015 = "https://biz.sbs.co.kr/amp/article/20000265270"
+S_LOAN_1015_JS = "https://mobile.newsis.com/view/NISX20251015_0003363513"
+
+# 지금 적용되는 주담대 제도 상한 (시안 계산기 loanCap 과 같아야 한다). 생애최초·서민 실수요자 예외, DSR 은 넣지 않는다(은행 확인)
+LOAN_RULES = {
+    "asof": date(2025, 10, 16),
+    "price_caps": ((150000, 60000), (250000, 40000), (None, 20000)),   # (집값 상한 만원, 대출 상한 만원) 수도권·규제지역
+    "ltv": {"규제지역": 0.4, "그 밖 수도권": 0.7},
+    "source": S_LOAN_1015,
+}
+
 EVENTS: tuple[tuple[date, str, str, str], ...] = (
+    (date(2019, 12, 17), "대출", "12·16 대책: 투기·투기과열지구 15억 초과 아파트 주담대 금지, 9억 초과분 LTV 20%", S_LOAN_2019),
+    (date(2022, 12, 1), "대출", "15억 초과 아파트 주담대 허용, 무주택·1주택 LTV 50%(12월 시행, 날짜는 1일로 둠)", S_LOAN_2022),
+    (date(2025, 7, 1), "대출", "스트레스 DSR 3단계(수도권·규제지역, 가산금리 1.5%p)", S_LOAN_DSR3),
+    (date(2025, 6, 28), "대출", "6·27 대책: 수도권·규제지역 주택구입 주담대 6억 한도, 6개월 안 전입, 생애최초 LTV 70%", S_LOAN_0627),
+    (date(2025, 10, 16), "대출", "10·15 대책: 주담대 한도 15억 이하 6억·25억 이하 4억·초과 2억, 규제지역 LTV 40%, 스트레스 금리 하한 3%", S_LOAN_1015),
+    (date(2025, 10, 29), "대출", "1주택자 수도권·규제지역 전세대출 이자 DSR 반영", S_LOAN_1015_JS),
     (date(2020, 6, 19), "규제지역", "6·17 대책: 경기·인천 대부분 조정대상지역, 수원·안양·용인 수지 등 경기 10곳·인천 3구 투기과열", S_2020_06),
     (date(2020, 6, 23), "토허", "잠실·삼성·대치·청담 토지거래허가", S_2020_JAMSAM),
     (date(2021, 4, 27), "토허", "압구정·여의도·목동·성수 토지거래허가", S_2021_FOUR),
@@ -91,3 +112,12 @@ def zones_for(region_code: str, umd_name: str | None, start: date, end: date, ki
         if (z.start is None or z.start <= end) and (z.end is None or z.end >= start):
             out.append(z)
     return out
+
+
+def regulated_now(today: date) -> list[str]:
+    """오늘 규제지역(조정대상지역·투기과열지구)인 시군구. LTV 40% 판정에 쓴다."""
+    return sorted({c for z in ZONES if z.kind == "규제지역" and _on(z, today) for c in z.region_codes})
+
+
+def _on(z: Zone, d: date) -> bool:
+    return (z.start is None or z.start <= d) and (z.end is None or z.end >= d)

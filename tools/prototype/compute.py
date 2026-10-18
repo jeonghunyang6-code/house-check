@@ -41,7 +41,8 @@ def reg(rc):
         if len(ps) >= 6:
             out[k] = [ps[-6][0], ps[-6][1], ps[-1][0], ps[-1][1]]
     return out
-from collector.policy import zones_for
+from collector.policy import regulated_now, zones_for
+from collector.projects import PROJECTS
 import calendar
 def liq(seq, gr):
     """C3·C4 (complex_liquidity) + 상승기에 걸린 토지거래허가구역 (collector/policy.py)."""
@@ -211,6 +212,9 @@ json.dump({'monthly': monthly, 'cx': cx, 'today': today,
            'unsold': [{k: (float(r[k]) if isinstance(r[k], str) and k in ('r', 'rn') else r[k]) for k in r} for r in d.get('unsold', [])],
            'policy': [[r['d'], r['kind'], r['title']] for r in d.get('policy_events', [])],
            'sentiment': {k: v for (sr, k), v in RM.items() if sr == 'sentiment'},
+           'reg_now': regulated_now(TODAY),
+           # H4 호재 단계 [이름, 단계, 단계 날짜, 전망, 업무지구, 시군구들, 출처] (collector/projects.py)
+           'projects': [[p.name, p.status, p.status_date and p.status_date.isoformat(), p.outlook, list(p.cbd), list(p.region_codes), p.source] for p in PROJECTS],
            # 풍선효과: 사건별 [시군구, 그룹, 13주, 26주, 주 수, 지금까지, 외지인 전, 후, 서울 전, 후] / 그룹 중앙값 경로 [그룹, 주, 중앙값, n]
            'balloon': {e: {'rows': [[r['rc'], r['grp'], *[r[k] and float(r[k]) for k in ('chg_13w', 'chg_26w')], r['weeks_now'],
                                      *[r[k] and float(r[k]) for k in ('chg_now', 'ob', 'oa', 'sb', 'sa')]] for r in d.get('balloon', []) if r['e'] == e],
