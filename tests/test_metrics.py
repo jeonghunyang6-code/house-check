@@ -43,7 +43,14 @@ def test_metrics_end_to_end():
     _deal(db, "A", "2026-09-01", 160000); _deal(db, "A", "2026-09-10", 170000); _deal(db, "A", "2026-10-01", 180000)
     _deal(db, "A", "2026-10-02", 999999, dtype="직거래")             # 직거래는 무시
     _deal(db, "A", "2026-10-03", 990000, cancelled=True)            # 해제도 무시
-    db.query("INSERT INTO rent_monthly VALUES ('A', 84, '202610', '11680', 'x', 3, 81000, 2, 80000, 1, 0, NULL, NULL, 0, 0);")
+    db.query("INSERT INTO rent_monthly VALUES ('A', 84, '202610', '11680', 'x', 3, 81000, 2, 90000, 1, 0, NULL, NULL, 0, 0);")
+    # 전세 기준은 rent_monthly 가 아니라 원본 rents 의 실제 중앙값: 신규 79,000·81,000 → 80,000 (갱신·월세·사라짐 제외)
+    for i, (dep, rent, typ, gone) in enumerate([(79000, 0, '신규', False), (81000, 0, '신규', False), (95000, 0, '갱신', False),
+                                                (30000, 100, '신규', False), (10000, 0, '신규', True)]):
+        db.query("INSERT INTO rents (rent_key, apt_seq, apt_name, region_code, contract_month, contract_date, area_m2, "
+                 "deposit_10k, monthly_rent_10k, contract_type, used_renewal_right, last_seen_date, disappeared) "
+                 f"VALUES ('r{i}', 'A', 'x', '11680', '202610', '2026-10-0{i + 1}', 84.9, {dep}, {rent}, '{typ}', FALSE, "
+                 f"'2026-10-10', {gone});")
     # B: 최근 거래 2건뿐 → 기준 시세 없음
     _deal(db, "B", "2026-10-01", 50000); _deal(db, "B", "2026-10-05", 51000)
     # C: 최근 60·90일엔 없고 100~180일 전 3건 → 180일 창, 신뢰도 낮음. 전고점 20억, 저점 10억, 현재 14억 → 회복 40% 지연
@@ -56,7 +63,7 @@ def test_metrics_end_to_end():
     a, b, c = m["A"], m["B"], m["C"]
     assert (a["ref_10k"], a["ref_n"], a["ref_days"], a["confidence"]) == (170000, 3, 60, "높음")
     assert (a["peak_10k"], a["peak_month"], a["trough_10k"], a["pattern"]) == (150000, "202106", 100000, "신고가 돌파")
-    assert (a["jeonse_10k"], a["jeonse_src"], float(a["jeonse_ratio"])) == (80000, "신규", 47.1)
+    assert (a["jeonse_10k"], a["jeonse_n"], a["jeonse_src"], float(a["jeonse_ratio"])) == (80000, 2, "신규", 47.1)
     assert (float(a["band_lo"]), float(a["band_hi"])) == (42.0, 56.0)       # 17억: 50→30, 60→50 구간 40% 지점
     assert a["high_10k"] == 180000 and a["n_365"] == 3
     assert b["ref_10k"] is None and b["pattern"] is None and b["jeonse_ratio"] is None

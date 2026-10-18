@@ -61,10 +61,6 @@ for seq in d['seqs']:
     cur = [r for r in rents if r['m'] in ('202609', '202610')]
     new = [(r['n_jeonse_new'], r['jeonse_new_median_10k']) for r in cur if r['n_jeonse_new'] and r['jeonse_new_median_10k']]
     allj = [(r['n_jeonse'], r['jeonse_median_10k']) for r in cur if r['n_jeonse'] and r['jeonse_median_10k']]
-    src = new or allj
-    J = round(sum(n * v for n, v in src) / sum(n for n, _ in src)) if src else None
-    jn = sum(n for n, _ in src) if src else 0
-    ratio = J / C * 100 if (J and C) else None
     nb = band(C) if C else None
     n12 = sum(1 for r in ok if date.fromisoformat(r['cd']) > TODAY - timedelta(days=365))
     phs = [r for r in d.get('cx_phase', []) if r['apt_seq'] == seq and r['phase']]
@@ -72,6 +68,13 @@ for seq in d['seqs']:
     m84 = [r for r in d.get('cx_phase', []) if r['apt_seq'] == seq and r['area_group'] in (84, 85)]
     m84 = max(m84, key=lambda r: r['area_group'] == 84) if m84 else None
     gr = next((g for g in d.get('cx_grade', []) if g['apt_seq'] == seq), None)
+    if m84 and m84.get('jeonse_n'):  # 서버(sql/metrics.sql js)가 원본 계약으로 계산한 실제 중앙값
+        J, jn, jsrc, japprox = m84['jeonse_10k'], m84['jeonse_n'], m84['jeonse_src'], False
+    else:  # 서버 값이 없으면 월별 중앙값의 건수 가중 평균(근사)
+        src = new or allj
+        J = round(sum(n * v for n, v in src) / sum(n for n, _ in src)) if src else None
+        jn, jsrc, japprox = sum(n for n, _ in src) if src else 0, '신규' if new else '전체', True
+    ratio = J / C * 100 if (J and C) else None
     cx.append({'grade': gr and gr['grade'] is not None and {k: gr[k] for k in ('umd_name', 'grade', 'value_10k', 'q1_10k', 'q3_10k', 'n_complex', 'old_share', 'flag_rebuild', 'flag_gap', 'new_big_name', 'new_big_10k', 'asof')},
                'hh': gr and gr['households'],
                'm': m84 and {k: m84[k] for k in ('jeonse_24m_10k', 'jeonse_24m_n', 'reverse_risk', 'reserve_10k', 'real_ref_10k', 'base2020_10k', 'real_chg_2020',
@@ -80,7 +83,7 @@ for seq in d['seqs']:
                'zone': next(({k: z[k] for k in ('name', 'e5_ratio', 'e5_n', 'e7_new_ppm', 'e7_mid_ppm', 'e7_old_ppm', 'e7_n', 'f1_react_rel', 'f1_react_n')} for z in d.get('cx_zone', []) if z['apt_seq'] == seq), None),
                'e3': m84 and m84['e3_seqs'] and [n['apt_name'] for n in d.get('e3_names', []) if n['apt_seq'] in m84['e3_seqs'].split(',')],
                'phase': ph and {k: ph[k] for k in ('phase', 'chg_12m', 'up_months', 'down_months', 'last3', 'region_chg_12m', 'rel_strength')}, 'seq': seq, 'name': name, 'region': REG[seq[:5]], 'P': P, 'T': T, 'C': C, 'conf': conf, 'cn': cn if C else 0,
-               'rec': rec, 'pattern': pattern, 'J': J, 'jn': jn, 'jsrc': '신규' if new else '전체', 'ratio': ratio, 'band': nb,
+               'rec': rec, 'pattern': pattern, 'J': J, 'jn': jn, 'jsrc': jsrc, 'japprox': japprox, 'ratio': ratio, 'band': nb,
                'n12': n12, 'ref': ref,
                'pts': [[r['cd'], r['price_10k'], r['floor']] for r in ok],
                'jser': jser})

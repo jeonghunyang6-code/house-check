@@ -53,13 +53,13 @@ tr AS (
   SELECT DISTINCT ON (apt_seq, area_group) apt_seq, area_group, v AS trough, m AS trough_m
   FROM ref WHERE m >= DATE '2022-07-01' ORDER BY apt_seq, area_group, v, m
 ),
-js AS (  -- 당월·전월 전세 (rent_monthly 는 월별 중앙값이라 건수 가중 평균으로 근사)
+js AS (  -- 당월·전월 전세: DB 원본(rents)의 실제 중앙값. 신규가 있으면 신규, 없으면 전체(갱신·유형 공백 포함). 사라진 신고 제외
   SELECT apt_seq, area_group,
-    sum(n_jeonse_new * jeonse_new_median_10k)::numeric / nullif(sum(n_jeonse_new) FILTER (WHERE jeonse_new_median_10k IS NOT NULL), 0) AS jnew,
-    sum(n_jeonse_new) FILTER (WHERE jeonse_new_median_10k IS NOT NULL) AS nnew,
-    sum(n_jeonse * jeonse_median_10k)::numeric / nullif(sum(n_jeonse) FILTER (WHERE jeonse_median_10k IS NOT NULL), 0) AS jall,
-    sum(n_jeonse) FILTER (WHERE jeonse_median_10k IS NOT NULL) AS nall
-  FROM rent_monthly WHERE contract_month IN ({CUR_M}, {PREV_M}) GROUP BY 1, 2
+    percentile_cont(0.5) WITHIN GROUP (ORDER BY deposit_10k) FILTER (WHERE contract_type = '신규') AS jnew,
+    count(*) FILTER (WHERE contract_type = '신규') AS nnew,
+    percentile_cont(0.5) WITHIN GROUP (ORDER BY deposit_10k) AS jall, count(*) AS nall
+  FROM rents WHERE contract_month IN ({CUR_M}, {PREV_M}) AND monthly_rent_10k = 0 AND NOT disappeared
+  GROUP BY 1, 2
 ),
 c AS (
   -- B2 고점·저점: 보관 파일에서 계산한 값(deal_anchor)이 있으면 그것, 없으면 DB 의 거래로 계산한 값
@@ -112,7 +112,7 @@ rz AS (  -- B6: 같은 생활권(E0, jobs/lifezone.py) 판정 단지들의 12개
   SELECT x.lifezone_id, percentile_cont(0.5) WITHIN GROUP (ORDER BY ph.chg) AS zone_chg, count(*) AS zone_n
   FROM ph JOIN complexes x USING (apt_seq) WHERE x.lifezone_id IS NOT NULL GROUP BY 1
 ),
-j24 AS (  -- D3: 24개월 전 ±1개월 전세 계약 (건수 가중 근사)
+j24 AS (  -- D3: 24개월 전 ±1개월 전세 계약. 원본이 보관 파일에 있어 월별 중앙값(rent_monthly)의 건수 가중 평균으로 근사
   SELECT apt_seq, area_group,
     sum(n_jeonse * jeonse_median_10k)::numeric / nullif(sum(n_jeonse) FILTER (WHERE jeonse_median_10k IS NOT NULL), 0) AS j24,
     sum(n_jeonse) FILTER (WHERE jeonse_median_10k IS NOT NULL) AS n24

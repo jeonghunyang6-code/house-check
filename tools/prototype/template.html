@@ -978,12 +978,12 @@ function drawCx(c) {
   });
   const notes = [];
   if (!c.C) notes.push('최근 180일 거래가 3건 미만이라 기준 시세를 정하지 않았습니다.');
-  notes.push(`전세는 ${c.jsrc === '신규' ? '신규 계약' : '전체 계약'} 중앙값(2026년 9~10월, ${c.jn}건)으로 전세가율을 계산했습니다.`);
+  notes.push(`전세는 ${c.jsrc === '신규' ? '신규 계약' : '전체 계약(갱신 포함)'} ${c.japprox ? '월별 중앙값을 건수로 가중 평균한 근사값' : '중앙값'}(2026년 9~10월, ${c.jn}건)으로 전세가율을 계산했습니다.${c.jsrc === '전체' ? ' 이 기간 신규 계약이 없어 갱신 계약 보증금이 섞였습니다. 갱신청구권을 쓴 갱신은 인상 5% 상한이 있어 시세보다 낮게 나올 수 있습니다.' : ''}`);
   notes.push(c.phase
     ? `국면(B1): 지난달까지 12개월 기준 시세 ${(+c.phase.chg_12m > 0 ? '+' : '') + (+c.phase.chg_12m).toFixed(1)}%, 오른 달 ${c.phase.up_months}개·내린 달 ${c.phase.down_months}개, 최근 3개월 ${c.phase.last3}. 12개월 ±3%·8개월 이상 같은 방향이면 상승장/하락장(🔧, 📖 추세 최소 1년 p.136).`
     : '국면(B1)은 최근 13개월 중 3개월 창에 거래가 없는 달이 있어 판정하지 않았습니다.');
   if (c.m && c.m.real_chg_2020 != null) notes.push(`실질 가격(A6): 2020년 1분기 ${eok(c.m.base2020_10k)} → 지금 ${eok(c.C)}. 물가를 빼면 ${(+c.m.real_chg_2020 > 0 ? '+' : '') + (+c.m.real_chg_2020).toFixed(1)}% (${+c.m.real_chg_2020 >= 0 ? '물가보다 더 오름' : '물가만큼도 못 오름'}, 📖 실물자산은 최소 물가만큼은 오른다 p.108~110). 지금 기준 시세를 2020년 돈으로 바꾸면 ${eok(c.m.real_ref_10k)}.`);
-  if (c.m && c.m.reverse_risk != null) notes.push(`역전세(D3): 2년 전 전세 ${eok(c.m.jeonse_24m_10k)}(${c.m.jeonse_24m_n}건) → 지금 ${eok(c.J)}. ${c.m.reverse_risk ? '<b>지금 전세가 더 낮아 역전세 위험</b>' : '지금 전세가 더 높아 역전세 위험 없음'}. 대비금(전세가의 10%) ${eok(c.m.reserve_10k)} (📖 p.153).`);
+  if (c.m && c.m.reverse_risk != null) notes.push(`역전세(D3): 2년 전 전세 ${eok(c.m.jeonse_24m_10k)}(${c.m.jeonse_24m_n}건, 월별 중앙값의 건수 가중 평균) → 지금 ${eok(c.J)}. ${c.m.reverse_risk ? '<b>지금 전세가 더 낮아 역전세 위험</b>' : '지금 전세가 더 높아 역전세 위험 없음'}. 대비금(전세가의 10%) ${eok(c.m.reserve_10k)} (📖 p.153).`);
   notes.push(c.phase && c.phase.rel_strength != null
     ? `상대강도(B6): 같은 생활권(판정 단지 5곳 미만이면 같은 구) 단지들의 12개월 중앙값 ${(+c.phase.region_chg_12m).toFixed(1)}% 대비 ${(+c.phase.rel_strength > 0 ? '+' : '') + (+c.phase.rel_strength).toFixed(1)}%p. ${+c.phase.rel_strength < 0 ? '지역보다 덜 오른 "약한 파도"' : '지역보다 더 오름'}(📖 상승의 차이 p.420~421). `
     : '상대강도(B6)는 국면을 판정한 단지만 계산합니다.');
