@@ -30,6 +30,7 @@ def band(price):  # D1 정상 범위 (책 p.152), 사이 가격대는 선형 보
 
 
 CANDP = {r['apt_seq'] for r in d.get('cand_proj', [])}
+nm6 = {r['apt_seq']: r['apt_name'] for r in d.get('e6_names', [])}
 RM = {}
 for _r in d.get('region_monthly', []):
     RM.setdefault((_r['series'], _r['region']), []).append((_r['period'], float(_r['value'])))
@@ -116,6 +117,7 @@ for seq in d['seqs']:
                'proj_st': [[z['name'], z['status'], z['st'], int(float(z['m']))] for z in d.get('cx_proj', []) if z['apt_seq'] == seq],
                'acc': next(({k: z[k] for k in ('station_name', 'station_m', 'h2_cbd_min', 'h2_cbd_tr', 'h2_ybd_min', 'h2_ybd_tr', 'h2_gbd_min', 'h2_gbd_tr')} for z in d.get('cx_access', []) if z['apt_seq'] == seq), None),
                'liq': liq(seq, gr),
+               'e6t': [[nm6.get(r['target_seq'], r['target_seq']), float(r['ratio_now']), float(r['gap_pct']), r['dist_m']] for r in d.get('e6_targets', []) if r['apt_seq'] == seq][:3],
                'reg': reg(seq[:5]),
                'zone': next(({k: z[k] for k in ('name', 'e5_ratio', 'e5_n', 'e7_new_ppm', 'e7_mid_ppm', 'e7_old_ppm', 'e7_n', 'f1_react_rel', 'f1_react_n')} for z in d.get('cx_zone', []) if z['apt_seq'] == seq), None),
                'e3': m84 and m84['e3_seqs'] and [n['apt_name'] for n in d.get('e3_names', []) if n['apt_seq'] in m84['e3_seqs'].split(',')],
@@ -201,9 +203,17 @@ def e6():
         if a not in nm or sum(1 for x in qs if x in v) < 12 or not (qs[-1] in v or qs[-2] in v):
             continue
         r = nm[a]
-        rows.append([r['apt_name'], r['region_code'], r['umd_name'], [round(v[x]) if x in v else None for x in qs]])
+        rows.append([r['apt_name'], r['region_code'], r['umd_name'], [round(v[x]) if x in v else None for x in qs], a])
     rows.sort(key=lambda r: (r[1], r[0]))
-    return {'q': qs, 'cx': rows}
+    ix = {r[4]: i for i, r in enumerate(rows)}
+    # 서버 목표 후보(jobs/gap.py): {지금 집 순번: [[목표 순번, 배율, 격차 위치 %, 거리 m], ...]} — 두 단지 모두 이 목록에 있을 때만
+    t = {}
+    for r in d.get('e6_targets', []):
+        if r['apt_seq'] in ix and r['target_seq'] in ix:
+            t.setdefault(ix[r['apt_seq']], []).append([ix[r['target_seq']], float(r['ratio_now']), float(r['gap_pct']), r['dist_m']])
+    for r in rows:
+        r.pop()
+    return {'q': qs, 'cx': rows, 't': t}
 
 from collector.regions import REGIONS
 json.dump({'monthly': monthly, 'cx': cx, 'today': today,

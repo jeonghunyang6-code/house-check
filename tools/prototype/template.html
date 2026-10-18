@@ -344,6 +344,7 @@ footer.foot { color: var(--ink-3); font-size: 12px; max-width: 90ch; display: gr
           <label class="calc-row" for="e6_b"><span>목표 집</span><span class="calc-in" style="flex-basis:15em"><input id="e6_b" list="e6list" style="text-align:left"></span></label>
           <datalist id="e6list"></datalist>
         </form>
+        <div class="sec" id="e6Sug"></div>
         <div class="kpis" id="e6Out"></div>
         <svg class="chart" id="e6Chart" viewBox="0 0 340 170" role="img" aria-label="두 단지 84제곱미터 분기 중앙가 차이 추이"></svg>
         <div class="sec" id="e6Notes"></div>
@@ -1028,6 +1029,12 @@ const Move = {
   const man = (v) => Math.abs(v) >= 10000 ? (v / 10000).toFixed(2).replace(/\.?0+$/, '') + '억' : Math.round(v).toLocaleString() + '만';
   function draw() {
     const ia = idx.get($('#e6_a').value), ib = idx.get($('#e6_b').value), svg = $('#e6Chart');
+    // 서버가 고른 목표 후보(jobs/gap.py): 1.5~2.5배·10km 안, 지금 격차가 5년 중 좁은 순. 누르면 목표 집에 넣는다
+    const sug = ia != null ? (E.t || {})[ia] || [] : [];
+    $('#e6Sug').innerHTML = ia == null ? '' : sug.length
+      ? `<p class="muted" style="margin:0 0 4px">갈아타기 목표 후보 (1.5~2.5배 · 10km 안 · 지금 격차가 좁은 순, 누르면 목표로)</p><div class="chips">`
+        + sug.map(([j, r, p, dm]) => `<button type="button" class="chip" data-j="${j}" aria-pressed="${j === ib}">${E.cx[j][0]} ${r.toFixed(2)}배 · 하위 ${Math.round(p)}%${p <= 20 ? ' ✓' : ''} · ${(dm / 1000).toFixed(1)}km</button>`).join('') + '</div>'
+      : '<p class="muted" style="margin:0">이 단지는 1.5~2.5배·10km 안에서 함께 12분기 이상 거래된 목표 후보가 없습니다.</p>';
     svg.innerHTML = '';
     if (ia == null || ib == null) {
       $('#e6Out').innerHTML = ''; $('#e6Notes').innerHTML = `<p class="muted" style="margin:0">목록에서 단지를 고르세요 (수도권 ${E.cx.length.toLocaleString()}곳: 최근 20분기 중 12분기 이상 84㎡ 거래가 있는 단지).</p>`;
@@ -1060,6 +1067,7 @@ const Move = {
     $('#e6Notes').innerHTML = `<p class="muted" style="margin:0">📖 상승 초반에는 비싼 집이 먼저 올라 격차가 벌어지고 후반에 좁혀진다. 격차가 줄었을 때 갈아탄다(p.438~439). 목표가 지금 집의 1.5배가 안 되면 거래비용으로 남는 게 없다(p.436~438). 🔧 함께 거래된 분기들 중 지금 격차가 하위 20% 안이면 '격차가 작은 편'. 이건 지난 격차의 순위일 뿐 앞으로 오를 확률이 아닙니다. 1.5배는 작가의 투자 원칙이고, 출퇴근·가족 계획 때문에 그보다 작은 이동도 의미가 있을 수 있습니다. 분기마다 그 분기에 팔린 집의 층·동에 따라 값이 흔들리고, 두 단지 모두 84㎡ 기준입니다.</p>`;
   }
   for (const id of ['#e6_a', '#e6_b']) { $(id).addEventListener('change', draw); $(id).addEventListener('input', () => { if (idx.has($(id).value)) draw(); }); }
+  $('#e6Sug').addEventListener('click', (ev) => { const b = ev.target.closest('.chip'); if (!b) return; $('#e6_b').value = label(E.cx[+b.dataset.j]); draw(); });
   $('#e6').addEventListener('submit', (e) => e.preventDefault());
   draw();
 })();
@@ -1171,6 +1179,8 @@ function drawCx(c) {
   const pj = (D.projects || []).filter(p => p[5].includes(c.seq.slice(0, 5)) && !pst.some(z => z[0] === p[0]));
   if (pj.length) notes.push(`이 구를 지나는 ${pst.length ? '그 밖의 ' : ''}철도 사업(H4): ` + pj.map(p => `<b>${p[0]}</b> ${p[1] === '예타탈락' ? '예타 탈락' : p[1]}${p[4].length ? `(→ ${p[4].join('·')})` : ''} — ${PROJ_RULE[p[1]]}`).join(' / ')
     + '. 구 안에서도 역과의 거리에 따라 다르고, 역 위치는 직접 확인. 📖 착공 뒤 들어가도 늦지 않고 취소가 악재(p.279~280).');
+  if (c.e6t && c.e6t.length) notes.push(`갈아타기 목표 후보(E6): ` + c.e6t.map(t => `${t[0]} ${t[1].toFixed(2)}배·격차 하위 ${Math.round(t[2])}%${t[2] <= 20 ? '(<b>좁아진 때</b>)' : ''}·${(t[3] / 1000).toFixed(1)}km`).join(' / ')
+    + '. 이 단지를 산 뒤 옮겨 갈 곳의 예시: 84㎡ 분기 중앙가가 1.5~2.5배(🔧 2.5·10km), 지금 격차가 지난 5년 중 좁은 순. 📖 갈아타기는 최소 1.5배(p.436~438), 격차가 줄어들 때(p.438~439). ⑧ 에서 추이를 볼 수 있음.');
   if (c.liq) {
     const L = c.liq, ymf = (m) => `${m.slice(0, 4)}.${m.slice(4)}`, top = (r) => r == null ? '' : ` — 같은 구 단지 중 <b>${r >= 50 ? `상위 ${Math.max(1, Math.round(100 - r))}%` : `하위 ${Math.max(1, Math.round(r))}%`}</b>`;
     notes.push(`하락기 환금성(C3): 지역 매매지수 고점 ${ymf(L.peak_m)} → 저점 ${ymf(L.trough_m)}(${(+L.drop_pct).toFixed(1)}%${L.window_src === 'sido' ? ', 시군구 지수가 없어 시도 기준' : ''}) 사이 중개 거래 ${L.down_n}건, `

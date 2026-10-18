@@ -152,6 +152,8 @@ for r in select(db, """SELECT apt_seq, substr(contract_month,1,4)||'Q'||((substr
     e6.setdefault(r['apt_seq'], {})[r['q']] = float(r['p'])
 out['e6'] = e6
 out['e6_names'] = select(db, "SELECT apt_seq, apt_name, region_code, umd_name FROM complexes")
+# E6 서버 계산 갈아타기 목표 후보 (e6_targets, jobs/gap.py)
+out['e6_targets'] = select(db, "SELECT apt_seq, rank, target_seq, ratio_now, gap_pct, dist_m FROM e6_targets ORDER BY apt_seq, rank")
 out['seqs'] = SEQS
 out['regions'] = {k: v for k, v in REGIONS.items()}
 json.dump(out, open(OUT / 'raw.json', 'w'), ensure_ascii=False, default=str)
