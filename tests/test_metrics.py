@@ -240,3 +240,23 @@ def test_metrics_f1_plan():
     a = select(db, "SELECT * FROM complex_metrics WHERE apt_seq = 'A'")[0]
     assert (a["f1_zone_24m"], a["f1_sgg_24m"]) == (3364, 3374)
     assert a["f1_ipju"] == "지난입주(2026.07, 500세대)" and a["f1_next"] == "부동산원(2027.03, 3064세대)"
+
+
+def test_metrics_prev_high_after_cancel():
+    """오래된 거래가 나중에 해제되면, 전고점 재계산 기간(PREV_DAYS) 밖 거래도 그 단지·면적군은 다시 계산한다."""
+    if not URL:
+        return
+    db = _db()
+    db.query("INSERT INTO complexes (apt_seq, apt_name, region_code, umd_name, updated_at) VALUES ('A', 'a', '11680', '역삼동', '2026-10-01');")
+    _deal(db, "A", "2026-01-10", 150000)            # 나중에 해제될 고가
+    _deal(db, "A", "2026-03-10", 120000)
+    _deal(db, "A", "2026-05-10", 125000)            # PREV_DAYS(30) 밖
+    db.query(render(TODAY, 4000))
+    pick = lambda: {r["contract_date"].isoformat() if hasattr(r["contract_date"], "isoformat") else r["contract_date"]: r["prev_high_10k"]
+                    for r in select(db, "SELECT contract_date::text AS contract_date, prev_high_10k FROM deals")}
+    assert pick()["2026-05-10"] == 150000
+    key = select(db, "SELECT deal_key FROM deals WHERE price_10k = 150000")[0]["deal_key"]
+    db.query(f"UPDATE deals SET is_cancelled = true WHERE deal_key = {lit(key)}; "
+             f"INSERT INTO deal_events (deal_key, event, event_date) VALUES ({lit(key)}, 'cancelled', {lit(TODAY)});")
+    db.query(render(TODAY, 30))
+    assert pick()["2026-05-10"] == 120000             # 해제된 15억이 빠지고 3월 12억

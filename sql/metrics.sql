@@ -3,12 +3,17 @@ BEGIN;
 
 -- 1) 최근 계약 거래의 전고점 (ARCHITECTURE 4.3: 이전 계약일의 중개·비해제 최고가)
 --    DB 밖으로 보관한 과거 거래의 최고가(deal_anchor)와 합친다 (저장 구조 C, GREATEST 는 NULL 을 무시)
+--    최근 🔧 14일 안에 해제가 확인된 단지·면적군은 기간과 상관없이 모두 다시 계산한다(해제된 거래가 전고점으로 남지 않게,
+--    jobs/daily.py recheck_month 가 지난 1년 달을 돌아가며 다시 받는다)
 UPDATE deals d SET prev_high_10k = GREATEST((
   SELECT max(p.price_10k) FROM deals p
   WHERE p.apt_seq = d.apt_seq AND p.area_group = d.area_group AND p.contract_date < d.contract_date
     AND NOT p.is_cancelled AND p.deal_type = '중개'),
   (SELECT a.hist_high_10k FROM deal_anchor a WHERE a.apt_seq = d.apt_seq AND a.area_group = d.area_group))
-WHERE d.contract_date >= {TODAY} - {PREV_DAYS};
+WHERE d.contract_date >= {TODAY} - {PREV_DAYS}
+   OR (d.apt_seq, d.area_group) IN (
+     SELECT x.apt_seq, x.area_group FROM deal_events e JOIN deals x USING (deal_key)
+     WHERE e.event = 'cancelled' AND e.event_date >= {TODAY} - 14);
 
 -- 2) 단지 × 면적군 지표
 DELETE FROM complex_metrics;

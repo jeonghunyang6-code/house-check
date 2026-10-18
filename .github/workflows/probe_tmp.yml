@@ -1,0 +1,26 @@
+# 임시 (바로 지운다): 지난 1년 매매 다시 받기(해제 재확인 1회) → 지표 재계산
+name: probe_tmp
+on:
+  push:
+    branches: [claude/brave-lamport-gkzeao]
+    paths: [.github/workflows/probe_tmp.yml]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: command -v psql || (sudo apt-get update -q && sudo apt-get install -y -q postgresql-client)
+      - env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATA_GO_KR_SERVICE_KEY: ${{ secrets.DATA_GO_KR_SERVICE_KEY }}
+          HC_DB_BACKEND: psql
+          PYTHONUNBUFFERED: "1"
+        run: |
+          python -m jobs.daily --kinds trade --months 202511-202608 | grep -v " 신규0 해제0 사라짐0" || true
+          python -m jobs.metrics
