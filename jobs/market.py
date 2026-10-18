@@ -39,6 +39,25 @@ def _ym(p: str) -> str:
     return f"{p[:4]}.{p[4:]}"
 
 
+BANDS = ("6억 미만", "6~9억", "9~15억", "15~25억", "25~30억", "30억+")   # 15·25억 = 주담대 한도 경계, 30억 = 급지 1급(E1)·초고가(L6)
+BAND_CUTS = (60000, 90000, 150000, 250000, 300000)
+
+
+def price_bands(db: Db) -> list[dict]:
+    """가격대(84㎡ 환산 기준 시세)별 B1 12개월 변화 중앙값, 최근 3개월 상승 비중. 단지마다 84㎡ 에 가장 가까운 면적군 하나."""
+    case = " ".join(f"WHEN p84 < {c} THEN {lit(b)}" for c, b in zip(BAND_CUTS, BANDS)) + f" ELSE {lit(BANDS[-1])}"
+    rows = select(db, f"""
+WITH m AS (SELECT DISTINCT ON (apt_seq) apt_seq, left(apt_seq, 2) AS sd, ref_10k::numeric / area_group * 84 AS p84, chg_12m, last3
+  FROM complex_metrics WHERE ref_10k IS NOT NULL AND area_group BETWEEN 59 AND 135 AND chg_12m IS NOT NULL
+  ORDER BY apt_seq, abs(area_group - 84))
+SELECT CASE WHEN sd = '11' THEN '서울' ELSE '경기·인천' END AS scope, CASE {case} END AS band, count(*) AS n,
+  percentile_cont(0.5) WITHIN GROUP (ORDER BY chg_12m) AS chg, avg((last3 = '상승')::int) * 100 AS up3
+FROM m GROUP BY 1, 2""")
+    out = [dict(scope=r["scope"], band=r["band"], n=int(r["n"]), chg=round(float(r["chg"]), 1), up3=round(float(r["up3"])))
+           for r in rows if int(r["n"]) >= 5]   # 🔧 5곳 미만 구간은 뺀다
+    return sorted(out, key=lambda b: (b["scope"] != "서울", BANDS.index(b["band"])))
+
+
 def run(db: Db) -> dict[str, tuple]:
     today = date.today()
     stmts = ["BEGIN;", "DELETE FROM region_phase;"]
@@ -152,6 +171,20 @@ def run(db: Db) -> dict[str, tuple]:
                             "원인(분양가·입지·상품성·공급 집중·거시)은 단지별로 봐야 한다(📖 p.155~160)")
     else:
         sig["f3_unsold"] = (None, "데이터 없음", "수도권 미분양")
+    # L9 가격대별 시장 (▶ 금리상승의 후폭풍 4:36 "고가 꺾임, 저가 상승, 중간 숨고르기" / 📖 p.152), L6 초고가 분리(📖 p.122)
+    bands = price_bands(db)
+    se = [b for b in bands if b["scope"] == "서울"]
+    if se:
+        hi_, mid_ = [b for b in se if b["band"] in BANDS[-2:]], [b for b in se if b["band"] in BANDS[2:4]]
+        def med(bs):
+            n = sum(b["n"] for b in bs)
+            return sum(b["chg"] * b["n"] for b in bs) / n if n else None
+        h, m_ = med(hi_), med(mid_)
+        state = "고가 덜 오름" if h is not None and m_ is not None and h < m_ - 3 else "고가 더 오름" if h is not None and m_ is not None and h > m_ + 3 else "비슷"
+        sig["l9_price_bands"] = (round(h - m_, 1) if h is not None and m_ is not None else None, state,
+                                 "서울 단지 12개월 변화 중앙값(84㎡ 환산 기준 시세 구간, B1 판정 단지): "
+                                 + " · ".join(f"{b['band']} {b['chg']:+.1f}%({b['n']}곳)" for b in se)
+                                 + ". 🔧 25억+ 와 9~25억 차이 ±3%p. ▶ 가격대마다 다른 시장(고가 꺾임·저가 상승·중간 숨고르기), 📖 초고가는 따로 본다 p.122")
     # A4 급매 체결 비중 (📖 급매 = 실거래 대비 5% 이상 저렴 p.245~247): 서울 최근 4주 중개 거래 중
     # 같은 단지·면적의 직전 90일 중앙값(3건 이상) × 0.95 이하. 1층은 판정·기준 모두에서 뺀다(A1 과 같게, 1층은 평소 약 8% 낮아
     # 넣으면 41%가 급매로 잡혔다, 2026-10-18). 2~4층 할인(3~5%)은 남는다. 경기·인천은 이력이 짧아 제외
