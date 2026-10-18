@@ -3,6 +3,7 @@
     python -m jobs.rone weekly     # 마지막으로 받은 주 다음부터 이번 주까지 (매주 목요일 발표 뒤)
     python -m jobs.rone backfill   # 지역마다 전체 시계열 (2012년~). 이미 있는 행은 덮어쓴다
     python -m jobs.rone breadth --weeks 8   # 최근 N주의 전국·수도권 상승·하락 지역 수 (rone_breadth, 0011)
+    python -m jobs.rone buyer      # 매입자 거주지별 아파트 매매 (월간, buyer_residence, 0044)
 
 같은 (stat, cls_id, week_id)는 덮어쓰므로 몇 번을 다시 돌려도 된다(발표 후 수정치 반영).
 """
@@ -19,7 +20,8 @@ from collector.db import Db, DbError, connect, lit, select
 from collector.regions import REGIONS
 from collector.sources.molit import ApiError, QuotaExceeded
 from collector.market import breadth
-from collector.sources.rone import CAPITAL_PREFIXES, TABLES, Point, fetch_series, fetch_week, keep, map_regions, weeks_between
+from collector.sources.rone import (CAPITAL_PREFIXES, TABLES, Point, buyer_codes, fetch_buyer_month, fetch_series, fetch_week, keep, map_regions,
+                                    weeks_between)
 
 KST = ZoneInfo("Asia/Seoul")
 CHUNK = 1000
@@ -131,6 +133,46 @@ def run_backfill(db: Db) -> int:
     return rc
 
 
+BUYER_START = "202001"
+BUYER_REVISE = 3   # 최근 몇 달은 다시 받는다(늦은 신고로 바뀐다)
+
+
+def run_buyer(db: Db, today: date) -> int:
+    """매입자 거주지별 아파트 매매 (buyer_residence, 0044). 처음엔 2020-01 부터, 이후엔 저장된 마지막 달의 3달 전부터 지난달까지."""
+    last = select(db, "SELECT max(period) AS p FROM buyer_residence")[0]["p"]
+    ym = BUYER_START if not last else _ym_add(last, -BUYER_REVISE)
+    end = _ym_add(today.strftime("%Y%m"), -1)
+    rc, n_months = 0, 0
+    while ym <= end:
+        try:
+            rows = fetch_buyer_month(ym)
+        except QuotaExceeded as e:
+            print(f"  매입자 거주지 {ym}: 호출 한도 초과로 중단: {e}", file=sys.stderr)
+            return 2
+        except ApiError as e:
+            print(f"  매입자 거주지 {ym}: 실패 {e}", file=sys.stderr)
+            rc = 1
+            ym = _ym_add(ym, 1)
+            continue
+        if rows:
+            vals = ", ".join("(" + ", ".join(lit(x) for x in (r["period"], r["grp_id"], r["name"],
+                                                                ",".join(buyer_codes(r["name"], REGIONS)) or None, r["total"],
+                                                                r.get("same_sgg"), r.get("same_sido"), r.get("seoul"), r.get("other"))) + ")"
+                             for r in rows)
+            db.query("INSERT INTO buyer_residence (period, grp_id, name, region_codes, total, same_sgg, same_sido, seoul, other) VALUES "
+                     + vals + " ON CONFLICT (period, grp_id) DO UPDATE SET name = EXCLUDED.name, region_codes = EXCLUDED.region_codes, "
+                     "total = EXCLUDED.total, same_sgg = EXCLUDED.same_sgg, same_sido = EXCLUDED.same_sido, seoul = EXCLUDED.seoul, other = EXCLUDED.other;")
+            n_months += 1
+        print(f"  매입자 거주지 {ym}: {len(rows)}개 지역" if rows else f"  매입자 거주지 {ym}: 아직 발표 없음", flush=True)
+        ym = _ym_add(ym, 1)
+    return rc
+
+
+def _ym_add(ym: str, k: int) -> str:
+    y, m = divmod(int(ym[:4]) * 12 + int(ym[4:]) - 1 + k, 12)
+    return f"{y}{m + 1:02d}"
+
+
 def _latest_points(stat: str) -> list[Point]:
     """최근 4주 중 발표가 있는 가장 최근 주의 전체 지역 (backfill 할 지역 목록을 정하는 데 쓴다)."""
     today = datetime.now(KST).date()
@@ -143,14 +185,15 @@ def _latest_points(stat: str) -> list[Point]:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("mode", choices=["weekly", "backfill", "breadth"])
+    ap.add_argument("mode", choices=["weekly", "backfill", "breadth", "buyer"])
     ap.add_argument("--weeks", type=int, default=8, help="breadth 모드: 최근 몇 주")
     ap.add_argument("--db", choices=["api", "psql"])
     a = ap.parse_args(argv)
     db = connect(a.db)
     t0 = time.monotonic()
     today = datetime.now(KST).date()
-    rc = run_weekly(db, today) if a.mode == "weekly" else run_backfill(db) if a.mode == "backfill" else run_breadth(db, a.weeks, today)
+    rc = (run_weekly(db, today) if a.mode == "weekly" else run_backfill(db) if a.mode == "backfill"
+          else run_buyer(db, today) if a.mode == "buyer" else run_breadth(db, a.weeks, today))
     print(f"[rone] {a.mode} done in {time.monotonic() - t0:.0f}s rc={rc}")
     return rc
 

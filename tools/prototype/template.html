@@ -166,6 +166,14 @@ footer.foot { color: var(--ink-3); font-size: 12px; max-width: 90ch; display: gr
           <div id="checks"></div>
         </div>
         <div class="sec">
+          <h3>규제와 풍선효과 <span class="muted">(토지거래허가 확대 뒤)</span></h3>
+          <div class="seg" role="group" aria-label="규제 사건" id="blEv"></div>
+          <svg class="chart" id="blChart" viewBox="0 0 340 190" role="img" aria-label="규제 확대 뒤 새로 규제된 곳, 붙은 바깥, 먼 바깥의 매매지수 누적 변화 중앙값"></svg>
+          <div class="legend"><span><i style="background:var(--c2)"></i>새로 규제된 곳</span><span><i style="background:var(--c1)"></i>붙은 바깥</span><span><i style="background:var(--ink-3)"></i>먼 바깥</span></div>
+          <div class="tbl-wrap"><table id="blTbl" style="min-width:0"></table></div>
+          <p class="src" id="blSrc"></p>
+        </div>
+        <div class="sec">
           <h3>미분양 많은 곳 <span class="muted" id="unsoldAsof"></span></h3>
           <div class="tbl-wrap"><table id="unsoldTbl"></table></div>
           <p class="src" id="unsoldSrc"></p>
@@ -435,6 +443,51 @@ $('#notice').innerHTML = `<b>데이터 범위</b><span>서울 실거래는 2020�
     + '분양가 비율은 미분양이 많은 곳(평택·양주·이천 ÷ 신축 1.2~1.3)과 없는 곳(동작·의왕 1.1~1.2)이 크게 다르지 않아 분양가만으로 원인을 판정하지 않습니다(2026-10-18 확인).';
 })();
 
+/* ① 풍선효과 (📖 규제 밖 비슷한 급지로 수요 이동 → 따라가지 마라 p.288~292, jobs/balloon.py) */
+(function () {
+  const B = D.balloon || {}, evs = Object.keys(B);
+  if (!evs.length) { $('#blSrc').textContent = '데이터 없음'; return; }
+  const GC = { inside: '--c2', adjacent: '--c1', far: '--ink-3' }, GN = { inside: '새로 규제', adjacent: '붙은 바깥', far: '먼 바깥' };
+  const title = { '2025-03-24': '25.03 강남3구·용산', '2025-10-20': '25.10 서울·경기 12곳' };
+  let cur = evs[evs.length - 1];
+  $('#blEv').innerHTML = evs.map(e => `<button data-v="${e}" aria-pressed="${e === cur}">${title[e] || e}</button>`).join('');
+  $('#blEv').addEventListener('click', (ev) => { const b = ev.target.closest('button'); if (!b) return; cur = b.dataset.v;
+    [...$('#blEv').children].forEach(x => x.setAttribute('aria-pressed', x === b)); draw(); });
+  const n1 = (v) => v == null ? '–' : (v > 0 ? '+' : '') + (+v).toFixed(1);
+  function draw() {
+    const svg = $('#blChart'); svg.innerHTML = '';
+    const P = B[cur].path, W = 340, H = 190, L = 34, R = 44, T = 10, B_ = 22;
+    const wmax = Math.max(...P.map(p => p[1])), vs = P.map(p => p[2]);
+    const lo = Math.min(0, Math.floor(Math.min(...vs))), hi = Math.max(1, Math.ceil(Math.max(...vs)));
+    const x = (w) => L + (W - L - R) * w / Math.max(wmax, 1), y = (v) => T + (H - T - B_) * (1 - (v - lo) / (hi - lo));
+    const step = (hi - lo) > 8 ? 4 : (hi - lo) > 4 ? 2 : 1;
+    for (let t = Math.ceil(lo / step) * step; t <= hi; t += step) { el('line', { x1: L, x2: W - R, y1: y(t), y2: y(t), class: 'grid' }, svg); txt(svg, L - 4, y(t) + 3, (t > 0 ? '+' : '') + t + '%', 'end'); }
+    for (let w = 0; w <= wmax; w += 13) txt(svg, x(w), H - 6, w + '주');
+    for (const g of ['far', 'adjacent', 'inside']) {
+      const pts = P.filter(p => p[0] === g);
+      if (!pts.length) continue;
+      el('path', { d: pts.map((p, i) => `${i ? 'L' : 'M'}${x(p[1]).toFixed(1)},${y(p[2]).toFixed(1)}`).join(''), fill: 'none', stroke: css(GC[g]), 'stroke-width': 2, 'stroke-linejoin': 'round' }, svg);
+      const l = pts[pts.length - 1];
+      txt(svg, x(l[1]) + 4, y(l[2]) + 3, n1(l[2]) + '%', 'start').setAttribute('style', `fill:var(${GC[g]});font-weight:600`);
+      pts.forEach(p => hover(el('circle', { cx: x(p[1]), cy: y(p[2]), r: 5, fill: 'transparent' }, svg), `${GN[g]} ${p[1]}주 ${n1(p[2])}% (${p[3]}곳 중앙값)`));
+    }
+    const rows = B[cur].rows.filter(r => r[1] === 'adjacent').sort((a, b) => (b[5] ?? -99) - (a[5] ?? -99));
+    const wk = Math.max(...B[cur].rows.map(r => r[4]));
+    $('#blTbl').innerHTML = `<thead><tr><th>붙은 바깥 시군구</th><th class="r">13주</th><th class="r">${wk}주</th><th class="r">외지인 매수<br>(전→후)</th></tr></thead><tbody>`
+      + rows.slice(0, 10).map(r => `<tr><td>${(D.region_names[r[0]] || r[0]).replace(/^(서울|경기|인천) /, '')}</td><td class="r num">${n1(r[2])}%</td><td class="r num"><b>${n1(r[5])}%</b></td>`
+        + `<td class="r num">${r[6] == null ? '–' : `${(+r[6]).toFixed(0)}→${(+r[7]).toFixed(0)}%`}${r[8] != null ? `<br><span class="muted">서울 ${(+r[8]).toFixed(0)}→${(+r[9]).toFixed(0)}%</span>` : ''}</td></tr>`).join('') + '</tbody>';
+    // 판정 (jobs/balloon.py verdict 와 같은 규칙, 🔧 0.5%p): 번짐 = 붙은 바깥 > 먼 바깥, 풍선 = 거기에 규제지역보다도 더 오름
+    const endm = (g) => { const p = P.filter(q => q[0] === g); return p.length ? p[p.length - 1][2] : null; };
+    const [mi, ma, mf] = ['inside', 'adjacent', 'far'].map(endm);
+    const st = mi == null || ma == null || mf == null ? null : (ma - mf > 0.5 && ma - mi > 0.5) ? '풍선(바깥이 규제지역보다 더 오름)' : ma - mf > 0.5 ? '번짐(붙은 바깥도 오름)' : '번짐 없음';
+    $('#blSrc').innerHTML = (st ? `<b>${st}</b> — ${wmax}주${cur !== evs[evs.length - 1] ? '(다음 확대 전까지)' : ''}: 새로 규제 ${n1(mi)}% · 붙은 바깥 ${n1(ma)}% · 먼 바깥 ${n1(mf)}% (R-ONE 주간 매매지수, 그룹 중앙값). `
+        + `📖 규제 밖 비슷한 급지로 수요가 옮겨 가도 따라가지 마라(p.288~292), 토허제는 거래를 줄일 뿐 가격을 떨어뜨리진 않는다(p.269~270).<br>` : '')
+      + '새로 규제 = 그날 시군구 전체가 토지거래허가로 묶인 곳, 붙은 바깥 = 규제 밖이면서 규제 시군구와 맞닿은 곳(한강 건너 포함), 먼 바깥 = 나머지 수도권. 기준 = 효력일 전 마지막 조사 주, 다음 확대 전까지만. '
+      + '외지인 매수 = 다른 시군구 거주자 매수 비중(한국부동산원 매입자거주지별, 사건 전·후 6개월). 작가는 "비슷한 급지"로 옮겨 간다고 했지만 여기서는 맞닿음만 봅니다.';
+  }
+  draw();
+})();
+
 /* ② 주간 가격 동향 (한국부동산원 R-ONE) */
 (function () {
   const W = D.weekly, G = D.geo, V = W.v, NODATA = new Set(W.nodata);
@@ -553,6 +606,7 @@ $('#notice').innerHTML = `<b>데이터 범위</b><span>서울 실거래는 2020�
     '둔화': 'warn', '확대': 'none', '유지': 'none', '비교 불가': 'none',
     '상승 전환': 'good', '아님': 'none', '있음': 'good', '없음': 'none', '감소': 'none', '증가': 'none', '늘어남': 'warn', '보통': 'none', '유지': 'none', '대세 하락 의심': 'bad', '단기 조정': 'warn',
     '5% 미만': 'good', '5% 이상': 'warn', '10% 이상': 'warn', '20% 이상': 'bad',
+    '풍선(바깥이 규제지역보다 더 오름)': 'bad', '번짐(붙은 바깥도 오름)': 'warn', '번짐 없음': 'none',
   };
   const pill = (state) => `<span class="pill ${PILL[state] || 'acc'}">${state || '–'}</span>`;
   const row = (g, t, sig, extra = '') => sig
@@ -589,6 +643,7 @@ $('#notice').innerHTML = `<b>데이터 범위</b><span>서울 실거래는 2020�
     row('상승 압력', '서울 신규 전세 감소 + 전세가 상승 (D5)', S.d5_new_jeonse, S.d5_new_jeonse && S.d5_new_jeonse.value != null ? ` <span class="muted num">${S.d5_new_jeonse.value > 0 ? '+' : ''}${num(S.d5_new_jeonse.value)}%</span>` : ''),
     row('공급', '수도권 아파트 인허가 12개월 (F2)', S.f2_permits, S.f2_permits && S.f2_permits.value != null ? ` <span class="muted num">${Number(S.f2_permits.value).toLocaleString()}호</span>` : ''),
     row('공급', '수도권 아파트 착공 12개월 (F2)', S.f2_starts, S.f2_starts && S.f2_starts.value != null ? ` <span class="muted num">${Number(S.f2_starts.value).toLocaleString()}호</span>` : ''),
+    row('규제', '풍선효과 (붙은 바깥 − 먼 바깥)', S.g2_balloon, S.g2_balloon && S.g2_balloon.value != null ? ` <span class="muted num">${S.g2_balloon.value > 0 ? '+' : ''}${num(S.g2_balloon.value)}%p</span>` : ''),
     row('공급', '수도권 미분양 (F3)', S.f3_unsold, S.f3_unsold && S.f3_unsold.value != null ? ` <span class="muted num">${Number(S.f3_unsold.value).toLocaleString()}호</span>` : ''),
   ].join('').replace(/<span class="pill acc"><\/span>/g, '<span></span>');
 

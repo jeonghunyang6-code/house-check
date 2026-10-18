@@ -197,6 +197,11 @@ json.dump({'monthly': monthly, 'cx': cx, 'today': today,
            'g1': g1(), 'g2': g2(), 'e6': e6(),
            'unsold': [{k: (float(r[k]) if isinstance(r[k], str) and k in ('r', 'rn') else r[k]) for k in r} for r in d.get('unsold', [])],
            'policy': [[r['d'], r['kind'], r['title']] for r in d.get('policy_events', [])],
+           # 풍선효과: 사건별 [시군구, 그룹, 13주, 26주, 주 수, 지금까지, 외지인 전, 후, 서울 전, 후] / 그룹 중앙값 경로 [그룹, 주, 중앙값, n]
+           'balloon': {e: {'rows': [[r['rc'], r['grp'], *[r[k] and float(r[k]) for k in ('chg_13w', 'chg_26w')], r['weeks_now'],
+                                     *[r[k] and float(r[k]) for k in ('chg_now', 'ob', 'oa', 'sb', 'sa')]] for r in d.get('balloon', []) if r['e'] == e],
+                           'path': [[r['grp'], r['week'], float(r['m']), r['n']] for r in d.get('balloon_path', []) if r['e'] == e]}
+                       for e in sorted({r['e'] for r in d.get('balloon', [])})},
            'auction': {a: [[r['period_month'].replace('-', ''), float(r['sale_ratio']) * 100] for r in d.get('auction', []) if r['area_code'] == a]
                        for a in ('서울', '경기', '인천', '전국')},
            # ⑦ 후보 단지: [단지, 시군구, 동, 면적군, 기준 시세(만원), 신뢰도, 국면, 급지, 재건축 기대, 동 안 격차, 신축 대단지, 세대수, 준공, 월 회전율 %, 하락기 거래 시군구 안 분위(C3)]

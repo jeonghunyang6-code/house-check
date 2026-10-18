@@ -110,6 +110,10 @@ ip AS (SELECT u.sido, u.name, sum(i.households) AS hh FROM u JOIN ipju_plan i ON
 SELECT (SELECT p FROM lp) AS period, u.sido, u.name, u.unsold, u0.u0, u.unsold_done, pr.n, pr.r, pr.rn, ip.hh
 FROM u LEFT JOIN u0 USING (sido, name) LEFT JOIN pr USING (sido, name) LEFT JOIN ip USING (sido, name)
 WHERE u.region_codes IS NOT NULL ORDER BY u.unsold DESC""")
+# 풍선효과 (balloon, jobs/balloon.py)
+out['balloon'] = select(db, """SELECT event_date::text e, region_code rc, grp, chg_13w, chg_26w, weeks_now, chg_now, outsider_before ob, outsider_after oa,
+  seoul_before sb, seoul_after sa FROM balloon ORDER BY event_date, grp, chg_now DESC""")
+out['balloon_path'] = select(db, "SELECT event_date::text e, grp, week, median_chg m, n FROM balloon_path ORDER BY event_date, grp, week")
 out['policy_events'] = select(db, "SELECT event_date::text d, kind, title, source FROM policy_events ORDER BY event_date")
 # G. 유동성·소득·집값 (G1): 2005년부터 전체
 out['g1'] = select(db, """SELECT series, period, value FROM macro_monthly
