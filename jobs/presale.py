@@ -19,23 +19,26 @@ from collections import Counter
 
 from collector.db import Db, DbError, connect, lit, select
 from collector.infra import dist_m
-from collector.presale import (AREAS, PLAN_FILE, address_candidates, locate, match_complex, name_overlap, parse_item, parse_plan,
-                              total_households)
+from collector.presale import (AREAS, PLAN_FILE, address_candidates, locate, match_complex, name_overlap, parse_item, parse_models,
+                              parse_plan, total_households)
 from collector.datagokr_file import CaptchaRequired, DownloadError, download
 from collector.regions import REGIONS
 from collector.sgis import Sgis, SgisError
 
 URL = "https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancDetail"
+URL_MDL = "https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancMdl"   # 주택형별 (분양가)
+RATIO_MONTHS = 24   # 🔧 분양가 ÷ 주변 시세는 최근 24개월 공고만 (주변 시세가 지금 값이라 오래된 공고는 비교가 안 된다)
 NEAR_M = 3000   # 🔧
 
 
-def fetch(area: str, key: str) -> list[dict]:
+def fetch(area: str | None, key: str, url: str = URL) -> list[dict]:
     out, page = [], 1
     while True:
-        q = urllib.parse.urlencode({"page": page, "perPage": 500, "serviceKey": key, "cond[SUBSCRPT_AREA_CODE_NM::EQ]": area})
+        q = urllib.parse.urlencode({"page": page, "perPage": 500, "serviceKey": key,
+                                    **({"cond[SUBSCRPT_AREA_CODE_NM::EQ]": area} if area else {})})
         for i in range(4):
             try:
-                with urllib.request.urlopen(URL + "?" + q, timeout=60) as r:
+                with urllib.request.urlopen(url + "?" + q, timeout=60) as r:
                     d = json.load(r)
                 break
             except urllib.error.HTTPError as e:
@@ -102,7 +105,61 @@ def run(db: Db, geo_limit: int) -> int:
             print(f"  좌표 {i}/{len(todo)} {geo_n}", flush=True)
     left = select(db, "SELECT count(*) AS n FROM presale WHERE geo_method IS NULL")[0]["n"]
     print(f"  공고 {len(rows)}건 저장, 이번에 좌표 {geo_n}, 남은 {left}건")
-    return link_totals(db) or react(db) or load_plan(db, None)
+    return link_totals(db) or react(db) or load_plan(db, None) or prices(db, key) or price_ratio(db)
+
+
+def prices(db: Db, key: str) -> int:
+    """청약홈 주택형별 → presale 분양가 (0042). 전국 전체를 받아 우리 공고만 쓴다(지역 조건이 없는 API)."""
+    items = fetch(None, key, URL_MDL)
+    if items and not {"HOUSE_MANAGE_NO", "HOUSE_TY", "LTTOT_TOP_AMOUNT"} <= set(items[0]):
+        print(f"  주택형별 응답 칸이 예상과 다름: {sorted(items[0])}", file=sys.stderr)
+        return 2
+    got = parse_models(items)
+    ours = {r["house_no"] for r in select(db, "SELECT house_no FROM presale")}
+    vals = [f"({lit(h)}, {lit(v['price_ppm_10k'])}, {lit(v['price84_10k'])}, {v['price_types']})" for h, v in got.items() if h in ours]
+    stmts = ["BEGIN;"] + [f"UPDATE presale AS p SET price_ppm_10k = v.a::numeric, price84_10k = v.b::int, price_types = v.n "
+                          f"FROM (VALUES {', '.join(vals[i:i + 1000])}) AS v(h, a, b, n) WHERE p.house_no = v.h;"
+                          for i in range(0, len(vals), 1000)] + ["COMMIT;"]
+    if vals:
+        db.query("\n".join(stmts))
+    print(f"  분양가: 주택형 {len(items):,}행(전국 공고 {len(got):,}건) → 우리 공고 {len(vals):,}/{len(ours):,}건, "
+          f"가격 있음 {sum(1 for h, v in got.items() if h in ours and v['price_ppm_10k']):,}건")
+    return 0
+
+
+def price_ratio(db: Db) -> int:
+    """F3 분양가 과다형 구분: 최근 공고의 ㎡당 분양가 ÷ 같은 생활권 단지 ㎡당 기준 시세 중앙값(🔧 3곳 미만이면 반경 1.5km),
+    그리고 ÷ 같은 생활권 신축(E7) ㎡당 시세. 그 공고 단지 자신(kapt_apt_seq)은 비교에서 뺀다."""
+    db.query(f"""BEGIN;
+UPDATE presale SET price_ratio = NULL, price_ratio_new = NULL, price_ref_n = NULL;
+WITH m AS (
+  SELECT c.apt_seq, c.lifezone_id AS z, c.lat, c.lng, percentile_cont(0.5) WITHIN GROUP (ORDER BY x.ref_10k::numeric / x.area_group) AS ppm
+  FROM complex_metrics x JOIN complexes c USING (apt_seq) WHERE x.ref_10k IS NOT NULL AND x.area_group BETWEEN 40 AND 135 GROUP BY 1, 2, 3, 4
+), p AS (
+  SELECT house_no, lifezone_id AS z, lat, lng, kapt_apt_seq, price_ppm_10k FROM presale
+  WHERE price_ppm_10k IS NOT NULL AND notice_date >= current_date - INTERVAL '{RATIO_MONTHS} months'
+), zr AS (
+  SELECT p.house_no, percentile_cont(0.5) WITHIN GROUP (ORDER BY m.ppm) AS ref, count(*) AS n
+  FROM p JOIN m ON m.z = p.z AND m.apt_seq IS DISTINCT FROM p.kapt_apt_seq GROUP BY 1
+), rr AS (
+  SELECT p.house_no, percentile_cont(0.5) WITHIN GROUP (ORDER BY m.ppm) AS ref, count(*) AS n
+  FROM p JOIN m ON p.lat IS NOT NULL AND m.lat IS NOT NULL AND abs(m.lat - p.lat) < 0.014 AND abs(m.lng - p.lng) < 0.018
+    AND 111320 * sqrt(power(m.lat - p.lat, 2) + power((m.lng - p.lng) * 0.7934, 2)) <= 1500 AND m.apt_seq IS DISTINCT FROM p.kapt_apt_seq
+  GROUP BY 1
+)
+UPDATE presale t SET
+  price_ratio = round((p.price_ppm_10k / CASE WHEN zr.n >= 3 THEN zr.ref ELSE rr.ref END)::numeric, 2),
+  price_ref_n = CASE WHEN zr.n >= 3 THEN zr.n ELSE rr.n END,
+  price_ratio_new = round((p.price_ppm_10k / nullif(l.e7_new_ppm, 0))::numeric, 2)
+FROM p LEFT JOIN zr USING (house_no) LEFT JOIN rr USING (house_no) LEFT JOIN lifezone l ON l.zone_id = p.z
+WHERE t.house_no = p.house_no AND (zr.n >= 3 OR rr.n >= 3 OR l.e7_new_ppm IS NOT NULL);
+COMMIT;""")
+    r = select(db, f"""SELECT count(*) FILTER (WHERE price_ppm_10k IS NOT NULL AND notice_date >= current_date - INTERVAL '{RATIO_MONTHS} months') AS n,
+      count(price_ratio) AS nr, percentile_cont(0.5) WITHIN GROUP (ORDER BY price_ratio) AS mr,
+      count(price_ratio_new) AS nn, percentile_cont(0.5) WITHIN GROUP (ORDER BY price_ratio_new) AS mn FROM presale""")[0]
+    print(f"  분양가 ÷ 주변 시세: 최근 {RATIO_MONTHS}개월 공고 {r['n']}건 중 {r['nr']}건(중앙값 {r['mr'] and round(float(r['mr']), 2)}), "
+          f"÷ 신축 {r['nn']}건(중앙값 {r['mn'] and round(float(r['mn']), 2)})")
+    return 0
 
 
 def load_plan(db: Db, path: str | None) -> int:
@@ -184,12 +241,18 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--db", choices=["api", "psql"])
     ap.add_argument("--geo-limit", type=int, default=1500, help="이번에 좌표를 찾을 공고 수 (SGIS 약 1초/건)")
     ap.add_argument("--link-only", action="store_true", help="API 없이 총 세대 보정 + 과거 입주 반응 + 입주 예정 물량 (DB 만 필요)")
+    ap.add_argument("--prices-only", action="store_true", help="분양가(주택형별)만 받고 주변 시세와 비교")
     ap.add_argument("--plan-file", help="입주 예정 물량 파일을 미리 받아 둔 경로 (없으면 공공데이터포털에서 받음)")
     a = ap.parse_args(argv)
     t0 = time.monotonic()
     try:
         db = connect(a.db)
-        rc = (link_totals(db) or react(db) or load_plan(db, a.plan_file)) if a.link_only else run(db, a.geo_limit)
+        if a.prices_only:
+            rc = prices(db, os.environ["DATA_GO_KR_SERVICE_KEY"]) or price_ratio(db)
+        elif a.link_only:
+            rc = link_totals(db) or react(db) or load_plan(db, a.plan_file) or price_ratio(db)
+        else:
+            rc = run(db, a.geo_limit)
     except (DbError, OSError, KeyError) as e:
         print(f"[presale] 실패: {type(e).__name__} {e}", file=sys.stderr)
         rc = 1

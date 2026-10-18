@@ -103,3 +103,39 @@ def fetch(name: str, start: str, end: str) -> list[tuple[str, float]]:
     pts = parse(_call({"orgId": s.org_id, "tblId": s.tbl_id, "itmId": s.itm_id, **objs,
                        "prdSe": "M", "startPrdDe": start, "endPrdDe": end}))
     return from_year_to_date(pts) if s.year_to_date else pts
+
+
+# F3 시군구별 미분양 (📖 원인 5가지 p.155~160). C1 = 시도, C2 = 시군구(경기는 시 단위, 인천은 2026-07 개편 뒤 구 이름).
+# 2026-10-18 실제 응답으로 확인: 서울 25구, 인천 11곳, 경기 31시군
+UNSOLD_SIDO = {"서울": ("13102871087A.0002", "13102871088A.0002"), "인천": ("13102871087A.0005", "13102871088A.0006"),
+               "경기": ("13102871087A.0009", "13102871088A.0010")}
+
+
+def fetch_unsold_sgg(start: str, end: str) -> list[dict]:
+    """[{period, sido, name, unsold, unsold_done}] 시도 '계' 행은 뺀다. 준공 후 값이 없는 시군구는 None."""
+    out: dict[tuple[str, str, str], dict] = {}
+    for sido, (a_all, a_done) in UNSOLD_SIDO.items():
+        for r in _rows(_call({"orgId": "116", "tblId": "DT_MLTM_2082", "itmId": "13103871087T1", "objL1": a_all, "objL2": "ALL",
+                              "prdSe": "M", "startPrdDe": start, "endPrdDe": end})):
+            if r["C2_NM"] != "계":
+                out[(r["PRD_DE"], sido, r["C2_NM"])] = dict(period=r["PRD_DE"], sido=sido, name=r["C2_NM"], unsold=int(float(r["DT"])), unsold_done=None)
+        for r in _rows(_call({"orgId": "116", "tblId": "DT_MLTM_5328", "itmId": "13103871088T1", "objL1": a_done, "objL2": "ALL",
+                              "objL3": "13102871088C.0001", "objL4": "13102871088D.0001", "prdSe": "M", "startPrdDe": start, "endPrdDe": end})):
+            k = (r["PRD_DE"], sido, r["C2_NM"])
+            if r["C2_NM"] != "계" and k in out:
+                out[k]["unsold_done"] = int(float(r["DT"]))
+    return sorted(out.values(), key=lambda x: (x["period"], x["sido"], x["name"]))
+
+
+def _rows(j: list | dict) -> list[dict]:
+    if isinstance(j, dict):
+        if str(j.get("err")) == "30":
+            return []
+        raise ApiError(f"KOSIS err {j.get('err')} {j.get('errMsg')}")
+    return [r for r in j if r.get("DT") not in (None, "", "-")]
+
+
+def sgg_codes(sido: str, name: str, regions: dict[str, str]) -> list[str]:
+    """KOSIS 시군구 이름 → 우리 시군구 코드들. 경기 '수원시' → 수원시 4개 구. 못 찾으면 []."""
+    pre = f"{sido} {name}"
+    return sorted(c for c, n in regions.items() if n == pre or n.startswith(pre + " "))

@@ -13,11 +13,13 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from collector.db import Db, DbError, connect, lit
+from collector.regions import REGIONS
 from collector.sources import ecos, kosis
 from collector.sources.molit import ApiError, QuotaExceeded
 
 KST = ZoneInfo("Asia/Seoul")
 START = "200001"
+UNSOLD_START = "202001"
 
 
 def upsert(db: Db, series: str, pts: list[tuple[str, float]], today) -> None:
@@ -40,15 +42,42 @@ def run(db: Db) -> int:
             if pts:
                 upsert(db, name, pts, today)
             print(f"  {name}: {len(pts)}개 기간" + (f", 최신 {pts[-1][0]} = {pts[-1][1]}" if pts else ""))
-    return rc
+    return run_unsold(db, today) or rc
+
+
+def run_unsold(db: Db, today) -> int:
+    """F3 시군구별 미분양 (0042). 2020년부터 전체를 덮어쓴다."""
+    try:
+        rows = kosis.fetch_unsold_sgg(UNSOLD_START, today.strftime("%Y%m"))
+    except (ApiError, QuotaExceeded) as e:
+        print(f"  시군구 미분양: 실패 {e}", file=sys.stderr)
+        return 1
+    if not rows:
+        print("  시군구 미분양: 0건", file=sys.stderr)
+        return 1
+    codes = {(r["sido"], r["name"]): ",".join(kosis.sgg_codes(r["sido"], r["name"], REGIONS)) or None for r in rows}
+    vals = [f"({lit(r['period'])}, {lit(r['sido'])}, {lit(r['name'])}, {lit(codes[(r['sido'], r['name'])])}, {r['unsold']}, {lit(r['unsold_done'])})"
+            for r in rows]
+    stmts = ["BEGIN;", f"DELETE FROM unsold_sgg WHERE period >= {lit(UNSOLD_START)};"]
+    for i in range(0, len(vals), 1000):
+        stmts.append("INSERT INTO unsold_sgg (period, sido, name, region_codes, unsold, unsold_done) VALUES " + ", ".join(vals[i:i + 1000]) + ";")
+    stmts.append("COMMIT;")
+    db.query("\n".join(stmts))
+    miss = sorted({f"{s} {n}" for (s, n), c in codes.items() if c is None})
+    last = max(r["period"] for r in rows)
+    print(f"  시군구 미분양: {len(rows)}행, 최신 {last} {sum(r['unsold'] for r in rows if r['period'] == last):,}호"
+          + (f", 코드 못 맞춤 {miss}" if miss else ""))
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--db", choices=["api", "psql"])
+    ap.add_argument("--unsold-only", action="store_true", help="시군구 미분양만")
     a = ap.parse_args(argv)
     try:
-        rc = run(connect(a.db))
+        db = connect(a.db)
+        rc = run_unsold(db, datetime.now(KST).date()) if a.unsold_only else run(db)
     except DbError as e:
         print(f"[macro] 실패: {e}", file=sys.stderr)
         return 1
