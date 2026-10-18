@@ -155,13 +155,19 @@ def run_buyer(db: Db, today: date) -> int:
             ym = _ym_add(ym, 1)
             continue
         if rows:
-            vals = ", ".join("(" + ", ".join(lit(x) for x in (r["period"], r["grp_id"], r["name"],
-                                                                ",".join(buyer_codes(r["name"], REGIONS)) or None, r["total"],
-                                                                r.get("same_sgg"), r.get("same_sido"), r.get("seoul"), r.get("other"))) + ")"
-                             for r in rows)
-            db.query("INSERT INTO buyer_residence (period, grp_id, name, region_codes, total, same_sgg, same_sido, seoul, other) VALUES "
-                     + vals + " ON CONFLICT (period, grp_id) DO UPDATE SET name = EXCLUDED.name, region_codes = EXCLUDED.region_codes, "
-                     "total = EXCLUDED.total, same_sgg = EXCLUDED.same_sgg, same_sido = EXCLUDED.same_sido, seoul = EXCLUDED.seoul, other = EXCLUDED.other;")
+            try:
+                vals = ", ".join("(" + ", ".join(lit(x) for x in (r["period"], r["grp_id"], r["name"],
+                                                                    ",".join(buyer_codes(r["name"], REGIONS)) or None, r["total"],
+                                                                    r.get("same_sgg"), r.get("same_sido"), r.get("seoul"), r.get("other"))) + ")"
+                                 for r in rows)
+                db.query("INSERT INTO buyer_residence (period, grp_id, name, region_codes, total, same_sgg, same_sido, seoul, other) VALUES "
+                         + vals + " ON CONFLICT (period, grp_id) DO UPDATE SET name = EXCLUDED.name, region_codes = EXCLUDED.region_codes, "
+                         "total = EXCLUDED.total, same_sgg = EXCLUDED.same_sgg, same_sido = EXCLUDED.same_sido, seoul = EXCLUDED.seoul, other = EXCLUDED.other;")
+            except DbError as e:
+                print(f"  매입자 거주지 {ym}: 저장 실패 {e}", file=sys.stderr)
+                rc = 1
+                ym = _ym_add(ym, 1)
+                continue
             n_months += 1
         print(f"  매입자 거주지 {ym}: {len(rows)}개 지역" if rows else f"  매입자 거주지 {ym}: 아직 발표 없음", flush=True)
         ym = _ym_add(ym, 1)
