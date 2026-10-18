@@ -252,7 +252,9 @@ footer.foot { color: var(--ink-3); font-size: 12px; max-width: 90ch; display: gr
         <form class="calc" id="calc" autocomplete="off">
           <p class="calc-intro">종잣돈과 대출로 살 수 있는 집값, 매달 갚을 원리금을 계산합니다.</p>
           <label class="calc-row" for="c_seed"><span>종잣돈</span><span class="calc-in"><input id="c_seed" inputmode="numeric" value="40000"><span class="unit">만원</span></span></label>
-          <label class="calc-row" for="c_limit"><span>은행 대출 가능액</span><span class="calc-in"><input id="c_limit" inputmode="numeric" value="50000"><span class="unit">만원</span></span></label>
+          <label class="calc-row" for="c_limit"><span>쓸 대출 (계획)</span><span class="calc-in"><input id="c_limit" inputmode="numeric" value="50000"><span class="unit">만원</span></span></label>
+          <label class="calc-row" for="c_bank"><span>은행에서 확인한 한도 (선택)</span><span class="calc-in"><input id="c_bank" inputmode="numeric" value="" placeholder="미확인"><span class="unit">만원</span></span></label>
+          <label class="calc-row" for="c_reserve"><span>남겨 둘 예비자금</span><span class="calc-in"><input id="c_reserve" inputmode="numeric" value="0"><span class="unit">만원</span></span></label>
           <label class="calc-row" for="c_rate"><span>대출 금리</span><span class="calc-in"><input id="c_rate" inputmode="decimal" value=""><span class="unit">%</span></span></label>
           <label class="calc-row" for="c_years"><span>상환 기간</span><span class="calc-in"><input id="c_years" inputmode="numeric" value="30"><span class="unit">년</span></span></label>
           <div class="calc-foot"><button type="button" class="chip" id="calcReset">초기화</button><span class="muted">원리금균등 상환 기준</span></div>
@@ -655,6 +657,27 @@ $('#notice').innerHTML = `<b>데이터 범위</b><span>서울 실거래는 2020�
   $('#g2Src').textContent = `2006년 이후 ${G.rel.length}개월 중 금리와 집값이 같은 방향 ${n('동행')}개월, 반대 방향 ${n('역행')}개월, 금리 동결 ${n('금리 동결')}개월. 최근(${cur[0].slice(0, 4)}.${cur[0].slice(4)})은 ${cur[1]}. 📖 금리는 집값을 조절하지 않는다, 금리 인하는 경기가 나쁘다는 뜻일 수 있다(p.48~49). 동행 = 1년 전보다 금리가 오르며 집값도 오름, 또는 둘 다 내림. 출처: 한국은행 ECOS(기준금리, KB 아파트 매매가격지수).`;
 })();
 
+/* 대출 세 가지를 나눈다 (외부 검토 2026-10-17 반영): 제도 상한(가격 구간별 상한, 개인 한도 아님) / 은행 확인 한도(사용자 입력) / 필요 대출.
+   은행 확인 한도가 없으면 '확인 필요'로 두고 가능으로 확정하지 않는다. 구간은 은행이 대출 신청일의 시세(KB 시세·감정가 등)로 정하므로
+   이 화면의 실거래 기준 가격이 경계 🔧 ±5% 안이면 구간이 바뀔 수 있다고 알린다 */
+const LOAN_EDGES = [150000, 250000], LOAN_EDGE_PCT = 0.05;
+const Loan = {
+  band: (p) => p <= 150000 ? '15억 이하' : p <= 250000 ? '15~25억' : '25억 초과',
+  nearEdge: (p) => LOAN_EDGES.find(e => Math.abs(p - e) <= e * LOAN_EDGE_PCT),
+  check(price, need, bank) {
+    const cap = loanCap(price), notes = [], edge = Loan.nearEdge(price);
+    let state;
+    if (need > cap * 10000) state = '제도 상한 초과';
+    else if (bank == null) state = need > 0 ? '은행 확인 필요' : '대출 없음';
+    else state = need <= bank ? '확인 한도 안' : '은행 한도 부족';
+    if (need > cap * 10000) notes.push(`<b>필요 대출 ${(need / 10000).toFixed(1)}억이 이 집값 구간(${Loan.band(price)})의 제도 상한 ${cap}억을 넘습니다.</b> 대출을 줄이거나 집값을 낮춰야 합니다.`);
+    else if (bank == null && need > 0) notes.push(`제도 상한 ${cap}억은 이 가격대에서 받을 수 있는 <b>최대치</b>이지 내 한도가 아닙니다. 실제 한도는 LTV·DSR(소득·다른 빚)로 은행이 정합니다. 은행에서 확인한 한도를 넣으면 판정합니다.`);
+    else if (bank != null && need > bank) notes.push(`<b>필요 대출이 은행 확인 한도보다 ${((need - bank) / 10000).toFixed(2)}억 많습니다.</b>`);
+    if (edge) notes.push(`집값 ${(price / 10000).toFixed(1)}억이 ${edge / 10000}억 경계와 가깝습니다. 은행은 실거래 중앙값이 아니라 대출 신청일의 시세(KB 시세·감정가 등)로 구간을 정하므로 구간과 상한이 달라질 수 있습니다. 확인 필요.`);
+    return { cap, band: Loan.band(price), state, notes };
+  },
+};
+
 /* ⑥ 예산 계산기 (I1, I4): 📖 종잣돈 + 대출 = 볼 금액대 p.295~298, 인테리어 ≤ 5% p.241
    대출은 입력한 은행 가능액을 그대로 쓴다. 작가의 "원리금 ≤ 세후 소득 30%"(📖 p.474)는 상황마다 달라 계산에서 빼고 안내 문구로만 둔다(사용자 결정 2026-10-13).
    세율·중개보수: 지방세법 제11조 유상거래 주택 세율, 중개보수는 2021-10 개정 상한요율(수도권 조례 동일). 2026-10-13 검색으로 바뀐 근거 없음을 확인
@@ -694,7 +717,7 @@ const Calc = {
 (function () {
   const $v = (id) => { const x = parseFloat(String($(id).value).replace(/,/g, '')); return isFinite(x) ? x : 0; };
   const rateSig = (D.signals || {}).g3_mortgage_rate;
-  const IDS = ['c_seed', 'c_limit', 'c_rate', 'c_years'];
+  const IDS = ['c_seed', 'c_limit', 'c_bank', 'c_reserve', 'c_rate', 'c_years'];
   const defaults = Object.fromEntries(IDS.map(k => [k, $('#' + k).value]));
   defaults.c_rate = rateSig && rateSig.value != null ? Number(rateSig.value).toFixed(2) : '4.5';
   $('#c_rate').value = defaults.c_rate;
@@ -704,18 +727,23 @@ const Calc = {
   const won = (v) => Math.round(v).toLocaleString() + '원';
   function draw() {
     const seed = $v('#c_seed'), loan = $v('#c_limit'), rate = $v('#c_rate'), yrs = Math.max(1, $v('#c_years'));
+    const bankRaw = String($('#c_bank').value).replace(/,/g, '').trim(), bank = bankRaw === '' ? null : $v('#c_bank');
+    const reserve = Math.max(0, $v('#c_reserve'));
     try { localStorage.setItem(KEY, JSON.stringify(Object.fromEntries(IDS.map(k => [k, $('#' + k).value])))); } catch (e) {}
-    const price = Calc.priceFor(seed + loan);
+    const price = Calc.priceFor(Math.max(0, seed - reserve) + loan);
+    const L = Loan.check(price, loan, bank);
     window.calcPrice = price; window.dispatchEvent(new CustomEvent('calcprice', { detail: price }));   // ⑦ 후보 단지 찾기가 쓴다
     const pay = Calc.payment(loan * 10000, rate, yrs);
     const interest = pay * yrs * 12 - loan * 10000;
     const tax = Calc.acqTax(price), fee = Calc.brokerFee(price), legal = Calc.legalFee(price), mv = Calc.MOVING;
     $('#calcOut').innerHTML = `
-      <div class="kpi"><span class="k">볼 수 있는 집값</span><span class="v">${man(price)}</span><span class="d">종잣돈 ${man(seed)} + 대출 ${man(loan)} − 부대비용</span></div>
+      <div class="kpi"><span class="k">볼 수 있는 집값</span><span class="v">${man(price)}</span><span class="d">종잣돈 ${man(seed)}${reserve ? ` − 예비자금 ${man(reserve)}` : ''} + 대출 ${man(loan)} − 부대비용</span></div>
+      <div class="kpi"><span class="k">대출 판정</span><span class="v">${L.state}</span><span class="d">필요 대출 ${man(loan)} · 제도 상한 ${L.cap}억(${L.band}) · 은행 확인 ${bank == null ? '미확인' : man(bank)}</span></div>
       <div class="kpi"><span class="k">월 원리금</span><span class="v">${won(pay)}</span><span class="d">${yrs}년 · 연 ${rate}%</span></div>
       <div class="kpi"><span class="k">총 대출 이자</span><span class="v">${man(interest / 10000)}</span><span class="d">총 상환 ${man((loan * 10000 + interest) / 10000)}</span></div>
       <div class="kpi"><span class="k">부대비용</span><span class="v">${man(tax + fee + legal + mv)}</span><span class="d">취득세 ${man(tax)} · 중개보수 ${man(fee)} · 법무사·등기 ${man(legal)} · 이사 ${man(mv)}</span></div>`;
     const notes = [
+      ...L.notes,
       `참고: 송희구 작가는 월 원리금을 세후 소득의 30% 이내로 두라고 합니다(📖 p.474). 이 원리금이면 세후 월소득 ${man(pay / 0.3 / 10000)} 이상일 때 그 기준에 맞습니다. 계산에는 넣지 않았습니다.`,
       `볼 금액대 = 종잣돈 + 대출(📖 p.295~298). 사고 싶은 집을 살 돈이 있을 때가 매수 시점(📖 p.106~108).`,
       `인테리어는 집값의 최대 5% = ${man(price * 0.05)}(📖 p.241). 이 금액은 위 계산에 넣지 않았습니다.`,
@@ -760,13 +788,13 @@ const Calc = {
       : list.length ? list.slice(0, 60).map(r => {
         const flags = [r.newbig ? '<span class="pill acc">신축 대단지</span>' : '', r.rebuild ? '<span class="pill none">노후 단지 많음</span>' : '', r.gap ? '<span class="pill warn">동 안 격차</span>' : ''].join(' ');
         return `<div class="row"><span class="name">${r.name}</span><span class="price">${eok(r.ref)}</span>
-          <span class="meta">${(D.region_names[r.rc] || '').replace(/^(서울|경기|인천) /, '')} ${r.umd} · ${r.ag}㎡ · ${r.by ? (2026 - r.by) + '년차' : ''}${r.hh ? ' · ' + Number(r.hh).toLocaleString() + '세대' : ''}${r.tv != null ? ' · 월 회전 ' + r.tv.toFixed(2) + '%' : ''} · 정책 상한 구간 ${loanCap(r.ref)}억</span>
+          <span class="meta">${(D.region_names[r.rc] || '').replace(/^(서울|경기|인천) /, '')} ${r.umd} · ${r.ag}㎡ · ${r.by ? (2026 - r.by) + '년차' : ''}${r.hh ? ' · ' + Number(r.hh).toLocaleString() + '세대' : ''}${r.tv != null ? ' · 월 회전 ' + r.tv.toFixed(2) + '%' : ''} · 제도 상한 ${loanCap(r.ref)}억${Loan.nearEdge(r.ref) ? '(경계 확인)' : ''}</span>
           <span class="st">${r.grade ? `<span class="pill none">${r.grade}급지</span>` : ''} ${r.phase ? `<span class="pill ${PH[r.phase] || 'none'}">${r.phase}</span>` : ''}</span>
           ${flags.trim() ? `<span class="meta" style="grid-column:1/3">${flags}</span>` : ''}</div>`;
       }).join('') + (list.length > 60 ? `<p class="muted" style="padding:8px 2px">위 60곳만 보여줍니다 (전체 ${list.length.toLocaleString()}곳).</p>` : '')
       : '<p class="muted" style="padding:10px 2px">조건에 맞는 단지가 없습니다.</p>';
     $('#candSrc').textContent = '기준 시세(A1) = 같은 단지·면적 최근 60~180일 중개 거래 중앙값. 급지 = 동 84㎡ 환산 실거래 대표가 8단계(30/25/20/15/12/9/6억). '
-      + '같은 급지 안에서는 신축 대단지를 먼저 보여줍니다. 노후 단지 많음은 30년 넘은 단지 거래가 절반 이상이라는 뜻일 뿐, 정비사업이 진행 중이라는 뜻은 아닙니다. 정책 상한 구간은 이 단지 기준 시세로 고른 수도권·규제지역 구간입니다. 은행은 대출 신청일의 시세(감정가 등)로 판단하고 실제 한도는 LTV·DSR 과 중 작은 값이라, 내가 받을 수 있는 금액이 아닙니다.';
+      + '같은 급지 안에서는 신축 대단지를 먼저 보여줍니다. 노후 단지 많음은 30년 넘은 단지 거래가 절반 이상이라는 뜻일 뿐, 정비사업이 진행 중이라는 뜻은 아닙니다. 제도 상한은 이 단지 기준 시세로 고른 수도권·규제지역 구간의 최대치이고, 경계(15억·25억) ±5% 안이면 “경계 확인”을 붙입니다. 은행은 대출 신청일의 시세(감정가 등)로 판단하고 실제 한도는 LTV·DSR 과 중 작은 값이라, 내가 받을 수 있는 금액이 아닙니다.';
   }
   if (window.calcPrice) fromCalc(); else draw();
 })();
@@ -822,6 +850,9 @@ const Move = {
       <div class="kpi"><span class="k">종잣돈으로 모자란 현금</span><span class="v">${r.shortOwn || r.shortSplit ? `${r.shortOwn ? man(r.shortOwn) : '0'} / ${r.shortSplit ? man(r.shortSplit) : '0'}` : '없음'}</span><span class="d">실거주 / 분리 · ${r.shortOwn || r.shortSplit ? '부대비용을 낼 현금이나 대출이 더 필요' : '두 방식 모두 현금으로 가능'}</span></div>`;
     const ns = [];
     ns.unshift(`<b>먼저 확인:</b> ${TOH}`);
+    const lp = $v('#l_price'), lcap = loanCap(lp) * 10000;
+    if (r.loanOwn > lcap) ns.push(`<b>실거주 대출 ${man(r.loanOwn)}은 이 집값 구간(${Loan.band(lp)})의 제도 상한 ${man(lcap)}을 넘습니다.</b> 이 계산의 실거주는 그대로는 실행할 수 없습니다.`);
+    else if (r.loanOwn > 0) ns.push(`대출 ${man(r.loanOwn)}은 제도 상한(${man(lcap)}) 안이지만, 실제 한도는 LTV·DSR로 은행이 정합니다. 은행 확인 전에는 가능으로 보지 마세요.${Loan.nearEdge(lp) ? ` 집값이 ${Loan.nearEdge(lp) / 10000}억 경계 근처라 은행 시세로 구간을 확인해야 합니다.` : ''}`);
     if (inc > 0) {
       ns.push(`참고: 실거주 원리금 ${man(r.monthOwn)}은 세후 월소득 ${man(inc)}의 <b>${(r.monthOwn / inc * 100).toFixed(0)}%</b>. 작가는 30% 이내를 권한다(📖 p.474). 생활비·다른 빚·소득 안정성은 빠진 간편 기준이라 이것만으로 방식을 정하지 않는다. 📖 종잣돈보다 소득이 넉넉하면 최대 대출 실거주, 소득보다 종잣돈이 많으면 전세를 지렛대로 쓰는 분리(p.293~294).`);
     } else ns.push('세후 월소득을 넣으면 작가의 참고 기준(원리금 ≤ 세후 소득 30%, 📖 p.474)과 비교해 보여 줍니다.');
@@ -950,7 +981,7 @@ function drawCx(c) {
     <div class="kpi"><span class="k">전세가율</span><span class="v">${c.ratio == null ? '–' : pct(c.ratio)}</span><span class="d"><span class="pill ${rc}">${rl}</span>${c.band ? ` 정상 ${c.band[0]}~${c.band[1]}%` : ''}</span></div>
     <div class="kpi"><span class="k">최근 1년 거래</span><span class="v">${c.n12}건</span><span class="d">84㎡형${c.hh ? ` · 단지 ${Number(c.hh).toLocaleString()}세대` : ''}${c.m && c.m.turnover_pct != null ? ` · 월 회전율 ${(+c.m.turnover_pct).toFixed(2)}% <span class="pill ${c.m.turnover_state === '적음' ? 'warn' : 'good'}">${c.m.turnover_state}</span>` : ''}</span></div>
     <div class="kpi"><span class="k">급지 (${c.grade ? c.grade.umd_name : '동'})</span><span class="v">${c.grade ? c.grade.grade + '급지' : '–'}</span><span class="d">${c.grade ? `동 대표가 ${eok(c.grade.value_10k)} · ${gradeFlags(c.grade).join(' ') || '표시 없음'}` : '급지 계산 안 된 동'}</span></div>
-    <div class="kpi"><span class="k">주담대 정책 상한 구간</span><span class="v">${c.C ? loanCap(c.C) + '억' : '–'}</span><span class="d">${c.C ? `기준 시세 ${eok(c.C)} → ${c.C <= 150000 ? '15억 이하' : c.C <= 250000 ? '15~25억' : '25억 초과'}` : ''}</span></div>`;
+    <div class="kpi"><span class="k">주담대 제도 상한</span><span class="v">${c.C ? loanCap(c.C) + '억' : '–'}</span><span class="d">${c.C ? `기준 시세 ${eok(c.C)} → ${Loan.band(c.C)}. 내 한도 아님(은행이 LTV·DSR로 정함)${Loan.nearEdge(c.C) ? ` · <b>${Loan.nearEdge(c.C) / 10000}억 경계 근처, 은행 시세로 확인 필요</b>` : ''}` : ''}</span></div>`;
   const svg = $('#cxChart'); svg.innerHTML = '';
   const W = 340, H = 210, L = 34, R = 8, T = 10, B = 22;
   const t0 = Date.parse('2020-01-01'), t1 = Date.parse('2026-11-01');
