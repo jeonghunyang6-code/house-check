@@ -18,8 +18,9 @@ WHERE d.contract_date >= {TODAY} - {PREV_DAYS}
 -- 2) 단지 × 면적군 지표
 DELETE FROM complex_metrics;
 INSERT INTO complex_metrics
-WITH base AS (
-  SELECT apt_seq, area_group, contract_date, price_10k FROM deals WHERE NOT is_cancelled AND deal_type = '중개'
+WITH base AS (  -- 기준 시세용: 중개·비해제, 1층 제외 (📖 P1 "1층 제외, 중층 이상" 영상 1:33. 2026-10-18 실측 1층 약 8% 낮음)
+  SELECT apt_seq, area_group, contract_date, price_10k FROM deals
+  WHERE NOT is_cancelled AND deal_type = '중개' AND floor IS DISTINCT FROM 1
 ),
 a1 AS (
   SELECT apt_seq, area_group,
@@ -29,13 +30,15 @@ a1 AS (
     percentile_cont(0.5) WITHIN GROUP (ORDER BY price_10k) FILTER (WHERE contract_date > {TODAY} - 60)  AS m60,
     percentile_cont(0.5) WITHIN GROUP (ORDER BY price_10k) FILTER (WHERE contract_date > {TODAY} - 90)  AS m90,
     percentile_cont(0.5) WITHIN GROUP (ORDER BY price_10k) FILTER (WHERE contract_date > {TODAY} - 180) AS m180,
-    count(*) FILTER (WHERE contract_date > {TODAY} - 365) AS n_365,
-    max(contract_date) AS last_date
-  FROM base GROUP BY 1, 2
+    max(n_365) AS n_365, max(last_date) AS last_date
+  FROM base RIGHT JOIN (  -- 거래 수·마지막 거래일은 1층 포함
+    SELECT apt_seq, area_group, count(*) FILTER (WHERE contract_date > {TODAY} - 365) AS n_365, max(contract_date) AS last_date
+    FROM deals WHERE NOT is_cancelled AND deal_type = '중개' GROUP BY 1, 2) al USING (apt_seq, area_group)
+  GROUP BY 1, 2
 ),
 hi AS (  -- 역대 최고 = DB 구간 + 보관 구간(deal_anchor)
   SELECT DISTINCT ON (apt_seq, area_group) apt_seq, area_group, high_10k, high_date FROM (
-    SELECT apt_seq, area_group, price_10k AS high_10k, contract_date AS high_date FROM base
+    SELECT apt_seq, area_group, price_10k AS high_10k, contract_date AS high_date FROM deals WHERE NOT is_cancelled AND deal_type = '중개'
     UNION ALL SELECT apt_seq, area_group, hist_high_10k, hist_high_date FROM deal_anchor) x
   ORDER BY apt_seq, area_group, high_10k DESC, high_date
 ),
@@ -268,7 +271,7 @@ FROM c WHERE m.apt_seq = c.apt_seq AND m.area_group = c.area_group;
 WITH d AS (
   SELECT apt_seq, CASE WHEN area_m2 >= 55 AND area_m2 < 65 THEN 's' WHEN area_m2 >= 80 AND area_m2 < 90 THEN 'm'
     WHEN area_m2 >= 100 AND area_m2 <= 135 THEN 'l' END AS k, area_m2, price_10k
-  FROM deals WHERE NOT is_cancelled AND deal_type = '중개' AND contract_date > {TODAY} - 365
+  FROM deals WHERE NOT is_cancelled AND deal_type = '중개' AND floor IS DISTINCT FROM 1 AND contract_date > {TODAY} - 365
 ), g AS (
   SELECT apt_seq,
     percentile_cont(0.5) WITHIN GROUP (ORDER BY price_10k) FILTER (WHERE k = 's') AS ps, percentile_cont(0.5) WITHIN GROUP (ORDER BY area_m2) FILTER (WHERE k = 's') AS as_,
@@ -295,7 +298,7 @@ UPDATE lifezone SET e5_ratio = NULL, e5_n = NULL, e7_new_ppm = NULL, e7_mid_ppm 
 WITH d AS (
   SELECT d.apt_seq, x.lifezone_id AS z, d.area_m2, d.price_10k / d.area_m2 AS ppm
   FROM deals d JOIN complexes x USING (apt_seq)
-  WHERE NOT d.is_cancelled AND d.deal_type = '중개' AND d.contract_date > {TODAY} - 365 AND x.lifezone_id IS NOT NULL
+  WHERE NOT d.is_cancelled AND d.deal_type = '중개' AND d.floor IS DISTINCT FROM 1 AND d.contract_date > {TODAY} - 365 AND x.lifezone_id IS NOT NULL
 ), c AS (
   SELECT apt_seq, z,
     percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm) FILTER (WHERE area_m2 >= 75 AND area_m2 < 100) AS p30,
@@ -310,7 +313,7 @@ UPDATE lifezone l SET e5_ratio = round(e.r::numeric, 3), e5_n = e.n FROM e WHERE
 WITH d AS (
   SELECT d.apt_seq, x.lifezone_id AS z, x.build_year, d.price_10k / d.area_m2 AS ppm
   FROM deals d JOIN complexes x USING (apt_seq)
-  WHERE NOT d.is_cancelled AND d.deal_type = '중개' AND d.area_m2 BETWEEN 40 AND 135 AND d.contract_date > {TODAY} - 365
+  WHERE NOT d.is_cancelled AND d.deal_type = '중개' AND d.floor IS DISTINCT FROM 1 AND d.area_m2 BETWEEN 40 AND 135 AND d.contract_date > {TODAY} - 365
     AND x.lifezone_id IS NOT NULL AND x.build_year IS NOT NULL
 ), c AS (
   SELECT apt_seq, z, CASE WHEN extract(year FROM {TODAY}) - max(build_year) <= 5 THEN 'new'

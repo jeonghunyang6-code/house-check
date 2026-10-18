@@ -153,13 +153,15 @@ def run(db: Db) -> dict[str, tuple]:
     else:
         sig["f3_unsold"] = (None, "데이터 없음", "수도권 미분양")
     # A4 급매 체결 비중 (📖 급매 = 실거래 대비 5% 이상 저렴 p.245~247): 서울 최근 4주 중개 거래 중
-    # 같은 단지·면적의 직전 90일 중앙값(3건 이상) × 0.95 이하. 층 보정 없음. 경기·인천은 이력이 짧아 제외
+    # 같은 단지·면적의 직전 90일 중앙값(3건 이상) × 0.95 이하. 1층은 판정·기준 모두에서 뺀다(A1 과 같게, 1층은 평소 약 8% 낮아
+    # 넣으면 41%가 급매로 잡혔다, 2026-10-18). 2~4층 할인(3~5%)은 남는다. 경기·인천은 이력이 짧아 제외
     a4 = select(db, f"""WITH r AS (
         SELECT d.apt_seq, d.area_group, d.contract_date, d.price_10k FROM deals d
-        WHERE d.region_code LIKE '11%' AND NOT d.is_cancelled AND d.deal_type = '중개' AND d.contract_date > {lit(today)}::date - 56),
+        WHERE d.region_code LIKE '11%' AND NOT d.is_cancelled AND d.deal_type = '중개' AND d.floor IS DISTINCT FROM 1
+          AND d.contract_date > {lit(today)}::date - 56),
       p AS (SELECT r.contract_date, r.price_10k, x.ref, x.n FROM r CROSS JOIN LATERAL (
         SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY b.price_10k) AS ref, count(*) AS n FROM deals b
-        WHERE b.apt_seq = r.apt_seq AND b.area_group = r.area_group AND NOT b.is_cancelled AND b.deal_type = '중개'
+        WHERE b.apt_seq = r.apt_seq AND b.area_group = r.area_group AND NOT b.is_cancelled AND b.deal_type = '중개' AND b.floor IS DISTINCT FROM 1
           AND b.contract_date < r.contract_date AND b.contract_date >= r.contract_date - 90) x)
       SELECT (contract_date > {lit(today)}::date - 28) AS cur, count(*) FILTER (WHERE n >= 3) AS total,
              count(*) FILTER (WHERE n >= 3 AND price_10k <= ref * 0.95) AS gm FROM p GROUP BY 1""")
@@ -169,7 +171,7 @@ def run(db: Db) -> dict[str, tuple]:
         rc = round(cur["gm"] * 100.0 / cur["total"], 1)
         rp = round(prev["gm"] * 100.0 / prev["total"], 1) if prev and prev["total"] else None
         sig["a4_quick_sale"] = (rc, "참고" if rp is None else "감소" if rc < rp else "증가" if rc > rp else "유지",
-                                f"서울 최근 4주 중개 거래 {cur['total']:,}건 중 직전 시세보다 5% 이상 싸게 팔린 거래 {cur['gm']:,}건 ({rc}%)"
+                                f"서울 최근 4주 중개 거래(1층 제외) {cur['total']:,}건 중 직전 시세보다 5% 이상 싸게 팔린 거래 {cur['gm']:,}건 ({rc}%)"
                                 + (f", 그 전 4주 {rp}%" if rp is not None else "")
                                 + ". 급매가 소진되고 하단이 오르면 반등(📖 p.245~247). 최근 거래는 신고 기한(30일) 전이라 더 늘어난다")
     else:

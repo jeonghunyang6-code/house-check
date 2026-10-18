@@ -32,9 +32,10 @@ cx = []
 for seq in d['seqs']:
     deals = [r for r in d['cx_deals'] if r['apt_seq'] == seq]
     ok = [r for r in deals if not r['is_cancelled'] and r['deal_type'] == '중개']
+    okr = [r for r in ok if r['floor'] != 1]  # 기준 시세용: 1층 제외 (sql/metrics.sql base)
     name = deals[-1]['apt_name']
     bym = {}
-    for r in ok: bym.setdefault(r['cd'][:7].replace('-', ''), []).append(r['price_10k'])
+    for r in okr: bym.setdefault(r['cd'][:7].replace('-', ''), []).append(r['price_10k'])
     ref = []  # 3개월 이동 중앙값 (B1·B2 의 월별 기준 시세)
     for i, m in enumerate(ALL):
         win = sum((bym.get(x, []) for x in ALL[max(0, i - 2):i + 1]), [])
@@ -46,7 +47,7 @@ for seq in d['seqs']:
     # A1 기준 시세: 최근 60일 중앙값, 3건 미만이면 90→180일
     C = conf = None
     for days, c in ((60, '높음'), (90, '보통'), (180, '낮음')):
-        w = [r['price_10k'] for r in ok if date.fromisoformat(r['cd']) > TODAY - timedelta(days=days)]
+        w = [r['price_10k'] for r in okr if date.fromisoformat(r['cd']) > TODAY - timedelta(days=days)]
         if len(w) >= 3: C, conf, cn = round(st.median(w)), c, len(w); break
     rec = (C - T) / (P - T) if (C and P and T and P > T) else None
     # B2 회복 패턴은 서버(sql/metrics.sql, 국면 조건 포함) 값을 그대로 쓴다. 위 P·T·rec 는 차트 표시용

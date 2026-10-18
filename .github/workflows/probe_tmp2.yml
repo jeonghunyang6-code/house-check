@@ -1,21 +1,33 @@
-# 임시(PR 전에 삭제): 0038 적용 + A1 층 측정
+# 임시(PR 전에 삭제): 1층 제외 반영 — deal_anchor 재생성·적재, 지표·시장 신호 재계산
 name: probe-tmp2
 on:
   push:
     branches: [claude/brave-lamport-gkzeao]
     paths: [.github/workflows/probe_tmp2.yml]
 permissions:
-  contents: read
+  contents: write  # deal_anchor.csv.gz 릴리스 자산 갱신
 jobs:
   probe:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
       - run: command -v psql || (sudo apt-get update -q && sudo apt-get install -y -q postgresql-client)
       - env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          HC_DB_BACKEND: psql
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PYTHONUNBUFFERED: "1"
         run: |
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f db/migrations/0038_archive_recheck.sql
-          psql "$DATABASE_URL" -c "SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = 'archive_cells_source_check'"
-          PGOPTIONS='-c statement_timeout=600000 -c default_transaction_read_only=on' psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tools/probe/a1_floor.sql
+          psql "$DATABASE_URL" -At -c "SELECT 'before', count(*), sum(trough_10k), sum(p20_10k) FROM deal_anchor"
+          python -m jobs.deal_archive anchor --months 202001-202409 --archive gh
+          python -m jobs.deal_archive load --archive gh
+          psql "$DATABASE_URL" -At -c "SELECT 'after', count(*), sum(trough_10k), sum(p20_10k) FROM deal_anchor"
+          python -m jobs.metrics
+          python -m jobs.market
+          psql "$DATABASE_URL" -At -c "SELECT key, value, state, detail FROM market_signals WHERE key = 'a4_quick_sale'" || true
+          psql "$DATABASE_URL" -At -c "SELECT jeonse_src, count(*) FROM complex_metrics GROUP BY 1"
