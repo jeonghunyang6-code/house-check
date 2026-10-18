@@ -63,6 +63,11 @@ out['e3_names'] = select(db, f"""SELECT apt_seq, apt_name FROM complexes WHERE a
  SELECT unnest(string_to_array(e3_seqs, ',')) FROM complex_metrics WHERE apt_seq IN ({sl}) AND area_group IN (84,85))""")
 out['cx_access'] = select(db, f"""SELECT apt_seq, station_name, station_m, h2_cbd_min, h2_cbd_tr, h2_ybd_min, h2_ybd_tr, h2_gbd_min, h2_gbd_tr
  FROM complexes WHERE apt_seq IN ({sl})""")
+# C3·C4 하락기 환금성 (complex_liquidity, jobs/liquidity.py)
+out['cx_liq'] = select(db, f"""SELECT apt_seq, households, peak_m, trough_m, drop_pct, window_src, down_n, down_turnover, down_rank, up_n, up_turnover, keep_ratio, keep_rank,
+  (SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY keep_ratio) FROM complex_liquidity x WHERE x.region_code = l.region_code) AS keep_region_med,
+  (SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY down_turnover) FROM complex_liquidity x WHERE x.region_code = l.region_code) AS down_region_med
+ FROM complex_liquidity l WHERE apt_seq IN ({sl})""")
 out['cx_zone'] = select(db, f"""SELECT c.apt_seq, z.name, z.e5_ratio, z.e5_n, z.e7_new_ppm, z.e7_mid_ppm, z.e7_old_ppm, z.e7_n, z.f1_react_rel, z.f1_react_n
  FROM complexes c JOIN lifezone z ON z.zone_id = c.lifezone_id WHERE c.apt_seq IN ({sl})""")
 # D2. 급지 E1 (dong_grade 최신): 예시 단지의 동 급지·표시 3개
@@ -73,9 +78,10 @@ out['cx_grade'] = select(db, f"""SELECT c.apt_seq, c.umd_name, g.grade, g.value_
  LEFT JOIN kapt_complexes k ON k.kapt_code = c.kapt_code WHERE c.apt_seq IN ({sl})""")
 # D3. 후보 단지 찾기 (⑦): 기준 시세가 있는 단지·면적 전체 + 급지·표시
 out['cand'] = select(db, f"""SELECT m.apt_seq, m.area_group, m.ref_10k, m.confidence, m.phase, m.pattern, m.turnover_pct, c.apt_name, c.region_code, c.umd_name,
-  c.build_year, k.households, g.grade, g.flag_rebuild, g.flag_gap, g.new_big_name
+  c.build_year, k.households, g.grade, g.flag_rebuild, g.flag_gap, g.new_big_name, l.down_rank
  FROM complex_metrics m JOIN complexes c USING (apt_seq)
  LEFT JOIN kapt_complexes k ON k.kapt_code = c.kapt_code
+ LEFT JOIN complex_liquidity l ON l.apt_seq = m.apt_seq
  LEFT JOIN {G} g ON g.region_code = c.region_code AND g.umd_name = c.umd_name
  WHERE m.ref_10k IS NOT NULL AND m.area_group BETWEEN 40 AND 135""")
 # E. R-ONE 주간 지수 (rone_weekly, jobs/rone.py)
