@@ -17,6 +17,11 @@
 - 표 크기(전체/실제 내용): deals 203MB(heap 115/내용 95), rent_monthly 118MB(heap 77/내용 85), **complexes 70MB(heap 66/내용 14)**, **complex_metrics 39MB(heap 33/내용 8)**, rone_weekly 30MB. complexes·complex_metrics 는 반복 UPDATE·재계산으로 생긴 빈 공간 → 사용자 승인 후 `VACUUM FULL` 두 표 실행: **DB 517MB → 434MB**, complexes 70→15MB, complex_metrics 39MB→9MB, 행 수 그대로(18,752·34,985). 재계산·UPDATE 가 반복되면 다시 커지므로 크기를 주기적으로 볼 것. deals 도 빈 공간 약 20MB+색인(죽은 행 7만)이 있으나 아직 안 함
 - **경기 전월세 backfill(4번)은 공간 계획 없이는 못 돌린다**: 서울 rent_monthly 53만 행 ≈ 100MB(색인 포함). 경기는 서울 이상일 것(추정, 미확인) → +100~150MB. VACUUM 뒤 434MB 에 더하면 한도 초과. 사용처: metrics D3(24개월 전 ±1개월), F1 입주 반응(2020-07~ 전 지역), D5(서울 2021-06~)
 
+**남은 지표 점검 (2026-10-18, indicators.md·viewpoints.md 대조)**
+- 새 데이터 없이 계산만 하면 되는 것: C3 하락기 환금성·C4 거래 유지율(보관 파일 2021~23 + K-apt 세대수 + R-ONE), A5 거래 없는 평형 보간, D4 전세 하락 원인(F1+B1), E6 서버 표·후보 추천(지금 시안만), L6 초고가 분리·L9 가격대별 분리, I3 재개발 시나리오(H5 뒤)
+- 새 데이터가 필요한 것: 경기·인천 전월세 이력(진행 중, 공간 문제) → D3·D5·F1 반응 / F3 시군구 미분양(KOSIS)·분양가(청약홈 주택형별, 필드 미확인) / H5 정비사업(건축물대장 용적률·대지면적, 정비사업 단계: 서울 공개 자료, 경기는 출처 미확인) / 규제 이력 표(토허제·규제지역 지정·해제일, 수동) → 규제 G1 마커·G2 풍선효과 / H3 학령인구(KOSIS 연령별 주민등록인구) / H4 호재 단계(수동 GeoJSON) / G7 심리·검색량(국토연 소비심리지수, 네이버 데이터랩 미신청) / P2 호가(네이버, 보류)
+- 보류 유지: C1 신고 지연 보정(first_seen 쌓이는 중), M6 임장 기록(화면 흐름 결정 대기)
+
 **다음 할 일 (순서대로)**
 1. **Supabase 관리 API 토큰**: 2026-10-18 `SUPABASE_ACCESS_TOKEN` 이 만료돼 401 → 사용자가 새 토큰으로 교체함(새 세션부터 적용). 먼저 `select 1` 로 확인. 그동안 DB 작업은 Actions 임시 워크플로(psql + `DATABASE_URL`)로 했다. Actions 로그 다운로드 주소(blob.core.windows.net)는 이 환경에서 막혀 MCP `get_job_logs`(return_content, tail_lines)로 읽는다
 2. **DB 크기·읽기 전용 확인**: `pg_database_size`, `default_transaction_read_only`. 무료 500MB 한도(2026-10-14 약 350MB)
