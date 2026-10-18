@@ -340,7 +340,7 @@ const loanCap = (p) => p == null ? null : p <= 150000 ? 6 : p <= 250000 ? 4 : 2;
 const GRADE_CUTS = [30, 25, 20, 15, 12, 9, 6];
 function gradeFlags(g) {
   const f = [];
-  if (g.flag_rebuild) f.push('<span class="pill acc">재건축 기대</span>');
+  if (g.flag_rebuild) f.push('<span class="pill none">노후 단지 많음</span>');
   if (g.new_big_name) f.push(`<span class="pill acc">신축 대단지</span>`);
   if (g.flag_gap) f.push('<span class="pill warn">동 안 격차 큼</span>');
   return f;
@@ -729,7 +729,8 @@ const Calc = {
   draw();
 })();
 
-/* ⑦ 후보 단지 찾기: 예산(⑥) 안의 단지를 급지 순으로. 같은 급지 안에서는 미래가치 표시(신축 대단지·재건축 기대)가 있는 곳 먼저, 그다음 기준 시세 높은 순 */
+/* ⑦ 후보 단지 찾기: 예산(⑥) 안의 단지를 급지 순으로. 같은 급지 안에서는 신축 대단지 먼저, 그다음 기준 시세 높은 순.
+   '노후 단지 많음'(30년+ 거래 비중)은 정비사업 진행이 아니라서 정렬에 쓰지 않는다 */
 (function () {
   const rows = (D.cand || []).map(r => ({ name: r[0], rc: r[1], umd: r[2], ag: r[3], ref: r[4], conf: r[5], phase: r[6], grade: r[7], rebuild: r[8], gap: r[9], newbig: r[10], hh: r[11], by: r[12], tv: r[13] }));
   const state = { region: '전체', area: '84형', phase: '전체', size: '300세대 이상' };
@@ -753,19 +754,19 @@ const Calc = {
     const budget = parseFloat(String($('#f_budget').value).replace(/,/g, '')) || 0;
     const list = rows.filter(r => r.ref <= budget && r.ref >= budget * 0.8 && REG[state.region](r.rc) && AREA[state.area](r.ag)
       && (state.phase === '전체' || r.phase === state.phase) && SIZE[state.size](r.hh || 0))
-      .sort((a, b) => (a.grade || 9) - (b.grade || 9) || ((b.newbig || b.rebuild) - (a.newbig || a.rebuild)) || b.ref - a.ref);
+      .sort((a, b) => (a.grade || 9) - (b.grade || 9) || (b.newbig - a.newbig) || b.ref - a.ref);
     $('#candCount').textContent = budget ? `${list.length.toLocaleString()}곳` : '';
     $('#candList').innerHTML = !budget ? '<p class="muted" style="padding:10px 2px">예산을 넣거나 ⑥ 계산기 값을 쓰세요.</p>'
       : list.length ? list.slice(0, 60).map(r => {
-        const flags = [r.newbig ? '<span class="pill acc">신축 대단지</span>' : '', r.rebuild ? '<span class="pill acc">재건축 기대</span>' : '', r.gap ? '<span class="pill warn">동 안 격차</span>' : ''].join(' ');
+        const flags = [r.newbig ? '<span class="pill acc">신축 대단지</span>' : '', r.rebuild ? '<span class="pill none">노후 단지 많음</span>' : '', r.gap ? '<span class="pill warn">동 안 격차</span>' : ''].join(' ');
         return `<div class="row"><span class="name">${r.name}</span><span class="price">${eok(r.ref)}</span>
-          <span class="meta">${(D.region_names[r.rc] || '').replace(/^(서울|경기|인천) /, '')} ${r.umd} · ${r.ag}㎡ · ${r.by ? (2026 - r.by) + '년차' : ''}${r.hh ? ' · ' + Number(r.hh).toLocaleString() + '세대' : ''}${r.tv != null ? ' · 월 회전 ' + r.tv.toFixed(2) + '%' : ''} · 주담대 최대 ${loanCap(r.ref)}억</span>
+          <span class="meta">${(D.region_names[r.rc] || '').replace(/^(서울|경기|인천) /, '')} ${r.umd} · ${r.ag}㎡ · ${r.by ? (2026 - r.by) + '년차' : ''}${r.hh ? ' · ' + Number(r.hh).toLocaleString() + '세대' : ''}${r.tv != null ? ' · 월 회전 ' + r.tv.toFixed(2) + '%' : ''} · 정책 상한 구간 ${loanCap(r.ref)}억</span>
           <span class="st">${r.grade ? `<span class="pill none">${r.grade}급지</span>` : ''} ${r.phase ? `<span class="pill ${PH[r.phase] || 'none'}">${r.phase}</span>` : ''}</span>
           ${flags.trim() ? `<span class="meta" style="grid-column:1/3">${flags}</span>` : ''}</div>`;
       }).join('') + (list.length > 60 ? `<p class="muted" style="padding:8px 2px">위 60곳만 보여줍니다 (전체 ${list.length.toLocaleString()}곳).</p>` : '')
       : '<p class="muted" style="padding:10px 2px">조건에 맞는 단지가 없습니다.</p>';
     $('#candSrc').textContent = '기준 시세(A1) = 같은 단지·면적 최근 60~180일 중개 거래 중앙값. 급지 = 동 84㎡ 환산 실거래 대표가 8단계(30/25/20/15/12/9/6억). '
-      + '같은 급지 안에서는 신축 대단지·재건축 기대 표시가 있는 곳을 먼저 보여줍니다(미래가치는 급지를 바꾸지 않는다). 주담대 상한은 수도권·규제지역 기준이고 실제 한도는 LTV·DSR 과 중 작은 값입니다.';
+      + '같은 급지 안에서는 신축 대단지를 먼저 보여줍니다. 노후 단지 많음은 30년 넘은 단지 거래가 절반 이상이라는 뜻일 뿐, 정비사업이 진행 중이라는 뜻은 아닙니다. 정책 상한 구간은 이 단지 기준 시세로 고른 수도권·규제지역 구간입니다. 은행은 대출 신청일의 시세(감정가 등)로 판단하고 실제 한도는 LTV·DSR 과 중 작은 값이라, 내가 받을 수 있는 금액이 아닙니다.';
   }
   if (window.calcPrice) fromCalc(); else draw();
 })();
@@ -782,7 +783,11 @@ const Move = {
     const loanSplit = Math.max(0, price - jeonse + deposit - seed);
     const payOwn = Calc.payment(loanOwn * 10000, rate, years) / 10000;
     const paySplit = Calc.payment(loanSplit * 10000, rate, years) / 10000;
-    return { loanOwn, loanSplit, payOwn, paySplit, monthOwn: payOwn, monthSplit: paySplit + rent, costs: Calc.costs(price) };
+    const costs = Calc.costs(price);
+    // 처음에 필요한 현금(대출 뺀 내 돈): 실거주 = 매매가 + 부대비용 − 대출, 분리 = 갭 + 월세 보증금 + 부대비용 − 대출. 대출은 위 정의대로(부대비용은 대출 안 함)
+    const cashOwn = price + costs - loanOwn, cashSplit = price - jeonse + deposit + costs - loanSplit;
+    return { loanOwn, loanSplit, payOwn, paySplit, monthOwn: payOwn, monthSplit: paySplit + rent, costs, cashOwn, cashSplit,
+             shortOwn: Math.max(0, cashOwn - seed), shortSplit: Math.max(0, cashSplit - seed), intOwn: loanOwn * rate / 100 / 12 };
   },
   // I3: 지금 집을 판 돈(− 매도 중개보수 − 남은 대출) + 현금으로 목표 집 + 부대비용
   move(cur, debt, cash, target, tjeonse, rent, rate, years) {
@@ -790,7 +795,7 @@ const Move = {
     const need = target + Calc.costs(target);
     const loanOwn = Math.max(0, need - net);
     const loanSplit = Math.max(0, need - tjeonse - net);
-    return { net, need, ratio: cur > 0 ? target / cur : 0, loanOwn, loanSplit, spare: Math.max(0, net - (need - tjeonse)),
+    return { net, need, sellFee: Calc.brokerFee(cur), ratio: cur > 0 ? target / cur : 0, loanOwn, loanSplit, spare: Math.max(0, net - (need - tjeonse)),
              payOwn: Calc.payment(loanOwn * 10000, rate, years) / 10000, paySplit: Calc.payment(loanSplit * 10000, rate, years) / 10000 + rent };
   },
 };
@@ -811,28 +816,28 @@ const Move = {
     const rate = $v('#l_rate'), yrs = Math.max(1, $v('#l_years')), inc = $v('#l_income');
     const r = Move.live($v('#l_seed'), $v('#l_price'), $v('#l_jeonse'), $v('#l_rent'), $v('#l_deposit'), rate, yrs);
     $('#lsOut').innerHTML = `
-      <div class="kpi"><span class="k">실거주 월 지출</span><span class="v">${man(r.monthOwn)}</span><span class="d">대출 ${man(r.loanOwn)} 원리금</span></div>
-      <div class="kpi"><span class="k">분리 월 지출</span><span class="v">${man(r.monthSplit)}</span><span class="d">${r.loanSplit > 0 ? `대출 ${man(r.loanSplit)} 원리금 ${man(r.paySplit)} + ` : ''}월세 ${man($v('#l_rent'))}</span></div>
-      <div class="kpi"><span class="k">매달 차이</span><span class="v">${man(Math.abs(r.monthOwn - r.monthSplit))}</span><span class="d">${r.monthOwn >= r.monthSplit ? '분리가 덜 듦' : '실거주가 덜 듦'}</span></div>
-      <div class="kpi"><span class="k">부대비용 (두 방식 같음)</span><span class="v">${man(r.costs)}</span><span class="d">취득세·중개보수·법무사·이사, 위 비교에서 뺌</span></div>`;
+      <div class="kpi"><span class="k">실거주 월 현금 유출</span><span class="v">${man(r.monthOwn)}</span><span class="d">대출 ${man(r.loanOwn)} 원리금 · 이 중 이자 ${man(r.intOwn)} (첫 달)</span></div>
+      <div class="kpi"><span class="k">분리 월 현금 유출</span><span class="v">${man(r.monthSplit)}</span><span class="d">${r.loanSplit > 0 ? `대출 ${man(r.loanSplit)} 원리금 ${man(r.paySplit)} + ` : ''}월세 ${man($v('#l_rent'))}</span></div>
+      <div class="kpi"><span class="k">처음에 필요한 현금</span><span class="v">${man(r.cashOwn)} / ${man(r.cashSplit)}</span><span class="d">실거주 / 분리 (부대비용 ${man(r.costs)} 포함, 대출 빼고)</span></div>
+      <div class="kpi"><span class="k">종잣돈으로 모자란 현금</span><span class="v">${r.shortOwn || r.shortSplit ? `${r.shortOwn ? man(r.shortOwn) : '0'} / ${r.shortSplit ? man(r.shortSplit) : '0'}` : '없음'}</span><span class="d">실거주 / 분리 · ${r.shortOwn || r.shortSplit ? '부대비용을 낼 현금이나 대출이 더 필요' : '두 방식 모두 현금으로 가능'}</span></div>`;
     const ns = [];
+    ns.unshift(`<b>먼저 확인:</b> ${TOH}`);
     if (inc > 0) {
-      const ok = r.monthOwn <= inc * 0.3;
-      ns.push(`실거주 원리금 ${man(r.monthOwn)}은 세후 월소득 ${man(inc)}의 <b>${(r.monthOwn / inc * 100).toFixed(0)}%</b>. 작가 기준 30% 이내(📖 p.474) ${ok ? '→ <b>실거주로 감당 가능</b>' : '→ <b>넘음, 분리 쪽이 맞음</b>'}. 📖 종잣돈보다 소득이 넉넉하면 최대 대출 실거주, 소득보다 종잣돈이 많으면 전세를 지렛대로 쓰는 분리(p.293~294).`);
-    } else ns.push('세후 월소득을 넣으면 작가 기준(원리금 ≤ 세후 소득 30%, 📖 p.474)으로 어느 쪽이 맞는지 알려 줍니다.');
+      ns.push(`참고: 실거주 원리금 ${man(r.monthOwn)}은 세후 월소득 ${man(inc)}의 <b>${(r.monthOwn / inc * 100).toFixed(0)}%</b>. 작가는 30% 이내를 권한다(📖 p.474). 생활비·다른 빚·소득 안정성은 빠진 간편 기준이라 이것만으로 방식을 정하지 않는다. 📖 종잣돈보다 소득이 넉넉하면 최대 대출 실거주, 소득보다 종잣돈이 많으면 전세를 지렛대로 쓰는 분리(p.293~294).`);
+    } else ns.push('세후 월소득을 넣으면 작가의 참고 기준(원리금 ≤ 세후 소득 30%, 📖 p.474)과 비교해 보여 줍니다.');
+    ns.push(`월 현금 유출의 원리금에는 원금 상환(내 집 지분으로 쌓임)이 들어 있다. 순수 비용으로는 실거주는 이자(첫 달 ${man(r.intOwn)}), 분리는 월세${r.loanSplit > 0 ? '+대출 이자' : ''}를 비교해야 한다. 집값 변동은 두 방식이 같다(같은 집을 산다).`);
     ns.push(`분리는 종잣돈으로 매매가와 전세가의 차이(${man(Math.max(0, $v('#l_price') - $v('#l_jeonse')))})${$v('#l_deposit') ? '와 월세 보증금' : ''}을 내는 방식입니다. 전세가가 내려가면 돌려줄 돈이 모자랄 수 있습니다(역전세, 📖 대비금 전세가의 10% p.153 = ${man($v('#l_jeonse') * 0.1)}).`);
-    ns.push(TOH);
     $('#lsNotes').innerHTML = P(ns);
 
     const m = Move.move($v('#m_cur'), $v('#m_debt'), $v('#m_cash'), $v('#m_target'), $v('#m_tjeonse'), $v('#m_rent'), rate, yrs);
     $('#mvOut').innerHTML = `
-      <div class="kpi"><span class="k">목표 ÷ 지금 집</span><span class="v">${m.ratio.toFixed(2)}배</span><span class="d">${m.ratio >= 1.5 ? '1.5배 이상 — 갈아탈 만함' : '<b>1.5배 미만 — 거래비용에 묻힘</b>'}</span></div>
+      <div class="kpi"><span class="k">목표 ÷ 지금 집</span><span class="v">${m.ratio.toFixed(2)}배</span><span class="d">${m.ratio >= 1.5 ? '작가 기준 1.5배 이상' : '<b>작가 기준 1.5배 미달</b>'}</span></div>
       <div class="kpi"><span class="k">쓸 수 있는 돈</span><span class="v">${man(m.net)}</span><span class="d">판 돈 − 매도 중개보수 − 남은 대출 + 현금</span></div>
       <div class="kpi"><span class="k">실거주로 갈아타기</span><span class="v">대출 ${man(m.loanOwn)}</span><span class="d">월 원리금 ${man(m.payOwn)}</span></div>
       <div class="kpi"><span class="k">분리로 갈아타기</span><span class="v">${m.loanSplit > 0 ? '대출 ' + man(m.loanSplit) : '대출 없음'}</span><span class="d">월 ${man(m.paySplit)}(월세 포함)${m.spare > 0 ? ` · 남는 돈 ${man(m.spare)}` : ''}</span></div>`;
     $('#mvNotes').innerHTML = P([
-      `📖 갈아타기는 최소 1.5배. 1.2배는 취득세·중개보수 같은 거래비용으로 상쇄되는 돈 낭비이고, 같은 단지·동네 안 수평 이동은 하지 않는다(p.436~438). 목표 집 부대비용 ${man(m.need - $v('#m_target'))}을 넣어 계산했습니다.`,
-      '📖 갈아탈 때는 두 집의 가격 차이가 줄어든 때를 노린다(상승 초반엔 비싼 집이 먼저 올라 벌어지고, 후반에 좁혀진다 p.438~439). 격차 추이(E6)는 아직 만들지 않았습니다.',
+      `📖 작가의 원칙: 갈아타기는 최소 1.5배, 1.2배는 거래비용으로 상쇄된다(p.436~438). 실제 거래비용은 이번 계산에서 매도 중개보수 ${man(m.sellFee)} + 목표 집 부대비용 ${man(m.need - $v('#m_target'))}. 투자 원칙이라 출퇴근·가족 계획 때문의 이동은 1.5배 미만이어도 의미가 있을 수 있다.`,
+      '📖 갈아탈 때는 두 집의 가격 차이가 줄어든 때를 노린다(상승 초반엔 비싼 집이 먼저 올라 벌어지고, 후반에 좁혀진다 p.438~439). 아래 갈아타기 격차에서 두 단지의 과거 격차를 볼 수 있습니다.',
       `세금은 1주택 기준입니다(지금 집을 팔고 사므로 1주택 유지, 양도세는 1주택 비과세 가정). 먼저 사고 나중에 파는 일시적 2주택은 처분 기한이 바뀌는 중(조정대상지역 3년 → 2년)이라 넣지 않았습니다. 재개발로 갈아타기는 정비사업 데이터를 붙인 뒤에 추가합니다. ${TOH}`,
     ]);
   }
@@ -867,23 +872,27 @@ const Move = {
     const A = E.cx[ia][3], B = E.cx[ib][3];
     const g = E.q.map((q, i) => (A[i] != null && B[i] != null) ? [q, B[i] - A[i]] : null).filter(Boolean);
     if (g.length < 6) { $('#e6Out').innerHTML = ''; $('#e6Notes').innerHTML = '<p class="muted" style="margin:0">두 단지가 함께 거래된 분기가 6개 미만이라 계산하지 않습니다.</p>'; return; }
-    const cur = g[g.length - 1], lastA = [...A].reverse().find(v => v != null), lastB = [...B].reverse().find(v => v != null);
-    const pct = g.filter(p => p[1] <= cur[1]).length / g.length * 100, ratio = lastB / lastA;
+    const cur = g[g.length - 1], ci = E.q.indexOf(cur[0]);
+    const pct = g.filter(p => p[1] <= cur[1]).length / g.length * 100, ratio = B[ci] / A[ci];   // 격차와 배율 모두 같은 분기(마지막 공통 분기)
+    const stale = ci < E.q.length - 1;
     const sorted = g.map(p => p[1]).sort((x, y) => x - y), p20 = sorted[Math.max(0, Math.ceil(sorted.length * 0.2) - 1)];
     $('#e6Out').innerHTML = `
-      <div class="kpi"><span class="k">지금 격차 (${cur[0]})</span><span class="v">${man(cur[1])}</span><span class="d">목표 − 지금 집, 84㎡ 분기 중앙가</span></div>
-      <div class="kpi"><span class="k">5년 중 위치</span><span class="v">하위 ${Math.round(pct)}%</span><span class="d">${pct <= 20 ? '<b>격차 축소 구간</b>' : '아직 격차가 큰 편'}</span></div>
-      <div class="kpi"><span class="k">목표 ÷ 지금</span><span class="v">${ratio.toFixed(2)}배</span><span class="d">${ratio >= 1.5 ? '1.5배 이상' : '<b>1.5배 미만 — 후보에서 뺌</b>'}</span></div>
-      <div class="kpi"><span class="k">함께 거래된 분기</span><span class="v">${g.length}개</span><span class="d">${g[0][0]} ~ ${cur[0]}</span></div>`;
+      <div class="kpi"><span class="k">${stale ? '마지막 비교 가능 분기' : '최근 격차'} (${cur[0]})</span><span class="v">${man(cur[1])}</span><span class="d">목표 − 지금 집, 84㎡ 분기 중앙가${stale ? ' · <b>최근 분기에 함께 거래 없음</b>' : ''}</span></div>
+      <div class="kpi"><span class="k">관측된 격차 중 순위</span><span class="v">하위 ${Math.round(pct)}%</span><span class="d">${pct <= 20 ? '<b>격차가 작은 편</b>' : '격차가 큰 편'} (${g.length}개 분기 중)</span></div>
+      <div class="kpi"><span class="k">목표 ÷ 지금 (${cur[0]})</span><span class="v">${ratio.toFixed(2)}배</span><span class="d">${ratio >= 1.5 ? '작가 기준 1.5배 이상' : '작가 기준 1.5배 미달'}</span></div>
+      <div class="kpi"><span class="k">함께 거래된 분기</span><span class="v">${g.length} / ${E.q.length}</span><span class="d">${g[0][0]} ~ ${cur[0]}</span></div>`;
     const W = 340, H = 170, L = 34, Rr = 8, T = 10, Bm = 22, vs = g.map(p => p[1]), lo = Math.min(0, ...vs), hi = Math.max(...vs) || 1;
     const x = (i) => L + (W - L - Rr) * E.q.indexOf(g[i][0]) / (E.q.length - 1), y = (v) => T + (H - T - Bm) * (1 - (v - lo) / (hi - lo || 1));
     for (const t of [lo, (lo + hi) / 2, hi]) { el('line', { x1: L, x2: W - Rr, y1: y(t), y2: y(t), class: 'grid' }, svg); txt(svg, L - 4, y(t) + 3, (t / 10000).toFixed(1) + '억', 'end'); }
     el('line', { x1: L, x2: W - Rr, y1: y(p20), y2: y(p20), stroke: css('--ink-3'), 'stroke-dasharray': '3 3' }, svg);
     txt(svg, W - Rr, y(p20) - 3, '하위 20%', 'end');
-    el('path', { d: g.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p[1]).toFixed(1)}`).join(''), fill: 'none', stroke: css('--s-trade'), 'stroke-width': 2, 'stroke-linejoin': 'round' }, svg);
+    // 연속한 분기끼리만 선으로 잇는다 (함께 거래되지 않은 분기는 끊고 점으로)
+    const qi = (i) => E.q.indexOf(g[i][0]);
+    el('path', { d: g.map((p, i) => `${i && qi(i) === qi(i - 1) + 1 ? 'L' : 'M'}${x(i).toFixed(1)},${y(p[1]).toFixed(1)}`).join(''), fill: 'none', stroke: css('--s-trade'), 'stroke-width': 2, 'stroke-linejoin': 'round' }, svg);
+    g.forEach((p, i) => el('circle', { cx: x(i), cy: y(p[1]), r: 1.8, fill: css('--s-trade') }, svg));
     el('circle', { cx: x(g.length - 1), cy: y(cur[1]), r: 3.5, fill: css('--s-trade'), stroke: css('--screen'), 'stroke-width': 2 }, svg);
     [0, g.length - 1].forEach(i => txt(svg, x(i), H - 6, `${g[i][0].slice(2, 4)}년 ${g[i][0].slice(5)}분기`, i ? 'end' : 'start'));
-    $('#e6Notes').innerHTML = `<p class="muted" style="margin:0">📖 상승 초반에는 비싼 집이 먼저 올라 격차가 벌어지고 후반에 좁혀진다. 격차가 줄었을 때 갈아탄다(p.438~439). 목표가 지금 집의 1.5배가 안 되면 거래비용으로 남는 게 없다(p.436~438). 🔧 지난 20분기 중 하위 20%면 '격차 축소 구간'. 분기마다 그 분기에 팔린 집의 층·동에 따라 값이 흔들립니다.</p>`;
+    $('#e6Notes').innerHTML = `<p class="muted" style="margin:0">📖 상승 초반에는 비싼 집이 먼저 올라 격차가 벌어지고 후반에 좁혀진다. 격차가 줄었을 때 갈아탄다(p.438~439). 목표가 지금 집의 1.5배가 안 되면 거래비용으로 남는 게 없다(p.436~438). 🔧 함께 거래된 분기들 중 지금 격차가 하위 20% 안이면 '격차가 작은 편'. 이건 지난 격차의 순위일 뿐 앞으로 오를 확률이 아닙니다. 1.5배는 작가의 투자 원칙이고, 출퇴근·가족 계획 때문에 그보다 작은 이동도 의미가 있을 수 있습니다. 분기마다 그 분기에 팔린 집의 층·동에 따라 값이 흔들리고, 두 단지 모두 84㎡ 기준입니다.</p>`;
   }
   for (const id of ['#e6_a', '#e6_b']) { $(id).addEventListener('change', draw); $(id).addEventListener('input', () => { if (idx.has($(id).value)) draw(); }); }
   $('#e6').addEventListener('submit', (e) => e.preventDefault());
@@ -941,7 +950,7 @@ function drawCx(c) {
     <div class="kpi"><span class="k">전세가율</span><span class="v">${c.ratio == null ? '–' : pct(c.ratio)}</span><span class="d"><span class="pill ${rc}">${rl}</span>${c.band ? ` 정상 ${c.band[0]}~${c.band[1]}%` : ''}</span></div>
     <div class="kpi"><span class="k">최근 1년 거래</span><span class="v">${c.n12}건</span><span class="d">84㎡형${c.hh ? ` · 단지 ${Number(c.hh).toLocaleString()}세대` : ''}${c.m && c.m.turnover_pct != null ? ` · 월 회전율 ${(+c.m.turnover_pct).toFixed(2)}% <span class="pill ${c.m.turnover_state === '적음' ? 'warn' : 'good'}">${c.m.turnover_state}</span>` : ''}</span></div>
     <div class="kpi"><span class="k">급지 (${c.grade ? c.grade.umd_name : '동'})</span><span class="v">${c.grade ? c.grade.grade + '급지' : '–'}</span><span class="d">${c.grade ? `동 대표가 ${eok(c.grade.value_10k)} · ${gradeFlags(c.grade).join(' ') || '표시 없음'}` : '급지 계산 안 된 동'}</span></div>
-    <div class="kpi"><span class="k">주담대 상한 구간</span><span class="v">${c.C ? '최대 ' + loanCap(c.C) + '억' : '–'}</span><span class="d">${c.C ? `기준 시세 ${eok(c.C)} → ${c.C <= 150000 ? '15억 이하' : c.C <= 250000 ? '15~25억' : '25억 초과'}` : ''}</span></div>`;
+    <div class="kpi"><span class="k">주담대 정책 상한 구간</span><span class="v">${c.C ? loanCap(c.C) + '억' : '–'}</span><span class="d">${c.C ? `기준 시세 ${eok(c.C)} → ${c.C <= 150000 ? '15억 이하' : c.C <= 250000 ? '15~25억' : '25억 초과'}` : ''}</span></div>`;
   const svg = $('#cxChart'); svg.innerHTML = '';
   const W = 340, H = 210, L = 34, R = 8, T = 10, B = 22;
   const t0 = Date.parse('2020-01-01'), t1 = Date.parse('2026-11-01');
@@ -980,8 +989,8 @@ function drawCx(c) {
     : '상대강도(B6)는 국면을 판정한 단지만 계산합니다.');
   if (c.m && c.m.turnover_pct != null) notes.push(`월 거래 회전율(C2): 단지 전체 월 거래 ÷ 세대수 = ${(+c.m.turnover_pct).toFixed(2)}% (집계 끝난 최근 12개월 평균). 📖 0.5~0.8%면 꽤 괜찮은 거래량(p.137) → <b>${c.m.turnover_state}</b>.`);
   if (c.m && c.m.e2_ratio != null) notes.push(`주변 시세 위치(E2): ㎡당 기준 시세가 ${c.m.e2_basis === '생활권' ? '같은 생활권' : '반경 1.5km'} 다른 단지 ${c.m.e2_n}곳(비슷한 평형) 중앙값의 <b>${(+c.m.e2_ratio).toFixed(2)}배</b>. `
-    + `${+c.m.e2_ratio < 1 ? '주변이 더 비쌈 = 따라 오를 여지' : '주변보다 비쌈'} (📖 같은 10억이라도 주변이 12~14억인 곳이 상승 여력이 크다 p.216~217, p.339).`);
-  if (c.e3 && c.e3.length) notes.push(`바로 위 급지 비교(E3): ${c.e3.join(', ')}. 목표 시세 ${eok(c.m.e3_target_10k)} (비교 단지 ㎡당 기준 시세 × 이 면적, 📖 미래 시세 = 바로 위 급지 현재 시세 p.358~359)`
+    + `${+c.m.e2_ratio < 1 ? '주변보다 낮은 편' : '주변보다 높은 편'}. 연식·동선·언덕·학교·단지 규모 같은 이유가 차이를 설명할 수 있으니 이유부터 확인. (작가 관점: 같은 10억이라도 주변이 12~14억인 곳이 상승 여력이 크다 📖 p.216~217, p.339 — 예측은 아님)`);
+  if (c.e3 && c.e3.length) notes.push(`바로 위 급지 비교(E3): ${c.e3.join(', ')}. 비교 가격 ${eok(c.m.e3_target_10k)} (비교 단지 ㎡당 기준 시세 × 이 면적). 규칙상 더 비싼 주변 단지를 고르므로 이 단지보다 높게 나오는 게 당연하며, 이 단지의 미래 가격 예측이 아닙니다(작가 관점: 미래 시세 = 바로 위 급지 현재 시세 📖 p.358~359)`
     + (c.m.rel_strength_e3 != null ? `. 12개월 변화 비교 단지 ${(+c.m.e3_chg_12m).toFixed(1)}% 대비 ${(+c.m.rel_strength_e3 > 0 ? '+' : '') + (+c.m.rel_strength_e3).toFixed(1)}%p` : '')
     + '. 🔧 같은 생활권 또는 5km 안(한강 같은 쪽)에서 ㎡당 10~40% 비싼 단지 중 같은 생활권 먼저, 가까운 3곳.');
   if (c.m && (c.m.f1_zone_24m != null || c.m.f1_sgg_24m)) {
@@ -989,10 +998,10 @@ function drawCx(c) {
     notes.push(`입주 물량(F1): 앞으로 24개월 같은 생활권 ${m.f1_zone_24m != null ? `<b>${Number(m.f1_zone_24m).toLocaleString()}세대</b>` : '–'}, 같은 시군구 ${Number(m.f1_sgg_24m || 0).toLocaleString()}세대`
       + (m.f1_next ? ` (가장 큰 입주: ${m.f1_next})` : '') + '. '
       + (m.f1_ipju ? `<b>지금 입주장</b>: ${m.f1_ipju} — 📖 입주 시작 후 5~6개월은 전세·매매가 눌린다(p.55). ` : '같은 생활권에 지금 입주장 없음. ')
-      + '세대 수: 한국부동산원 입주 예정 물량(앞으로 약 2년, 조합원·임대 포함 실제 총 세대)이 다루는 달은 그 값. 그 밖의 달은 청약홈 — 입주한 단지는 K-apt, 입주 전 정비사업은 실제÷공급 비율(약 2.3배)로 추정.'
+      + '세대 수: 한국부동산원 입주 예정 물량(2026-06-30 기준 파일, 앞으로 약 2년, 조합원·임대 포함 예정 총 세대 — 일정은 바뀔 수 있음)이 다루는 달은 그 값. 그 밖의 달은 청약홈 — 입주한 단지는 K-apt, 입주 전 정비사업은 실제÷공급 비율(약 2.3배)로 추정.'
       + (c.zone && c.zone.f1_react_rel != null ? ` 과거 큰 입주 ${c.zone.f1_react_n}번 때 이 생활권 전세는 같은 시도보다 <b>${(+c.zone.f1_react_rel > 0 ? '+' : '') + (+c.zone.f1_react_rel).toFixed(1)}%p</b> → `
-          + (+c.zone.f1_react_rel <= -2 ? '<b>입주 때 전세가 눌림 (대기 수요 적음)</b>' : +c.zone.f1_react_rel >= 0 ? '입주를 잘 흡수 (대기 수요 많음)' : '보통')
-          + ' (🔧 −2%p, 입주 전후 6개월 전세 비교, 📖 입주 물량이 전세를 누른다 p.154).' : ''));
+          + (+c.zone.f1_react_rel <= -2 ? '<b>입주 때 전세가 상대적으로 약했음</b>' : +c.zone.f1_react_rel >= 0 ? '입주 때도 전세가 버팀' : '차이 작음')
+          + ' (🔧 −2%p, 입주 전후 6개월 전세 비교. 그 사건 전후의 상대 변화일 뿐 원인·수요 규모는 확인되지 않음. 📖 입주 물량이 전세를 누른다 p.154).' : ''));
   }
   if (c.acc && c.acc.h2_cbd_min != null) {
     const a = c.acc, f = (m, t) => m == null ? '–' : `<b>${m}분</b>${t ? ` (환승 ${t})` : ' (직통)'}`;
@@ -1000,8 +1009,8 @@ function drawCx(c) {
       + `${a.station_name}역까지 걸어서 ${Math.round(a.station_m / 70)}분(📖 700m = 10분 p.220) 포함, 지하철은 노선별 평균 속도(정차 포함)로 계산한 추정치. 환승 1회 🔧 5분, 배차 대기·버스는 뺌. `
       + `📖 교통은 중심업무지구 연결이 핵심이고, 어디서 타는지보다 어디서 내리는지(p.68~70, p.86~87).`);
   }
-  if (c.m && c.m.e4_cap_10k != null) notes.push(`한계 시세(E4): 바로 위 급지 비교 단지의 59㎡ 기준 시세 ${eok(c.m.e4_cap_10k)}(${c.m.e4_cap_n}곳) = 이 단지 84㎡의 천장. 지금 기준 시세는 천장의 <b>${(c.C / c.m.e4_cap_10k).toFixed(2)}배</b> `
-    + `(${c.C >= c.m.e4_cap_10k ? '천장에 닿음 — 위 급지가 올라야 더 오를 수 있음' : '천장까지 여유'}, 📖 하급지 84㎡ 천장 = 상급지 59㎡ 가격, 상급지가 오르면 천장도 오른다 p.217~219).`);
+  if (c.m && c.m.e4_cap_10k != null) notes.push(`한계 시세(E4): 바로 위 급지 비교 단지의 59㎡ 기준 시세 ${eok(c.m.e4_cap_10k)}(${c.m.e4_cap_n}곳) = 작가가 말하는 이 단지 84㎡의 천장. 지금 기준 시세는 그 값의 <b>${(c.C / c.m.e4_cap_10k).toFixed(2)}배</b> `
+    + `(${Math.abs(c.C / c.m.e4_cap_10k - 1) <= 0.03 ? '비슷함' : c.C > c.m.e4_cap_10k ? '넘음' : '아래'}. 비교 단지를 '더 비싼 곳'으로 골라 생기는 결과라 독립된 근거는 아님. 작가 관점: 하급지 84㎡ 천장 = 상급지 59㎡ 가격, 상급지가 오르면 천장도 오른다 p.217~219).`);
   if (c.m && c.m.e4_compress != null) notes.push(`평형 압축(E4): ${c.m.e4_sizes} (최근 1년 중앙가). 큰 평형의 ㎡당 추가 가격이 59→84의 <b>${(+c.m.e4_compress).toFixed(2)}배</b>`
     + ` — 작을수록 큰 평형 값이 덜 붙음(📖 예: 24평 11억 / 32평 13억 / 42평 14억이면 약 0.4, p.231). 🔧 기준선 없음(수도권 중앙값 약 0.7).`);
   if (c.zone && (c.zone.e5_ratio != null || c.zone.e7_new_ppm != null)) {
@@ -1017,7 +1026,7 @@ function drawCx(c) {
     const rng = i === 0 ? `${GRADE_CUTS[0]}억 이상` : i === 7 ? `${GRADE_CUTS[6]}억 미만` : `${GRADE_CUTS[i]}~${GRADE_CUTS[i - 1]}억`;
     const extra = [];
     if (g.new_big_name) extra.push(`신축 대단지 ${g.new_big_name} ${eok(g.new_big_10k)}`);
-    if (g.flag_rebuild) extra.push(`30년 넘은 단지 거래 ${Math.round(g.old_share * 100)}%`);
+    if (g.flag_rebuild) extra.push(`30년 넘은 단지 거래 ${Math.round(g.old_share * 100)}%(노후 비중일 뿐 정비사업 진행 여부와 다름)`);
     if (g.flag_gap) extra.push(`동 안 가격 폭 ${eok(g.q1_10k)}~${eok(g.q3_10k)}`);
     notes.push(`급지(E1): ${g.umd_name} 84㎡ 환산 실거래 대표가 ${eok(g.value_10k)} → ${g.grade}급지(${rng}, 단지 ${g.n_complex}곳, ${g.asof} 계산)${extra.length ? '. ' + extra.join(' · ') : ''}. 경계 15억·25억은 주담대 상한 경계, 나머지는 🔧.`);
   }
