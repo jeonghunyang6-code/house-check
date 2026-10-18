@@ -28,6 +28,20 @@ def band(price):  # D1 정상 범위 (책 p.152), 사이 가격대는 선형 보
             t = 0 if x1 == x0 else (price - x0) / (x1 - x0)
             return [round(r0[0] + (r1[0] - r0[0]) * t), round(r0[1] + (r1[1] - r0[1]) * t)]
 
+
+from collector.policy import zones_for
+import calendar
+def liq(seq, gr):
+    """C3·C4 (complex_liquidity) + 상승기에 걸린 토지거래허가구역 (collector/policy.py)."""
+    z = next((x for x in d.get('cx_liq', []) if x['apt_seq'] == seq), None)
+    if not z:
+        return None
+    o = {k: (float(v) if isinstance(v, str) and k not in ('peak_m', 'trough_m', 'window_src') else v) for k, v in z.items() if k != 'apt_seq'}
+    y, m = int(o['peak_m'][:4]), int(o['peak_m'][4:])
+    zs = zones_for(seq[:5], gr and gr['umd_name'], date(2020, 1, 1), date(y, m, calendar.monthrange(y, m)[1]), kind='토허')
+    o['toh'] = [f"{zz.start:%Y.%m}~ {zz.note.split('.')[0]}{' (구역이 동 일부라 이 단지가 들어가는지 확인 필요)' if zz.scope == 'part' else ''}" for zz in zs]
+    return o
+
 cx = []
 for seq in d['seqs']:
     deals = [r for r in d['cx_deals'] if r['apt_seq'] == seq]
@@ -86,7 +100,7 @@ for seq in d['seqs']:
                'm': m84 and {k: m84.get(k) for k in ('jeonse_24m_10k', 'jeonse_24m_n', 'jeonse_24m_approx', 'reverse_risk', 'reserve_10k', 'real_ref_10k', 'base2020_10k', 'real_chg_2020',
                'turnover_pct', 'turnover_state', 'e3_target_10k', 'e3_chg_12m', 'rel_strength_e3', 'e2_ratio', 'e2_n', 'e2_basis', 'e4_cap_10k', 'e4_cap_n', 'e4_compress', 'e4_sizes', 'f1_zone_24m', 'f1_sgg_24m', 'f1_ipju', 'f1_next')},
                'acc': next(({k: z[k] for k in ('station_name', 'station_m', 'h2_cbd_min', 'h2_cbd_tr', 'h2_ybd_min', 'h2_ybd_tr', 'h2_gbd_min', 'h2_gbd_tr')} for z in d.get('cx_access', []) if z['apt_seq'] == seq), None),
-               'liq': next(({k: (float(z[k]) if isinstance(z[k], str) and k not in ('peak_m', 'trough_m', 'window_src') else z[k]) for k in z if k != 'apt_seq'} for z in d.get('cx_liq', []) if z['apt_seq'] == seq), None),
+               'liq': liq(seq, gr),
                'zone': next(({k: z[k] for k in ('name', 'e5_ratio', 'e5_n', 'e7_new_ppm', 'e7_mid_ppm', 'e7_old_ppm', 'e7_n', 'f1_react_rel', 'f1_react_n')} for z in d.get('cx_zone', []) if z['apt_seq'] == seq), None),
                'e3': m84 and m84['e3_seqs'] and [n['apt_name'] for n in d.get('e3_names', []) if n['apt_seq'] in m84['e3_seqs'].split(',')],
                'phase': ph and {k: ph[k] for k in ('phase', 'chg_12m', 'up_months', 'down_months', 'last3', 'region_chg_12m', 'rel_strength')}, 'seq': seq, 'name': name, 'region': REG[seq[:5]], 'P': P, 'T': T, 'C': C, 'conf': conf, 'cn': cn if C else 0, 'cs': cspread,
@@ -181,6 +195,8 @@ json.dump({'monthly': monthly, 'cx': cx, 'today': today,
            'weekly': weekly(), 'signals': {r['key']: r for r in d['signals']},
            'macro': {k: [[r['period'], float(r['value'])] for r in d['macro'] if r['series'] == k] for k in {r['series'] for r in d['macro']}},
            'g1': g1(), 'g2': g2(), 'e6': e6(),
+           'unsold': [{k: (float(r[k]) if isinstance(r[k], str) and k in ('r', 'rn') else r[k]) for k in r} for r in d.get('unsold', [])],
+           'policy': [[r['d'], r['kind'], r['title']] for r in d.get('policy_events', [])],
            'auction': {a: [[r['period_month'].replace('-', ''), float(r['sale_ratio']) * 100] for r in d.get('auction', []) if r['area_code'] == a]
                        for a in ('서울', '경기', '인천', '전국')},
            # ⑦ 후보 단지: [단지, 시군구, 동, 면적군, 기준 시세(만원), 신뢰도, 국면, 급지, 재건축 기대, 동 안 격차, 신축 대단지, 세대수, 준공, 월 회전율 %, 하락기 거래 시군구 안 분위(C3)]

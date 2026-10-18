@@ -154,7 +154,8 @@ footer.foot { color: var(--ink-3); font-size: 12px; max-width: 90ch; display: gr
         <div class="sec">
           <h3>전용 84㎡ 실거래 중위가격</h3>
           <svg class="chart" id="p84Chart" viewBox="0 0 340 150" role="img" aria-label="서울 전용 84제곱미터 월별 중위 실거래가 선 차트"></svg>
-          <p class="src">중개거래·해제 제외. 단지 구성이 달마다 달라 가격지수가 아닙니다.</p>
+          <p class="src">중개거래·해제 제외. 단지 구성이 달마다 달라 가격지수가 아닙니다. 세로 점선 = 규제 변화(아래 번호).</p>
+          <ol class="src" id="policyList" style="margin:4px 0 0;padding-left:18px"></ol>
         </div>
         <div class="sec">
           <h3>시장 국면 <span class="muted" id="phaseAsof"></span></h3>
@@ -163,6 +164,11 @@ footer.foot { color: var(--ink-3); font-size: 12px; max-width: 90ch; display: gr
         <div class="sec">
           <h3>시장 체크리스트 <span class="muted">(송희구 관점)</span></h3>
           <div id="checks"></div>
+        </div>
+        <div class="sec">
+          <h3>미분양 많은 곳 <span class="muted" id="unsoldAsof"></span></h3>
+          <div class="tbl-wrap"><table id="unsoldTbl"></table></div>
+          <p class="src" id="unsoldSrc"></p>
         </div>
         <div class="sec">
           <h3>거시 지표 <span class="muted">(최근 2년)</span></h3>
@@ -398,9 +404,35 @@ $('#notice').innerHTML = `<b>데이터 범위</b><span>서울 실거래는 2020�
   el('path', { d, fill: 'none', stroke: css('--s-trade'), 'stroke-width': 2, 'stroke-linejoin': 'round' }, svg);
   ms.forEach((m, i) => { if (m.m.endsWith('01')) txt(svg, x(i) + 14, H - 6, m.m.slice(0, 4)); });
   ms.forEach((m, i) => { if (!m.p84) return; const c = el('circle', { cx: x(i), cy: y(m.p84), r: 6, fill: 'transparent' }, svg); hover(c, `${m.m.slice(0, 4)}.${m.m.slice(4)} · ${eok(m.p84)}${m.partial ? ' (집계 중)' : ''}`); });
+  // 규제 사건 (collector/policy.py): 그 달 위치에 점선 + 번호. 📖 토허제는 거래를 줄이지만 가격을 떨어뜨리진 않는다 p.269~270
+  const P = (D.policy || []).filter(p => ms.some(m => m.m === p[0].slice(0, 4) + p[0].slice(5, 7)));
+  P.forEach((p, k) => {
+    const i = ms.findIndex(m => m.m === p[0].slice(0, 4) + p[0].slice(5, 7)), cx_ = x(i);
+    el('line', { x1: cx_, x2: cx_, y1: T, y2: H - B, stroke: css(p[1] === '토허' ? '--c2' : '--c4'), 'stroke-dasharray': '2 3', 'stroke-width': 1 }, svg);
+    const t = txt(svg, cx_ + 1, T + 8 + (k % 2) * 9, String(k + 1), 'start'); t.setAttribute('style', 'font-size:9px;fill:var(--ink-2)');
+    hover(el('rect', { x: cx_ - 4, y: T, width: 8, height: H - T - B, fill: 'transparent' }, svg), `${p[0].replace(/-/g, '.')} ${p[2]}`);
+  });
+  $('#policyList').innerHTML = P.map(p => `<li>${p[0].replace(/-/g, '.')} <span style="color:var(${p[1] === '토허' ? '--c2' : '--c4'})">${p[1] === '토허' ? '토지거래허가' : '규제지역'}</span> ${p[2]}</li>`).join('');
   const last = ms.filter(m => m.p84 && !m.partial).pop(); const li = ms.indexOf(last);
   el('circle', { cx: x(li), cy: y(last.p84), r: 4, fill: css('--s-trade'), stroke: css('--screen'), 'stroke-width': 2 }, svg);
   txt(svg, x(li) - 2, y(last.p84) + 16, `${md(last.m)} ${eok(last.p84)}`, 'end').setAttribute('style', 'fill:var(--ink-2)');
+})();
+
+/* ① F3 미분양 많은 곳 (📖 원인 5가지: 분양가·입지·상품성·공급 집중·거시 p.155~160) */
+(function () {
+  const U = (D.unsold || []).filter(r => r.unsold >= 300).slice(0, 12);
+  if (!U.length) { $('#unsoldSrc').textContent = '데이터 없음'; return; }
+  const p = U[0].period;
+  $('#unsoldAsof').textContent = `(${p.slice(0, 4)}.${p.slice(4)}, 300호 이상)`;
+  const n = (v) => v == null ? '–' : Number(v).toLocaleString(), r2 = (v) => v == null ? '–' : (+v).toFixed(2);
+  $('#unsoldTbl').style.minWidth = '0';
+  $('#unsoldTbl').innerHTML = `<thead><tr><th>시군구</th><th class="r">미분양<br>(1년 전)</th><th class="r">준공 후</th><th class="r">분양가 ÷ 주변<br>(÷ 신축)</th><th class="r">입주 예정<br>2년</th></tr></thead><tbody>`
+    + U.map(r => `<tr><td>${r.sido} ${r.name}</td><td class="r num"><b>${n(r.unsold)}</b><br><span class="muted">${n(r.u0)}</span></td><td class="r num">${n(r.unsold_done)}</td>`
+      + `<td class="r num">${r2(r.r)}<br><span class="muted">${r.rn != null ? r2(r.rn) : '–'}${r.n ? ` · ${r.n}건` : ''}</span></td><td class="r num">${r.hh ? n(r.hh) : '–'}</td></tr>`).join('') + '</tbody>';
+  $('#unsoldSrc').innerHTML = '미분양: 국토교통부 시·군·구별 미분양(KOSIS), 경기는 시 단위, 준공 후 = 다 지었는데 안 팔린 집. '
+    + '분양가 ÷ 주변: 최근 24개월 민영 공고(공공주택 제외)의 전용 ㎡당 분양가(주택형별 최고가) ÷ 같은 생활권 단지 ㎡당 기준 시세 중앙값, ÷ 신축 = 같은 생활권 준공 5년 이내 단지 시세(E7). 분양가에는 발코니 확장·옵션이 빠져 있고 주변 시세는 지금 값이라 거칠게 보세요. '
+    + '입주 예정: 한국부동산원 입주 예정 물량. 📖 미분양은 원인을 봐라 — 분양가 과다·입지·상품성·공급 집중·거시(p.155~160). '
+    + '분양가 비율은 미분양이 많은 곳(평택·양주·이천 ÷ 신축 1.2~1.3)과 없는 곳(동작·의왕 1.1~1.2)이 크게 다르지 않아 분양가만으로 원인을 판정하지 않습니다(2026-10-18 확인).';
 })();
 
 /* ② 주간 가격 동향 (한국부동산원 R-ONE) */
@@ -1025,7 +1057,8 @@ function drawCx(c) {
       + `월 회전율 ${(+L.down_turnover).toFixed(3)}%(같은 구 중앙값 ${(+L.down_region_med).toFixed(3)}%)${top(L.down_rank)}. `
       + (L.keep_ratio != null ? `거래 유지율(C4): 상승기(2020.01~고점) 회전율 ${(+L.up_turnover).toFixed(3)}%의 <b>${(+L.keep_ratio).toFixed(2)}배</b>(같은 구 중앙값 ${(+L.keep_region_med).toFixed(2)}배)${top(L.keep_rank)}. `
                               : '거래 유지율(C4)은 2017년 이후 입주라 계산하지 않음(입주 초기 거래가 적다가 2년 보유 뒤 몰려 비교가 안 됨). ')
-      + '📖 하락장에 거래가 많았던 단지가 환금성이 좋다(p.138~142). 직거래는 뺐고, 작가 기준선이 없어 같은 구 안 순위만 보여 줍니다. 토지거래허가구역(잠실·삼성·대치·청담 2020.06~)은 상승기 거래가 눌려 유지율이 높게 나올 수 있습니다.');
+      + (L.toh && L.toh.length && L.keep_ratio != null ? `<b>상승기에 토지거래허가구역</b>(${L.toh.join(' · ')})이라 상승기 거래가 눌려 유지율이 높게 나올 수 있습니다(📖 토허제는 거래를 줄인다 p.269~270). ` : '')
+      + '📖 하락장에 거래가 많았던 단지가 환금성이 좋다(p.138~142). 직거래는 뺐고, 작가 기준선이 없어 같은 구 안 순위만 보여 줍니다.');
   }
   if (c.m && c.m.e2_ratio != null) notes.push(`주변 시세 위치(E2): ㎡당 기준 시세가 ${c.m.e2_basis === '생활권' ? '같은 생활권' : '반경 1.5km'} 다른 단지 ${c.m.e2_n}곳(비슷한 평형) 중앙값의 <b>${(+c.m.e2_ratio).toFixed(2)}배</b>. `
     + `${+c.m.e2_ratio < 1 ? '주변보다 낮은 편' : '주변보다 높은 편'}. 연식·동선·언덕·학교·단지 규모 같은 이유가 차이를 설명할 수 있으니 이유부터 확인. (작가 관점: 같은 10억이라도 주변이 12~14억인 곳이 상승 여력이 크다 📖 p.216~217, p.339 — 예측은 아님)`);

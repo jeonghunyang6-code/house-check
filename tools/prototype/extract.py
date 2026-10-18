@@ -97,6 +97,20 @@ out['macro'] = select(db, """SELECT series, period, value FROM macro_monthly
  WHERE period >= to_char(now() - interval '26 months', 'YYYYMM') ORDER BY series, period""")
 out['auction'] = select(db, """SELECT period_month, area_code, sale_ratio, source_url FROM auction_stats
  WHERE source = 'ggi_news' AND use_type = '아파트' ORDER BY period_month""")
+# F3. 시군구 미분양(unsold_sgg) + 최근 24개월 민영 공고 분양가 ÷ 주변 시세(presale) + 앞으로 24개월 입주 예정(ipju_plan)
+out['unsold'] = select(db, """
+WITH lp AS (SELECT max(period) p FROM unsold_sgg),
+u AS (SELECT sido, name, region_codes, unsold, unsold_done FROM unsold_sgg, lp WHERE period = lp.p),
+u0 AS (SELECT sido, name, unsold AS u0 FROM unsold_sgg, lp WHERE period = to_char(to_date(lp.p, 'YYYYMM') - INTERVAL '12 months', 'YYYYMM')),
+pr AS (SELECT u.sido, u.name, count(*) AS n, percentile_cont(0.5) WITHIN GROUP (ORDER BY ps.price_ratio) AS r,
+         percentile_cont(0.5) WITHIN GROUP (ORDER BY ps.price_ratio_new) AS rn
+       FROM u JOIN presale ps ON ps.region_code = ANY (string_to_array(u.region_codes, ',')) WHERE ps.price_ratio IS NOT NULL GROUP BY 1, 2),
+ip AS (SELECT u.sido, u.name, sum(i.households) AS hh FROM u JOIN ipju_plan i ON i.region_code = ANY (string_to_array(u.region_codes, ','))
+       WHERE i.move_in_ym BETWEEN to_char(now(), 'YYYYMM') AND to_char(now() + INTERVAL '23 months', 'YYYYMM') GROUP BY 1, 2)
+SELECT (SELECT p FROM lp) AS period, u.sido, u.name, u.unsold, u0.u0, u.unsold_done, pr.n, pr.r, pr.rn, ip.hh
+FROM u LEFT JOIN u0 USING (sido, name) LEFT JOIN pr USING (sido, name) LEFT JOIN ip USING (sido, name)
+WHERE u.region_codes IS NOT NULL ORDER BY u.unsold DESC""")
+out['policy_events'] = select(db, "SELECT event_date::text d, kind, title, source FROM policy_events ORDER BY event_date")
 # G. 유동성·소득·집값 (G1): 2005년부터 전체
 out['g1'] = select(db, """SELECT series, period, value FROM macro_monthly
  WHERE series IN ('m2', 'household_income', 'apt_kb_nat', 'apt_kb_seoul', 'base_rate') AND period >= '2004' ORDER BY series, period""")

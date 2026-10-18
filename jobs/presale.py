@@ -28,6 +28,8 @@ from collector.sgis import Sgis, SgisError
 URL = "https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancDetail"
 URL_MDL = "https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancMdl"   # 주택형별 (분양가)
 RATIO_MONTHS = 24   # 🔧 분양가 ÷ 주변 시세는 최근 24개월 공고만 (주변 시세가 지금 값이라 오래된 공고는 비교가 안 된다)
+# 공공주택은 분양가를 정책으로 정해(시세 연동 아님) 비교에서 뺀다. 신혼희망타운 추가 모집 공고에는 10배 값도 있었다(2026-10-18)
+PUBLIC_RE = "신혼희망|공공임대|공공분양|분양전환|행복주택|국민임대|뉴홈|장기전세|공공지원|토지임대부"
 NEAR_M = 3000   # 🔧
 
 
@@ -138,6 +140,7 @@ WITH m AS (
 ), p AS (
   SELECT house_no, lifezone_id AS z, lat, lng, kapt_apt_seq, price_ppm_10k FROM presale
   WHERE price_ppm_10k IS NOT NULL AND notice_date >= current_date - INTERVAL '{RATIO_MONTHS} months'
+    AND house_type = 'APT' AND name !~ {lit(PUBLIC_RE)}
 ), zr AS (
   SELECT p.house_no, percentile_cont(0.5) WITHIN GROUP (ORDER BY m.ppm) AS ref, count(*) AS n
   FROM p JOIN m ON m.z = p.z AND m.apt_seq IS DISTINCT FROM p.kapt_apt_seq GROUP BY 1
@@ -154,10 +157,11 @@ UPDATE presale t SET
 FROM p LEFT JOIN zr USING (house_no) LEFT JOIN rr USING (house_no) LEFT JOIN lifezone l ON l.zone_id = p.z
 WHERE t.house_no = p.house_no AND (zr.n >= 3 OR rr.n >= 3 OR l.e7_new_ppm IS NOT NULL);
 COMMIT;""")
-    r = select(db, f"""SELECT count(*) FILTER (WHERE price_ppm_10k IS NOT NULL AND notice_date >= current_date - INTERVAL '{RATIO_MONTHS} months') AS n,
+    r = select(db, f"""SELECT count(*) FILTER (WHERE price_ppm_10k IS NOT NULL AND notice_date >= current_date - INTERVAL '{RATIO_MONTHS} months'
+        AND house_type = 'APT' AND name !~ {lit(PUBLIC_RE)}) AS n,
       count(price_ratio) AS nr, percentile_cont(0.5) WITHIN GROUP (ORDER BY price_ratio) AS mr,
       count(price_ratio_new) AS nn, percentile_cont(0.5) WITHIN GROUP (ORDER BY price_ratio_new) AS mn FROM presale""")[0]
-    print(f"  분양가 ÷ 주변 시세: 최근 {RATIO_MONTHS}개월 공고 {r['n']}건 중 {r['nr']}건(중앙값 {r['mr'] and round(float(r['mr']), 2)}), "
+    print(f"  분양가 ÷ 주변 시세: 최근 {RATIO_MONTHS}개월 민영 공고 {r['n']}건 중 {r['nr']}건(중앙값 {r['mr'] and round(float(r['mr']), 2)}), "
           f"÷ 신축 {r['nn']}건(중앙값 {r['mn'] and round(float(r['mn']), 2)})")
     return 0
 
