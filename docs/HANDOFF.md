@@ -215,7 +215,7 @@ curl -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
 - A1 '신뢰도' → **자료 충분도**(건수·기간만 본다). 화면에 창 안 가격 범위·마지막 거래일·뺀 1층 건수(0040 ref_lo/hi_10k, ref_floor1_n, sql/metrics.sql 2-1)
 - 대출: 계산기 ⑥에 '쓸 대출(계획)'·'은행에서 확인한 한도(선택)'·'예비자금'. 판정 = 제도 상한 초과 / 은행 확인 필요 / 은행 한도 부족 / 확인 한도 안. 15억·25억 🔧 ±5% 경계 경고(⑥·④·⑦·⑧). ⑧ 실거주 대출이 제도 상한을 넘으면 실행 불가로 표시. LTV·DSR 은 계산하지 않는다(은행 확인)
 - D3 2년 전 전세: `rent_j24`(0039)를 `rent_archive daily` 끝에서 보관 파일 원본으로 다시 계산(`python -m jobs.rent_archive j24` 로 단독 실행). metrics 는 이 표를 먼저 쓰고 없으면 rent_monthly 근사, `complex_metrics.jeonse_24m_approx` 로 구분
-- 0039·0040 은 Actions 로 적용해야 한다(이 세션 관리 API 토큰 만료). 적용 전에 머지하면 metrics 가 rent_j24 없음으로 실패
+- 0038·0039·0040 은 2026-10-18 Actions(임시 워크플로)로 실제 DB 에 적용 완료(이 세션 관리 API 토큰 만료). 적용 후 결과: rent_j24 로 D3 2년 전 값 4,333개 단지·면적 모두 원본 중앙값(근사 0), 역전세 위험 370개. 전세 기준 신규 7,664·전체(갱신 포함) 3,348. 기준 시세 11,275개에 가격 범위, 뺀 1층 2,343건, 범위 폭 중앙값 = 기준 시세의 9.0%. A4 서울 4주 5.1%(1층 제외, 그 전 4주 7.4%). deal_anchor 1층 제외로 다시 만듦(42,797행)
 
 ### A1 층 처리: 1층 제외 (2026-10-18 사용자 확정, (나)안)
 - 기준 시세 계열(중앙값)에서 1층 거래를 뺀다: sql/metrics.sql `base`(A1·B1·B2 월별·A6 2020년), E4 평형 압축, E5, E7, jobs/market.py A4(판정·기준 둘 다), collector/deal_anchor.py(고점·저점·p20), 시안 compute.py·extract.py(E6). 거래 수(n_365)·마지막 거래일·최고가·전고점(prev_high)은 1층 포함
