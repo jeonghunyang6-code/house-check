@@ -11,6 +11,13 @@
 
 **사용자 결정 (7절 9~11)**: 구매 2027년 우선·2028년까지 범위 / 관심 단지 밖 시장 흐름·거시경제도 계속 봄 → 시장 화면 유지(외부 검토의 '시장 홈 축소'는 따르지 않음) / A1 은 1층만 제외.
 
+**2026-10-18 16:00 UTC busy-meitner 세션 확인 결과**
+- 새 토큰 정상(`select 1` → 201)
+- **DB 517MB — 무료 한도 500MB 초과**. 읽기 전용은 아직 아님(`default_transaction_read_only=off`). 인천 전월세 backfill(run 39141686069)이 도는 중이라 계속 는다(rent_monthly 인천 8.4만 행 적재됨)
+- 표 크기(전체/실제 내용): deals 203MB(heap 115/내용 95), rent_monthly 118MB(heap 77/내용 85), **complexes 70MB(heap 66/내용 14)**, **complex_metrics 39MB(heap 33/내용 8)**, rone_weekly 30MB. complexes·complex_metrics 는 반복 UPDATE·재계산으로 생긴 빈 공간 → `VACUUM FULL` 두 표로 약 75MB 회수 예상(데이터 변화 없음). 이 세션은 DB 쓰기 권한 승인이 없어 아직 실행 못 함
+- **경기 전월세 backfill(4번)은 공간 계획 없이는 못 돌린다**: 서울 rent_monthly 53만 행 ≈ 100MB(색인 포함). 경기는 서울 이상일 것(추정, 미확인) → +100~150MB. VACUUM 뒤 약 440MB 에 더하면 한도 초과. 사용처: metrics D3(24개월 전 ±1개월), F1 입주 반응(2020-07~ 전 지역), D5(서울 2021-06~)
+- 3번 시안 재생성(extract.py)도 DB 를 읽으므로 같은 승인이 필요
+
 **다음 할 일 (순서대로)**
 1. **Supabase 관리 API 토큰**: 2026-10-18 `SUPABASE_ACCESS_TOKEN` 이 만료돼 401 → 사용자가 새 토큰으로 교체함(새 세션부터 적용). 먼저 `select 1` 로 확인. 그동안 DB 작업은 Actions 임시 워크플로(psql + `DATABASE_URL`)로 했다. Actions 로그 다운로드 주소(blob.core.windows.net)는 이 환경에서 막혀 MCP `get_job_logs`(return_content, tail_lines)로 읽는다
 2. **DB 크기·읽기 전용 확인**: `pg_database_size`, `default_transaction_read_only`. 무료 500MB 한도(2026-10-14 약 350MB)
