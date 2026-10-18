@@ -11,10 +11,55 @@
 
 **사용자 결정 (7절 9~11)**: 구매 2027년 우선·2028년까지 범위 / 관심 단지 밖 시장 흐름·거시경제도 계속 봄 → 시장 화면 유지(외부 검토의 '시장 홈 축소'는 따르지 않음) / A1 은 1층만 제외.
 
+**2026-10-18 16:00 UTC busy-meitner 세션 확인 결과**
+- 새 토큰 정상(`select 1` → 201)
+- **DB 517MB — 무료 한도 500MB 초과**. 읽기 전용은 아직 아님(`default_transaction_read_only=off`). 인천 전월세 backfill(run 39141686069)이 도는 중이라 계속 는다(rent_monthly 인천 8.4만 행 적재됨)
+- 표 크기(전체/실제 내용): deals 203MB(heap 115/내용 95), rent_monthly 118MB(heap 77/내용 85), **complexes 70MB(heap 66/내용 14)**, **complex_metrics 39MB(heap 33/내용 8)**, rone_weekly 30MB. complexes·complex_metrics 는 반복 UPDATE·재계산으로 생긴 빈 공간 → 사용자 승인 후 `VACUUM FULL` 두 표 실행: **DB 517MB → 434MB**, complexes 70→15MB, complex_metrics 39MB→9MB, 행 수 그대로(18,752·34,985). 재계산·UPDATE 가 반복되면 다시 커지므로 크기를 주기적으로 볼 것. deals 도 빈 공간 약 20MB+색인(죽은 행 7만)이 있으나 아직 안 함
+- **경기 전월세 backfill(4번)은 공간 계획 없이는 못 돌린다**: 서울 rent_monthly 53만 행 ≈ 100MB(색인 포함). 경기는 서울 이상일 것(추정, 미확인) → +100~150MB. VACUUM 뒤 434MB 에 더하면 한도 초과. 사용처: metrics D3(24개월 전 ±1개월), F1 입주 반응(2020-07~ 전 지역), D5(서울 2021-06~)
+
+**C3 하락기 환금성·C4 거래 유지율 (2026-10-18, busy-meitner, collector/liquidity.py, jobs/liquidity.py, 0041 적용·실행)**
+- 보관 파일 deals_202001~202312(Releases, 이 환경에서 인증 없이 curl 로 받아짐) + R-ONE 시군구 하락 구간 + K-apt 세대수 → `complex_liquidity` 8,040곳. 한 번 계산, 다음 하락기에 다시(워크플로 없음, `python -m jobs.liquidity --archive gh|dir:`)
+- R-ONE 인천 시계열은 cls 50124(50024 는 비어 있음). 인천 신설 구·화성 구 등 777곳은 시도 구간
+- 시안: ④ 설명, 비교표 '하락기 거래'(🔧 구 안 50분위 이상 충족), ⑦ 후보 목록 분위 표시
+- 토허제 구역은 C4 가 높게 나온다 → 규제 이력 표로 표시 예정
+
+**F3 미분양 원인·규제 이력 (2026-10-18, busy-meitner, 0042·0043 적용)**
+- `unsold_sgg`: `python -m jobs.macro`(rone.yml 매주)가 KOSIS 시군구 미분양·준공 후 미분양 2020~ 을 덮어쓴다. `--unsold-only` 로 단독. 개편 전 인천 동구·서구·중구는 새 구와 1:1 이 아니라 region_codes NULL
+- 분양가: `python -m jobs.presale --prices-only`(presale.yml 입력 mode=prices, 매주 full 실행에도 포함). 청약홈 getAPTLttotPblancMdl 필드(HOUSE_MANAGE_NO·HOUSE_TY·LTTOT_TOP_AMOUNT·SUPLY_HSHLDCO·SPSPLY_HSHLDCO) 2026-10-18 Actions 실제 응답으로 확인, 전국 14,869행 → 우리 공고 1,338건 모두 가격. `price_ratio` 는 DB 만으로(`--link-only` 에 포함)
+- 신혼희망타운 추가 모집 공고에 10배 분양가(8,398만/㎡)가 있었다 → 공공주택은 이름으로 빼고(PUBLIC_RE) house_type='APT' 만 비교
+- 규제 이력: `collector/policy.py` 가 원본(기사 출처 URL 포함, 관보 원문은 못 봄) → `python -m jobs.policy` 로 `policy_zone`(114행)·`policy_events`(9건). 바꾸면 다시 실행. 2020·2022 경기·인천 규제지역은 기사마다 목록이 달라 사건으로만. 토허 서울·경기 12곳은 2026-12-31 만료 예정, 연장 여부 미정(2026-09 보도) → 결정 나면 갱신
+- 시안: ① 84㎡ 차트에 규제 사건 점선·번호, '미분양 많은 곳' 표(300호+), ④ C4 는 상승기 토허 구역 단지에만 주의 문구
+- 다음: 풍선효과(📖 p.288~292, 규제 경계 밖 인접 시군구의 상대 상승률) — 행정동 인접(adm_adjacent)으로 시군구 인접을 만들면 된다
+
+**풍선효과·매입자 거주지 (2026-10-18, busy-meitner, 0044 적용, collector/balloon.py, jobs/balloon.py, jobs/rone.py buyer)**
+- 사건 = 시군구 전체 토허가 새로 걸린 날(collector/policy.py): 2025-03-24(강남3구·용산), 2025-10-20(서울 전역·경기 12곳). 그날 규제 시군구와 맞닿은(행정동 인접, 한강 건너 포함) 규제 밖 = 붙은 바깥, 나머지 = 먼 바깥. 원래 규제였던 곳은 뺀다. 기준 = 효력일 전 마지막 조사 주, 다음 사건 전까지만
+- 시군구 인접: 행정동 → 그 동 단지들의 시군구(다수), 단지 없는 동은 이름(`name_region`). 176쌍 안팎
+- 결과(2026-10-18): 2025-03 뒤 30주 새로 규제 +8.3% · 붙은 바깥 +6.4%(성동 +12.8·과천 +11.2·마포 +9.9) · 먼 바깥 +0.2% / 2025-10 뒤 52주 +13.1% · +3.0% · -0.1% → 둘 다 '번짐'(붙은 바깥 > 먼 바깥), 규제 안을 넘는 '풍선'은 아님(📖 토허제는 가격을 떨어뜨리진 않는다 p.269~270 와도 맞음). 🔧 판정 차이 0.5%p
+- 매입자 거주지: R-ONE A_2024_00609 (월) 매입자거주지별 아파트매매거래현황(2006~, ITM 100001 = 건수). `buyer_residence` 2020-01~. 경기는 시·구 둘 다 있어 구 단위(코드 하나)만 풍선효과에 쓴다. 이 세션에서 받는 데 한 달에 약 35초(연결 끊김 재시도)
+- rone.yml 매주: market 뒤 `jobs.rone buyer`(최근 3개월 다시) → `jobs.balloon`
+- 매입자 거주지 202001~202608 80개월 적재(6,989행). 수요 이동: 2025-03 뒤 붙은 바깥 서울 거주자 매수 비중 중앙값 +8.5%p(과천 13→22%, 하남 20→31%), 먼 바깥 -0.4%p. 2025-10 뒤 구리 외지인 32→70%·서울 19→37%(매매지수 +15.4%)
+
+**지역 전세가율·소비심리·연령별 인구 (2026-10-18, busy-meitner, 0045 적용, jobs/region_stats.py, rone.yml 매주)**
+- `region_monthly(series, region, period, value)`: region = 시군구 코드 / '11'·'28'·'41' / 'SUDO' / 'KR'
+- jeonse_ratio: R-ONE A_2024_00073 (월) 중위 매매가격 대비 전세가격_아파트, 83곳 2012-01~2026-09 (12,809행). 2026-09 서울 51.3%·수도권 62.7%, 시군구 78곳 중 50% 미만 11·80% 이상 2 → `market_signals.d1_region_jeonse`(▶ 60% 균형·50% 이하·80~90%)
+- sentiment: R-ONE T235013129634707 부동산시장 소비심리지수(국토연구원), 서울·인천·경기·수도권·전국 2012~2026-08. 서울 124.7 상승 국면 → `g7_sentiment`
+- pop_total/school(5~19)/working(15~64)/old(65+): KOSIS DT_1B04005N, 시군구 83 + 시도 3, 해마다 12월 + 최근 25개월(11,548행)
+- 처음 실행은 지역마다 전체 시계열(약 10분), 그다음은 최근 3개월만. 시안: 체크리스트 '서울 평균 전세가율', 거시 '소비심리', ④ 같은 구 전세가율·인구 5년 변화
+
+**대출 규제 이력·호재 단계 (2026-10-18, busy-meitner, 0046 적용)**
+- 대출: `collector/policy.py` EVENTS 에 kind '대출' 6건(2019-12-17 15억 초과 금지 → 2022-12 허용 → 2025-06-28 6억 한도 → 2025-07-01 스트레스 DSR 3단계 → 2025-10-16 6/4/2억·규제지역 LTV 40% → 2025-10-29 전세대출 DSR). 스트레스 DSR 1·2단계는 정확한 날짜를 확인 못 해 뺐다. `LOAN_RULES`·`regulated_now()` 가 지금 규칙
+- **계산기 제도 상한에 LTV 반영**: 가격 구간 상한과 LTV(규제지역 40%·그 밖 수도권 70%) 중 작은 값. ⑥ '집 위치' 선택 추가(⑧ 도 따름), ④·⑦ 은 단지 시군구로 자동. 서울 9억 집은 6억이 아니라 3.6억. 생애최초·서민 실수요자 예외는 반영 안 함
+- 호재: `collector/projects.py`(12개 사업) → `transit_projects`. `python -m jobs.policy` 가 함께 넣는다. 시안 ① '교통 호재 단계', ④ 이 구를 지나는 사업. GTX-A 서울역~수서 개통·신안산선·동북선 일정은 바뀌기 쉬워 몇 달마다 갱신할 것
+
+**남은 지표 점검 (2026-10-18, indicators.md·viewpoints.md 대조)**
+- 새 데이터 없이 계산만 하면 되는 것: ~~C3·C4~~(완료), A5 거래 없는 평형 보간, D4 전세 하락 원인(F1+B1), E6 서버 표·후보 추천(지금 시안만), L6 초고가 분리·L9 가격대별 분리, I3 재개발 시나리오(H5 뒤)
+- 새 데이터가 필요한 것: 경기·인천 전월세 이력(진행 중, 공간 문제) → D3·D5·F1 반응 / ~~F3 미분양·분양가~~(완료) / H5 정비사업(건축물대장 용적률·대지면적, 정비사업 단계: 서울 공개 자료, 경기는 출처 미확인) / ~~규제 이력 표~~(완료, 풍선효과도 완료) / H3 학령인구(KOSIS 연령별 주민등록인구) / ~~H4 호재 단계~~(완료, 시군구 단위) / G7 심리·검색량(국토연 소비심리지수, 네이버 데이터랩 미신청) / P2 호가(네이버, 보류)
+- 보류 유지: C1 신고 지연 보정(first_seen 쌓이는 중), M6 임장 기록(화면 흐름 결정 대기)
+
 **다음 할 일 (순서대로)**
 1. **Supabase 관리 API 토큰**: 2026-10-18 `SUPABASE_ACCESS_TOKEN` 이 만료돼 401 → 사용자가 새 토큰으로 교체함(새 세션부터 적용). 먼저 `select 1` 로 확인. 그동안 DB 작업은 Actions 임시 워크플로(psql + `DATABASE_URL`)로 했다. Actions 로그 다운로드 주소(blob.core.windows.net)는 이 환경에서 막혀 MCP `get_job_logs`(return_content, tail_lines)로 읽는다
 2. **DB 크기·읽기 전용 확인**: `pg_database_size`, `default_transaction_read_only`. 무료 500MB 한도(2026-10-14 약 350MB)
-3. **시안 다시 올리기**: `HC_ARCHIVE=dir:<보관 파일 폴더> python3 tools/prototype/extract.py && compute.py && build.py` → 아티팩트 https://claude.ai/artifact/RtjwRo7U1bq1UTYZNZsTqg 에 같은 파일 경로(`tools/prototype/out/house-check-screens.html`)로 재게시(지금 버전 19). 이번 변경(1층 제외, 자료 충분도 근거, 대출 판정, 전세 원본 중앙값·근사 표시)이 아직 시안에 안 보임. 보관 파일은 새 세션에 없으니 Releases(raw-data)의 deals_hist_*.csv.gz 를 받아야 한다(이 세션은 scratchpad/hist 에 있었음)
+3. ~~**시안 다시 올리기**~~ 2026-10-18 busy-meitner 에서 버전 20 으로 재게시(보관 파일은 Releases 에서 curl 로 받음: `https://github.com/jeonghunyang6-code/house-check/releases/download/raw-data/<파일>`, 인증 불필요). 옛 설명: `HC_ARCHIVE=dir:<보관 파일 폴더> python3 tools/prototype/extract.py && compute.py && build.py` → 아티팩트 https://claude.ai/artifact/RtjwRo7U1bq1UTYZNZsTqg 에 같은 파일 경로(`tools/prototype/out/house-check-screens.html`)로 재게시(지금 버전 19). 이번 변경(1층 제외, 자료 충분도 근거, 대출 판정, 전세 원본 중앙값·근사 표시)이 아직 시안에 안 보임. 보관 파일은 새 세션에 없으니 Releases(raw-data)의 deals_hist_*.csv.gz 를 받아야 한다(이 세션은 scratchpad/hist 에 있었음)
 4. **경기·인천 전월세 과거 이력**: 2026-10-18 15:42 UTC `backfill`(regions=incheon, months=202001-202608, kinds=rent) 실행 시작(run 39141686069). 결과 확인 후 경기를 시군구 묶음으로 나눠 실행(한 번 최대 350분, `concurrency: daily-snapshot` 이라 도는 동안 매일 수집이 밀린다). 끝나면 D3·rent_j24 가 경기·인천에도 생긴다(market d3_reverse_share 문구 '경기·인천은 아직 판정 못 함' 갱신)
 5. **전월세 재확인 첫 실제 실행 확인**: 머지 후 첫 daily-snapshot 로그에서 '전월세 재확인 YYYYMM: … 늦은 신고 n건, 사라짐 n건', 'D3 2년 전 전세 …' 줄 확인(실제 API 로는 아직 안 돌려 봄)
 6. 매매 1년 일회 재확인은 경기 일부만 됨 → 매일 재확인이 10일 안에 채움(추가 작업 없음)

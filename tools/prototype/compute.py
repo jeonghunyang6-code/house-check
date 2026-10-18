@@ -28,6 +28,33 @@ def band(price):  # D1 정상 범위 (책 p.152), 사이 가격대는 선형 보
             t = 0 if x1 == x0 else (price - x0) / (x1 - x0)
             return [round(r0[0] + (r1[0] - r0[0]) * t), round(r0[1] + (r1[1] - r0[1]) * t)]
 
+
+RM = {}
+for _r in d.get('region_monthly', []):
+    RM.setdefault((_r['series'], _r['region']), []).append((_r['period'], float(_r['value'])))
+def reg(rc):
+    """같은 시군구 전세가율(최신)과 인구 5년 변화(12월끼리). D1 지역값을 단지값 옆에 (M5), H3 학령인구·D7 생산가능인구."""
+    jr = RM.get(('jeonse_ratio', rc), [])
+    out = {'jr': jr[-1] if jr else None, 'jr_seoul': (RM.get(('jeonse_ratio', '11')) or [None])[-1]}
+    for k in ('school', 'working', 'total'):
+        ps = RM.get((f'pop_{k}', rc), [])
+        if len(ps) >= 6:
+            out[k] = [ps[-6][0], ps[-6][1], ps[-1][0], ps[-1][1]]
+    return out
+from collector.policy import regulated_now, zones_for
+from collector.projects import PROJECTS
+import calendar
+def liq(seq, gr):
+    """C3·C4 (complex_liquidity) + 상승기에 걸린 토지거래허가구역 (collector/policy.py)."""
+    z = next((x for x in d.get('cx_liq', []) if x['apt_seq'] == seq), None)
+    if not z:
+        return None
+    o = {k: (float(v) if isinstance(v, str) and k not in ('peak_m', 'trough_m', 'window_src') else v) for k, v in z.items() if k != 'apt_seq'}
+    y, m = int(o['peak_m'][:4]), int(o['peak_m'][4:])
+    zs = zones_for(seq[:5], gr and gr['umd_name'], date(2020, 1, 1), date(y, m, calendar.monthrange(y, m)[1]), kind='토허')
+    o['toh'] = [f"{zz.start:%Y.%m}~ {zz.note.split('.')[0]}{' (구역이 동 일부라 이 단지가 들어가는지 확인 필요)' if zz.scope == 'part' else ''}" for zz in zs]
+    return o
+
 cx = []
 for seq in d['seqs']:
     deals = [r for r in d['cx_deals'] if r['apt_seq'] == seq]
@@ -86,6 +113,8 @@ for seq in d['seqs']:
                'm': m84 and {k: m84.get(k) for k in ('jeonse_24m_10k', 'jeonse_24m_n', 'jeonse_24m_approx', 'reverse_risk', 'reserve_10k', 'real_ref_10k', 'base2020_10k', 'real_chg_2020',
                'turnover_pct', 'turnover_state', 'e3_target_10k', 'e3_chg_12m', 'rel_strength_e3', 'e2_ratio', 'e2_n', 'e2_basis', 'e4_cap_10k', 'e4_cap_n', 'e4_compress', 'e4_sizes', 'f1_zone_24m', 'f1_sgg_24m', 'f1_ipju', 'f1_next')},
                'acc': next(({k: z[k] for k in ('station_name', 'station_m', 'h2_cbd_min', 'h2_cbd_tr', 'h2_ybd_min', 'h2_ybd_tr', 'h2_gbd_min', 'h2_gbd_tr')} for z in d.get('cx_access', []) if z['apt_seq'] == seq), None),
+               'liq': liq(seq, gr),
+               'reg': reg(seq[:5]),
                'zone': next(({k: z[k] for k in ('name', 'e5_ratio', 'e5_n', 'e7_new_ppm', 'e7_mid_ppm', 'e7_old_ppm', 'e7_n', 'f1_react_rel', 'f1_react_n')} for z in d.get('cx_zone', []) if z['apt_seq'] == seq), None),
                'e3': m84 and m84['e3_seqs'] and [n['apt_name'] for n in d.get('e3_names', []) if n['apt_seq'] in m84['e3_seqs'].split(',')],
                'phase': ph and {k: ph[k] for k in ('phase', 'chg_12m', 'up_months', 'down_months', 'last3', 'region_chg_12m', 'rel_strength')}, 'seq': seq, 'name': name, 'region': REG[seq[:5]], 'P': P, 'T': T, 'C': C, 'conf': conf, 'cn': cn if C else 0, 'cs': cspread,
@@ -180,12 +209,24 @@ json.dump({'monthly': monthly, 'cx': cx, 'today': today,
            'weekly': weekly(), 'signals': {r['key']: r for r in d['signals']},
            'macro': {k: [[r['period'], float(r['value'])] for r in d['macro'] if r['series'] == k] for k in {r['series'] for r in d['macro']}},
            'g1': g1(), 'g2': g2(), 'e6': e6(),
+           'unsold': [{k: (float(r[k]) if isinstance(r[k], str) and k in ('r', 'rn') else r[k]) for k in r} for r in d.get('unsold', [])],
+           'policy': [[r['d'], r['kind'], r['title']] for r in d.get('policy_events', [])],
+           'sentiment': {k: v for (sr, k), v in RM.items() if sr == 'sentiment'},
+           'reg_now': regulated_now(TODAY),
+           # H4 호재 단계 [이름, 단계, 단계 날짜, 전망, 업무지구, 시군구들, 출처] (collector/projects.py)
+           'projects': [[p.name, p.status, p.status_date and p.status_date.isoformat(), p.outlook, list(p.cbd), list(p.region_codes), p.source] for p in PROJECTS],
+           # 풍선효과: 사건별 [시군구, 그룹, 13주, 26주, 주 수, 지금까지, 외지인 전, 후, 서울 전, 후] / 그룹 중앙값 경로 [그룹, 주, 중앙값, n]
+           'balloon': {e: {'rows': [[r['rc'], r['grp'], *[r[k] and float(r[k]) for k in ('chg_13w', 'chg_26w')], r['weeks_now'],
+                                     *[r[k] and float(r[k]) for k in ('chg_now', 'ob', 'oa', 'sb', 'sa')]] for r in d.get('balloon', []) if r['e'] == e],
+                           'path': [[r['grp'], r['week'], float(r['m']), r['n']] for r in d.get('balloon_path', []) if r['e'] == e]}
+                       for e in sorted({r['e'] for r in d.get('balloon', [])})},
            'auction': {a: [[r['period_month'].replace('-', ''), float(r['sale_ratio']) * 100] for r in d.get('auction', []) if r['area_code'] == a]
                        for a in ('서울', '경기', '인천', '전국')},
-           # ⑦ 후보 단지: [단지, 시군구, 동, 면적군, 기준 시세(만원), 신뢰도, 국면, 급지, 재건축 기대, 동 안 격차, 신축 대단지, 세대수, 준공, 월 회전율 %]
+           # ⑦ 후보 단지: [단지, 시군구, 동, 면적군, 기준 시세(만원), 신뢰도, 국면, 급지, 재건축 기대, 동 안 격차, 신축 대단지, 세대수, 준공, 월 회전율 %, 하락기 거래 시군구 안 분위(C3)]
            'cand': [[r['apt_name'], r['region_code'], r['umd_name'], r['area_group'], r['ref_10k'], r['confidence'], r['phase'], r['grade'],
                      bool(r['flag_rebuild']), bool(r['flag_gap']), r['new_big_name'] == r['apt_name'] if r['new_big_name'] else False,
-                     r['households'], r['build_year'], r['turnover_pct'] and float(r['turnover_pct'])] for r in d.get('cand', [])],
+                     r['households'], r['build_year'], r['turnover_pct'] and float(r['turnover_pct']),
+                     r.get('down_rank') and float(r['down_rank'])] for r in d.get('cand', [])],
            'geo': json.load(open(ROOT / 'data/geo/sudogwon_sgg_20260701.json')),
            'region_names': REGIONS, 'asof': TODAY.isoformat()}, open(OUT / 'data.json', 'w'), ensure_ascii=False)
 for c in cx: print(c['name'], c['region'], c['P'], c['T'], c['C'], c['conf'], c['cn'], c['pattern'], c['rec'] and round(c['rec'],2), c['J'], c['jn'], c['ratio'] and round(c['ratio']), c['band'], c['n12'])

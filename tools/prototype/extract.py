@@ -63,6 +63,11 @@ out['e3_names'] = select(db, f"""SELECT apt_seq, apt_name FROM complexes WHERE a
  SELECT unnest(string_to_array(e3_seqs, ',')) FROM complex_metrics WHERE apt_seq IN ({sl}) AND area_group IN (84,85))""")
 out['cx_access'] = select(db, f"""SELECT apt_seq, station_name, station_m, h2_cbd_min, h2_cbd_tr, h2_ybd_min, h2_ybd_tr, h2_gbd_min, h2_gbd_tr
  FROM complexes WHERE apt_seq IN ({sl})""")
+# C3·C4 하락기 환금성 (complex_liquidity, jobs/liquidity.py)
+out['cx_liq'] = select(db, f"""SELECT apt_seq, households, peak_m, trough_m, drop_pct, window_src, down_n, down_turnover, down_rank, up_n, up_turnover, keep_ratio, keep_rank,
+  (SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY keep_ratio) FROM complex_liquidity x WHERE x.region_code = l.region_code) AS keep_region_med,
+  (SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY down_turnover) FROM complex_liquidity x WHERE x.region_code = l.region_code) AS down_region_med
+ FROM complex_liquidity l WHERE apt_seq IN ({sl})""")
 out['cx_zone'] = select(db, f"""SELECT c.apt_seq, z.name, z.e5_ratio, z.e5_n, z.e7_new_ppm, z.e7_mid_ppm, z.e7_old_ppm, z.e7_n, z.f1_react_rel, z.f1_react_n
  FROM complexes c JOIN lifezone z ON z.zone_id = c.lifezone_id WHERE c.apt_seq IN ({sl})""")
 # D2. 급지 E1 (dong_grade 최신): 예시 단지의 동 급지·표시 3개
@@ -73,9 +78,10 @@ out['cx_grade'] = select(db, f"""SELECT c.apt_seq, c.umd_name, g.grade, g.value_
  LEFT JOIN kapt_complexes k ON k.kapt_code = c.kapt_code WHERE c.apt_seq IN ({sl})""")
 # D3. 후보 단지 찾기 (⑦): 기준 시세가 있는 단지·면적 전체 + 급지·표시
 out['cand'] = select(db, f"""SELECT m.apt_seq, m.area_group, m.ref_10k, m.confidence, m.phase, m.pattern, m.turnover_pct, c.apt_name, c.region_code, c.umd_name,
-  c.build_year, k.households, g.grade, g.flag_rebuild, g.flag_gap, g.new_big_name
+  c.build_year, k.households, g.grade, g.flag_rebuild, g.flag_gap, g.new_big_name, l.down_rank
  FROM complex_metrics m JOIN complexes c USING (apt_seq)
  LEFT JOIN kapt_complexes k ON k.kapt_code = c.kapt_code
+ LEFT JOIN complex_liquidity l ON l.apt_seq = m.apt_seq
  LEFT JOIN {G} g ON g.region_code = c.region_code AND g.umd_name = c.umd_name
  WHERE m.ref_10k IS NOT NULL AND m.area_group BETWEEN 40 AND 135""")
 # E. R-ONE 주간 지수 (rone_weekly, jobs/rone.py)
@@ -91,6 +97,30 @@ out['macro'] = select(db, """SELECT series, period, value FROM macro_monthly
  WHERE period >= to_char(now() - interval '26 months', 'YYYYMM') ORDER BY series, period""")
 out['auction'] = select(db, """SELECT period_month, area_code, sale_ratio, source_url FROM auction_stats
  WHERE source = 'ggi_news' AND use_type = '아파트' ORDER BY period_month""")
+# F3. 시군구 미분양(unsold_sgg) + 최근 24개월 민영 공고 분양가 ÷ 주변 시세(presale) + 앞으로 24개월 입주 예정(ipju_plan)
+out['unsold'] = select(db, """
+WITH lp AS (SELECT max(period) p FROM unsold_sgg),
+u AS (SELECT sido, name, region_codes, unsold, unsold_done FROM unsold_sgg, lp WHERE period = lp.p),
+u0 AS (SELECT sido, name, unsold AS u0 FROM unsold_sgg, lp WHERE period = to_char(to_date(lp.p, 'YYYYMM') - INTERVAL '12 months', 'YYYYMM')),
+pr AS (SELECT u.sido, u.name, count(*) AS n, percentile_cont(0.5) WITHIN GROUP (ORDER BY ps.price_ratio) AS r,
+         percentile_cont(0.5) WITHIN GROUP (ORDER BY ps.price_ratio_new) AS rn
+       FROM u JOIN presale ps ON ps.region_code = ANY (string_to_array(u.region_codes, ',')) WHERE ps.price_ratio IS NOT NULL GROUP BY 1, 2),
+ip AS (SELECT u.sido, u.name, sum(i.households) AS hh FROM u JOIN ipju_plan i ON i.region_code = ANY (string_to_array(u.region_codes, ','))
+       WHERE i.move_in_ym BETWEEN to_char(now(), 'YYYYMM') AND to_char(now() + INTERVAL '23 months', 'YYYYMM') GROUP BY 1, 2)
+SELECT (SELECT p FROM lp) AS period, u.sido, u.name, u.unsold, u0.u0, u.unsold_done, pr.n, pr.r, pr.rn, ip.hh
+FROM u LEFT JOIN u0 USING (sido, name) LEFT JOIN pr USING (sido, name) LEFT JOIN ip USING (sido, name)
+WHERE u.region_codes IS NOT NULL ORDER BY u.unsold DESC""")
+# 지역 월별 (region_monthly, jobs/region_stats.py): 소비심리 2년, 전세가율 서울·수도권 2년 + 시군구 최신, 예시 단지 시군구 인구(12월)
+out['region_monthly'] = select(db, f"""SELECT series, region, period, value FROM region_monthly
+ WHERE (series IN ('sentiment', 'jeonse_ratio') AND region IN ('11', '28', '41', 'SUDO', 'KR') AND period >= to_char(now() - interval '26 months', 'YYYYMM'))
+    OR (series = 'jeonse_ratio' AND period = (SELECT max(period) FROM region_monthly WHERE series = 'jeonse_ratio'))
+    OR (series LIKE 'pop_%' AND period LIKE '%12' AND region IN (SELECT DISTINCT split_part(s, '-', 1) FROM unnest(ARRAY[{sl}]) s))
+ ORDER BY series, region, period""")
+# 풍선효과 (balloon, jobs/balloon.py)
+out['balloon'] = select(db, """SELECT event_date::text e, region_code rc, grp, chg_13w, chg_26w, weeks_now, chg_now, outsider_before ob, outsider_after oa,
+  seoul_before sb, seoul_after sa FROM balloon ORDER BY event_date, grp, chg_now DESC""")
+out['balloon_path'] = select(db, "SELECT event_date::text e, grp, week, median_chg m, n FROM balloon_path ORDER BY event_date, grp, week")
+out['policy_events'] = select(db, "SELECT event_date::text d, kind, title, source FROM policy_events ORDER BY event_date")
 # G. 유동성·소득·집값 (G1): 2005년부터 전체
 out['g1'] = select(db, """SELECT series, period, value FROM macro_monthly
  WHERE series IN ('m2', 'household_income', 'apt_kb_nat', 'apt_kb_seoul', 'base_rate') AND period >= '2004' ORDER BY series, period""")
