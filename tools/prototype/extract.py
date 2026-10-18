@@ -18,8 +18,8 @@ out['monthly'] = select(db, """
   percentile_cont(0.5) WITHIN GROUP (ORDER BY price_10k) FILTER (WHERE NOT is_cancelled AND deal_type='중개' AND area_group IN (84,85)) p84
  FROM deals WHERE region_code LIKE '11%' GROUP BY 1 ORDER BY 1""")
 # B. 오늘 처음 등록된 거래 + 전고점 (직거래·해제 제외, 4.3)
-PREV = """(SELECT max(p.price_10k) FROM deals p WHERE p.apt_seq=d.apt_seq AND p.area_group=d.area_group
-           AND p.contract_date < d.contract_date AND NOT p.is_cancelled AND p.deal_type='중개')"""
+#    전고점은 서버가 계산한 deals.prev_high_10k (DB 거래 + 보관 구간 최고가, sql/metrics.sql 1) 를 그대로 쓴다
+PREV = "d.prev_high_10k"
 out['today'] = select(db, f"""
  SELECT d.apt_name, d.apt_seq, d.region_code, d.contract_date::text cd, d.area_m2, d.area_group, d.floor, d.price_10k,
   d.deal_type, d.is_cancelled, {PREV} prev_high,
@@ -54,7 +54,7 @@ for _rc in sorted({s.split('-')[0] for s in SEQS}):
 out['cx_deals'].sort(key=lambda r: r['cd'])
 out['cx_rent'] = select(db, f"""SELECT apt_seq, contract_month m, area_group, n_jeonse, jeonse_median_10k, n_jeonse_new, jeonse_new_median_10k, n_jeonse_renew
  FROM rent_monthly WHERE apt_seq IN ({sl}) AND area_group IN (84,85) ORDER BY contract_month""")
-out['cx_phase'] = select(db, f"""SELECT apt_seq, area_group, phase, chg_12m, up_months, down_months, last3, region_chg_12m, rel_strength,
+out['cx_phase'] = select(db, f"""SELECT apt_seq, area_group, phase, pattern, chg_12m, up_months, down_months, last3, region_chg_12m, rel_strength,
  jeonse_10k, jeonse_24m_10k, jeonse_24m_n, reverse_risk, reserve_10k, real_ref_10k, base2020_10k, real_chg_2020,
  households, turnover_pct, turnover_state, e3_seqs, e3_target_10k, e3_chg_12m, rel_strength_e3, e2_ratio, e2_n, e2_basis, e4_cap_10k, e4_cap_n, e4_compress, e4_sizes,
  f1_zone_24m, f1_sgg_24m, f1_ipju, f1_next

@@ -49,7 +49,9 @@ for seq in d['seqs']:
         w = [r['price_10k'] for r in ok if date.fromisoformat(r['cd']) > TODAY - timedelta(days=days)]
         if len(w) >= 3: C, conf, cn = round(st.median(w)), c, len(w); break
     rec = (C - T) / (P - T) if (C and P and T and P > T) else None
-    pattern = None if C is None else ('신고가 돌파' if C >= P else ('순조로운 회복' if rec is not None and rec >= 0.6 else '회복 지연'))
+    # B2 회복 패턴은 서버(sql/metrics.sql, 국면 조건 포함) 값을 그대로 쓴다. 위 P·T·rec 는 차트 표시용
+    srv = [r for r in d.get('cx_phase', []) if r['apt_seq'] == seq and r['area_group'] in (84, 85) and r.get('pattern')]
+    pattern = max(srv, key=lambda r: r['area_group'] == 84)['pattern'] if srv else None
     rents = [r for r in d['cx_rent'] if r['apt_seq'] == seq]
     jm = {}
     for r in rents:
