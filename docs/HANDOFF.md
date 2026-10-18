@@ -1,9 +1,25 @@
-# 진행 현황과 인수인계 (2026-10-11 기준)
+# 진행 현황과 인수인계 (최종 갱신 2026-10-18)
 
 새 세션은 이 문서부터 읽고, **그다음 `docs/PRODUCT_PLAN.md`(사용자 상황·합의 결정·Supabase 설정·진행 트랙)를 읽는다.**
 작업 브랜치는 세션 시스템이 지정한 것을 따른다. **세션마다 브랜치가 달라 작업이 흩어진 적이 있다** (`inspiring-bell`, `vigilant-fermi`, `festive-heisenberg`, `brave-lamport`).
 새 세션은 시작할 때 `git fetch origin` 후 `git branch -r`로 다른 `claude/*` 브랜치에 더 새 커밋이 있는지 먼저 확인하고, 있으면 합친다.
 2026-10-11 `brave-lamport` 세션에서 앞의 세 브랜치를 모두 합쳤다.
+
+## ★ 최신 상태 (2026-10-18, brave-lamport 세션 마감) — 새 세션은 여기부터
+
+**이번 세션에서 끝난 것** (PR #43 머지, 기본 브랜치 dad5b04): 해제·늦은 신고 재확인(매매·전월세), A1 1층 제외(사용자 (나)안 확정), 전세 실제 중앙값(당월·전월 rents, D3 2년 전 rent_j24), 자료 충분도 표시, 대출 세 가지 구분(제도 상한·은행 확인 한도·필요 대출). 0038·0039·0040 실제 DB 적용, deal_anchor 재생성, metrics·market 재계산 완료. 자세한 내용은 0절 아래 '해제·늦은 신고 재확인…', '자료 충분도·대출 구분…', 'A1 층 처리' 항목.
+
+**사용자 결정 (7절 9~11)**: 구매 2027년 우선·2028년까지 범위 / 관심 단지 밖 시장 흐름·거시경제도 계속 봄 → 시장 화면 유지(외부 검토의 '시장 홈 축소'는 따르지 않음) / A1 은 1층만 제외.
+
+**다음 할 일 (순서대로)**
+1. **Supabase 관리 API 토큰**: 2026-10-18 `SUPABASE_ACCESS_TOKEN` 이 만료돼 401 → 사용자가 새 토큰으로 교체함(새 세션부터 적용). 먼저 `select 1` 로 확인. 그동안 DB 작업은 Actions 임시 워크플로(psql + `DATABASE_URL`)로 했다. Actions 로그 다운로드 주소(blob.core.windows.net)는 이 환경에서 막혀 MCP `get_job_logs`(return_content, tail_lines)로 읽는다
+2. **DB 크기·읽기 전용 확인**: `pg_database_size`, `default_transaction_read_only`. 무료 500MB 한도(2026-10-14 약 350MB)
+3. **시안 다시 올리기**: `HC_ARCHIVE=dir:<보관 파일 폴더> python3 tools/prototype/extract.py && compute.py && build.py` → 아티팩트 https://claude.ai/artifact/RtjwRo7U1bq1UTYZNZsTqg 에 같은 파일 경로(`tools/prototype/out/house-check-screens.html`)로 재게시(지금 버전 19). 이번 변경(1층 제외, 자료 충분도 근거, 대출 판정, 전세 원본 중앙값·근사 표시)이 아직 시안에 안 보임. 보관 파일은 새 세션에 없으니 Releases(raw-data)의 deals_hist_*.csv.gz 를 받아야 한다(이 세션은 scratchpad/hist 에 있었음)
+4. **경기·인천 전월세 과거 이력**: 2026-10-18 15:42 UTC `backfill`(regions=incheon, months=202001-202608, kinds=rent) 실행 시작(run 39141686069). 결과 확인 후 경기를 시군구 묶음으로 나눠 실행(한 번 최대 350분, `concurrency: daily-snapshot` 이라 도는 동안 매일 수집이 밀린다). 끝나면 D3·rent_j24 가 경기·인천에도 생긴다(market d3_reverse_share 문구 '경기·인천은 아직 판정 못 함' 갱신)
+5. **전월세 재확인 첫 실제 실행 확인**: 머지 후 첫 daily-snapshot 로그에서 '전월세 재확인 YYYYMM: … 늦은 신고 n건, 사라짐 n건', 'D3 2년 전 전세 …' 줄 확인(실제 API 로는 아직 안 돌려 봄)
+6. 매매 1년 일회 재확인은 경기 일부만 됨 → 매일 재확인이 10일 안에 채움(추가 작업 없음)
+
+**사용자 결정 대기**: 화면 흐름 재구성(후보 → 상세 → 관심 저장 → 비교, 예산 필터, 매물·임장 기록; 시장·거시는 독립 탭 유지 — 시안부터 보여 주기 추천), 플랫폼(PWA 여부). 외부 검토 문서는 사용자 PC 에만 있음(저장소에 없음).
 
 ## 0. DB 연결: 해결됨 (2026-10-11)
 
@@ -526,8 +542,7 @@ Supabase 무료(500MB, 제3자 자료 기준·공식 미확인)를 유지한다.
 
 ## 9. 새 세션 시작 문장
 
-> docs/HANDOFF.md와 docs/PRODUCT_PLAN.md를 읽고 이어서 진행해줘. 0절의 "다음 할 일"부터 해줘 (DB는 Supabase 관리 API로 접속).
-> (감평협회 샘플 파일을 받았으면 함께 첨부)
+> docs/HANDOFF.md 읽고 이어서 하자. 맨 위 '★ 최신 상태'의 '다음 할 일'부터 (Supabase 토큰 새로 넣었음).
 
 ※ `DATA_GO_KR_SERVICE_KEY`는 환경변수로 설정돼 동작 확인됨(2026-10-11). 매매·전월세 API 승인됨. K-apt·청약홈은 미확인. 등록일은 소급 불가이므로 **매일 스냅샷 실행 환경(cron + DB) 결정이 가장 급하다.**
 
