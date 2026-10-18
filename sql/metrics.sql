@@ -179,6 +179,17 @@ SELECT apt_seq, area_group, {TODAY},
   CASE WHEN ref IS NOT NULL AND p20 > 0 AND cpi_now > 0 AND cpi_20 > 0 THEN round((((ref / cpi_now) / (p20 / cpi_20) - 1) * 100)::numeric, 1) END
 FROM d;
 
+-- 2-1) A1 자료 충분도 근거: 기준 시세 창 안 거래(1층 제외)의 가격 범위, 뺀 1층 건수
+UPDATE complex_metrics m SET ref_lo_10k = x.lo, ref_hi_10k = x.hi, ref_floor1_n = x.f1
+FROM (
+  SELECT d.apt_seq, d.area_group,
+    min(d.price_10k) FILTER (WHERE d.floor IS DISTINCT FROM 1) AS lo, max(d.price_10k) FILTER (WHERE d.floor IS DISTINCT FROM 1) AS hi,
+    count(*) FILTER (WHERE d.floor = 1) AS f1
+  FROM deals d JOIN complex_metrics c USING (apt_seq, area_group)
+  WHERE c.ref_days IS NOT NULL AND NOT d.is_cancelled AND d.deal_type = '중개' AND d.contract_date > {TODAY} - c.ref_days
+  GROUP BY 1, 2) x
+WHERE m.apt_seq = x.apt_seq AND m.area_group = x.area_group;
+
 UPDATE complex_metrics m SET jeonse_24m_approx = NOT EXISTS (
   SELECT 1 FROM rent_j24 t WHERE t.apt_seq = m.apt_seq AND t.area_group = m.area_group
     AND t.from_month = to_char({TODAY}::date - INTERVAL '25 months', 'YYYYMM'))

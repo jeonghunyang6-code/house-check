@@ -45,10 +45,15 @@ for seq in d['seqs']:
         return f(vs) if vs else None
     P, T = rng('202101', '202206', max), rng('202207', '202306', min)
     # A1 기준 시세: 최근 60일 중앙값, 3건 미만이면 90→180일
-    C = conf = None
+    C = conf = cdays = None
     for days, c in ((60, '높음'), (90, '보통'), (180, '낮음')):
         w = [r['price_10k'] for r in okr if date.fromisoformat(r['cd']) > TODAY - timedelta(days=days)]
-        if len(w) >= 3: C, conf, cn = round(st.median(w)), c, len(w); break
+        if len(w) >= 3: C, conf, cn, cdays = round(st.median(w)), c, len(w), days; break
+    # 자료 충분도 근거 (sql/metrics.sql 2-1): 창 안 가격 범위, 뺀 1층 건수, 마지막 거래일(1층 포함)
+    cwin = [r for r in ok if cdays and date.fromisoformat(r['cd']) > TODAY - timedelta(days=cdays)]
+    cspread = cdays and {'days': cdays, 'lo': min(r['price_10k'] for r in cwin if r['floor'] != 1),
+                         'hi': max(r['price_10k'] for r in cwin if r['floor'] != 1),
+                         'f1': sum(r['floor'] == 1 for r in cwin), 'last': max(r['cd'] for r in ok)}
     rec = (C - T) / (P - T) if (C and P and T and P > T) else None
     # B2 회복 패턴은 서버(sql/metrics.sql, 국면 조건 포함) 값을 그대로 쓴다. 위 P·T·rec 는 차트 표시용
     srv = [r for r in d.get('cx_phase', []) if r['apt_seq'] == seq and r['area_group'] in (84, 85) and r.get('pattern')]
@@ -83,7 +88,7 @@ for seq in d['seqs']:
                'acc': next(({k: z[k] for k in ('station_name', 'station_m', 'h2_cbd_min', 'h2_cbd_tr', 'h2_ybd_min', 'h2_ybd_tr', 'h2_gbd_min', 'h2_gbd_tr')} for z in d.get('cx_access', []) if z['apt_seq'] == seq), None),
                'zone': next(({k: z[k] for k in ('name', 'e5_ratio', 'e5_n', 'e7_new_ppm', 'e7_mid_ppm', 'e7_old_ppm', 'e7_n', 'f1_react_rel', 'f1_react_n')} for z in d.get('cx_zone', []) if z['apt_seq'] == seq), None),
                'e3': m84 and m84['e3_seqs'] and [n['apt_name'] for n in d.get('e3_names', []) if n['apt_seq'] in m84['e3_seqs'].split(',')],
-               'phase': ph and {k: ph[k] for k in ('phase', 'chg_12m', 'up_months', 'down_months', 'last3', 'region_chg_12m', 'rel_strength')}, 'seq': seq, 'name': name, 'region': REG[seq[:5]], 'P': P, 'T': T, 'C': C, 'conf': conf, 'cn': cn if C else 0,
+               'phase': ph and {k: ph[k] for k in ('phase', 'chg_12m', 'up_months', 'down_months', 'last3', 'region_chg_12m', 'rel_strength')}, 'seq': seq, 'name': name, 'region': REG[seq[:5]], 'P': P, 'T': T, 'C': C, 'conf': conf, 'cn': cn if C else 0, 'cs': cspread,
                'rec': rec, 'pattern': pattern, 'J': J, 'jn': jn, 'jsrc': jsrc, 'japprox': japprox, 'ratio': ratio, 'band': nb,
                'n12': n12, 'ref': ref,
                'pts': [[r['cd'], r['price_10k'], r['floor']] for r in ok],

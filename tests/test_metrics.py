@@ -20,7 +20,7 @@ def _db():
               "0009_rone_weekly.sql", "0011_market.sql", "0012_macro.sql", "0013_macro_annual.sql", "0014_complex_phase.sql", "0015_quadrant_strength.sql",
               "0016_reverse_real.sql", "0008_complexes.sql", "0019_deal_anchor.sql", "0020_turnover_e3.sql",
               "0022_complex_geo.sql", "0023_adm_dong.sql", "0030_lifezone.sql", "0031_e2.sql", "0032_e4_e5_e7.sql", "0034_presale.sql", "0035_presale_total.sql", "0037_ipju_plan.sql",
-              "0039_rent_j24.sql"):
+              "0039_rent_j24.sql", "0040_ref_spread.sql"):
         db.query((ROOT / "db" / "migrations" / m).read_text(encoding="utf-8"))
     return db
 
@@ -72,6 +72,7 @@ def test_metrics_end_to_end():
     assert (a["jeonse_10k"], a["jeonse_n"], a["jeonse_src"], float(a["jeonse_ratio"])) == (80000, 2, "신규", 47.1)
     assert (float(a["band_lo"]), float(a["band_hi"])) == (42.0, 56.0)       # 17억: 50→30, 60→50 구간 40% 지점
     assert a["high_10k"] == 180000 and a["n_365"] == 4
+    assert (a["ref_lo_10k"], a["ref_hi_10k"], a["ref_floor1_n"]) == (160000, 180000, 1)
     assert b["ref_10k"] is None and b["pattern"] is None and b["jeonse_ratio"] is None
     assert (c["ref_10k"], c["ref_days"], c["confidence"], c["pattern"], float(c["recovery"])) == (140000, 180, "낮음", "회복 지연", 0.4)
     assert c["no_rebound"] is False

@@ -945,7 +945,7 @@ function drawCx(c) {
   $('#cxRegion').innerHTML = `${c.region} ${c.phase ? `<span class="pill ${PH[c.phase.phase] || 'none'}">${c.phase.phase}</span>` : '<span class="pill none">국면 판정 보류</span>'}`;
   const [rc, rl] = ratioState(c), [pc, pl] = patState(c);
   $('#cxKpis').innerHTML = `
-    <div class="kpi"><span class="k">기준 시세</span><span class="v">${eok(c.C)}</span><span class="d">${c.C ? `최근 거래 ${c.cn}건 · 신뢰도 ${c.conf}` : '최근 180일 거래 3건 미만'}</span></div>
+    <div class="kpi"><span class="k">기준 시세</span><span class="v">${eok(c.C)}</span><span class="d">${c.C ? `최근 ${c.cs.days}일 중개 ${c.cn}건 · 범위 ${eok(c.cs.lo)}~${eok(c.cs.hi)} · 마지막 거래 ${c.cs.last.slice(5).replace('-', '/')}${c.cs.f1 ? ` · 1층 ${c.cs.f1}건 제외` : ''} · 자료 충분도 ${c.conf}` : '최근 180일 거래(1층 제외) 3건 미만'}</span></div>
     <div class="kpi"><span class="k">${c.C && c.C >= c.P ? '전고점 대비' : '전고점 회복률'}</span><span class="v">${recLabel(c)}</span><span class="d"><span class="pill ${pc}">${pl}</span></span></div>
     <div class="kpi"><span class="k">전세가율</span><span class="v">${c.ratio == null ? '–' : pct(c.ratio)}</span><span class="d"><span class="pill ${rc}">${rl}</span>${c.band ? ` 정상 ${c.band[0]}~${c.band[1]}%` : ''}</span></div>
     <div class="kpi"><span class="k">최근 1년 거래</span><span class="v">${c.n12}건</span><span class="d">84㎡형${c.hh ? ` · 단지 ${Number(c.hh).toLocaleString()}세대` : ''}${c.m && c.m.turnover_pct != null ? ` · 월 회전율 ${(+c.m.turnover_pct).toFixed(2)}% <span class="pill ${c.m.turnover_state === '적음' ? 'warn' : 'good'}">${c.m.turnover_state}</span>` : ''}</span></div>
