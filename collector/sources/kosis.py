@@ -139,3 +139,34 @@ def sgg_codes(sido: str, name: str, regions: dict[str, str]) -> list[str]:
     """KOSIS 시군구 이름 → 우리 시군구 코드들. 경기 '수원시' → 수원시 4개 구. 못 찾으면 []."""
     pre = f"{sido} {name}"
     return sorted(c for c, n in regions.items() if n == pre or n.startswith(pre + " "))
+
+
+# H3 학령인구·D7 생산가능인구: 주민등록인구 시군구 × 5세 구간, 월별 (orgId 101 DT_1B04005N, 2026-10-18 확인).
+# objL1 은 우리 시군구 코드와 같다(인천·화성 새 구 코드도 됨, 개편 뒤 달만).
+POP_TABLE = "DT_1B04005N"
+
+
+def age_lo(label: str) -> int | None:
+    """'5 - 9세' → 5, '100+' → 100, '계' → None."""
+    s = label.replace(" ", "")
+    if s.endswith("+"):
+        return int(s[:-1])
+    if "-" in s:
+        return int(s.split("-")[0])
+    return None
+
+
+def fetch_population(code: str, start: str, end: str) -> dict[str, dict[str, int]]:
+    """{YYYYMM: {total, school(5~19세), working(15~64세), old(65세+)}}"""
+    out: dict[str, dict[str, int]] = {}
+    for r in _rows(_call({"orgId": "101", "tblId": POP_TABLE, "itmId": "T2", "objL1": code, "objL2": "ALL",
+                          "prdSe": "M", "startPrdDe": start, "endPrdDe": end})):
+        g = out.setdefault(r["PRD_DE"], {"total": 0, "school": 0, "working": 0, "old": 0})
+        v, lo = int(float(r["DT"])), age_lo(r["C2_NM"])
+        if lo is None:
+            g["total"] = v
+        else:
+            g["school"] += v if 5 <= lo < 20 else 0
+            g["working"] += v if 15 <= lo < 65 else 0
+            g["old"] += v if lo >= 65 else 0
+    return out

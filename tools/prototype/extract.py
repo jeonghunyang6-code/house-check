@@ -110,6 +110,12 @@ ip AS (SELECT u.sido, u.name, sum(i.households) AS hh FROM u JOIN ipju_plan i ON
 SELECT (SELECT p FROM lp) AS period, u.sido, u.name, u.unsold, u0.u0, u.unsold_done, pr.n, pr.r, pr.rn, ip.hh
 FROM u LEFT JOIN u0 USING (sido, name) LEFT JOIN pr USING (sido, name) LEFT JOIN ip USING (sido, name)
 WHERE u.region_codes IS NOT NULL ORDER BY u.unsold DESC""")
+# 지역 월별 (region_monthly, jobs/region_stats.py): 소비심리 2년, 전세가율 서울·수도권 2년 + 시군구 최신, 예시 단지 시군구 인구(12월)
+out['region_monthly'] = select(db, f"""SELECT series, region, period, value FROM region_monthly
+ WHERE (series IN ('sentiment', 'jeonse_ratio') AND region IN ('11', '28', '41', 'SUDO', 'KR') AND period >= to_char(now() - interval '26 months', 'YYYYMM'))
+    OR (series = 'jeonse_ratio' AND period = (SELECT max(period) FROM region_monthly WHERE series = 'jeonse_ratio'))
+    OR (series LIKE 'pop_%' AND period LIKE '%12' AND region IN (SELECT DISTINCT split_part(s, '-', 1) FROM unnest(ARRAY[{sl}]) s))
+ ORDER BY series, region, period""")
 # 풍선효과 (balloon, jobs/balloon.py)
 out['balloon'] = select(db, """SELECT event_date::text e, region_code rc, grp, chg_13w, chg_26w, weeks_now, chg_now, outsider_before ob, outsider_after oa,
   seoul_before sb, seoul_after sa FROM balloon ORDER BY event_date, grp, chg_now DESC""")

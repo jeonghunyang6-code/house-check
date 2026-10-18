@@ -174,3 +174,42 @@ def buyer_codes(name: str, regions: dict[str, str]) -> list[str]:
         return []
     pre = " ".join(parts)
     return sorted(c for c, n in regions.items() if n == pre or n.startswith(pre + " "))
+
+
+# 월간 표 (jobs/region_stats.py, 0045). 2026-10-18 실제 응답으로 확인
+JEONSE_RATIO_TABLE = "A_2024_00073"   # (월) 중위 매매가격 대비 전세가격_아파트, 2012~, 시군구(구)까지, % — D1 지역 평균
+SENTIMENT_TABLE = "T235013129634707"   # 부동산시장 소비심리지수(국토연구원), 시도·수도권·전국 — G7
+SIDO_KEYS = {"서울": "11", "인천": "28", "경기": "41", "수도권": "SUDO", "전국": "KR"}
+
+
+def _rows_or_empty(j: dict) -> list[dict]:
+    if "SttsApiTblData" not in j:
+        res = j.get("RESULT", {})
+        if res.get("CODE") == "INFO-200":
+            return []
+        raise ApiError(f"{res.get('CODE')} {res.get('MESSAGE')}")
+    blk = j["SttsApiTblData"]
+    return blk[1]["row"] if len(blk) > 1 else []
+
+
+def fetch_monthly(statbl: str, ym: str | None = None, cls_id: int | None = None) -> list[dict]:
+    """한 달의 모든 지역(ym) 또는 한 지역의 전체 시계열(cls_id). 행 그대로."""
+    out, page = [], 1
+    while True:
+        q = {"STATBL_ID": statbl, "DTACYCLE_CD": "MM", "pIndex": page, "pSize": 1000}
+        q.update({"WRTTIME_IDTFR_ID": ym} if ym else {"CLS_ID": cls_id})
+        got = _rows_or_empty(_call(q))
+        out += got
+        if len(got) < 1000:
+            return out
+        page += 1
+
+
+def region_key(full_name: str, sgg: dict[str, str]) -> str | None:
+    """'수도권>서울'·'서울' → '11', '수도권>소계'·'수도권' → 'SUDO', '전국>소계' → 'KR', 시군구 경로 → 우리 코드(sgg = map_regions 결과)."""
+    parts = [p for p in full_name.split(">") if p != "소계"]
+    if len(parts) == 1 and parts[0] in SIDO_KEYS:
+        return SIDO_KEYS[parts[0]]
+    if len(parts) == 2 and parts[0] == "수도권" and parts[1] in SIDO_KEYS:
+        return SIDO_KEYS[parts[1]]
+    return sgg.get(full_name)

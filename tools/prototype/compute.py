@@ -29,6 +29,18 @@ def band(price):  # D1 정상 범위 (책 p.152), 사이 가격대는 선형 보
             return [round(r0[0] + (r1[0] - r0[0]) * t), round(r0[1] + (r1[1] - r0[1]) * t)]
 
 
+RM = {}
+for _r in d.get('region_monthly', []):
+    RM.setdefault((_r['series'], _r['region']), []).append((_r['period'], float(_r['value'])))
+def reg(rc):
+    """같은 시군구 전세가율(최신)과 인구 5년 변화(12월끼리). D1 지역값을 단지값 옆에 (M5), H3 학령인구·D7 생산가능인구."""
+    jr = RM.get(('jeonse_ratio', rc), [])
+    out = {'jr': jr[-1] if jr else None, 'jr_seoul': (RM.get(('jeonse_ratio', '11')) or [None])[-1]}
+    for k in ('school', 'working', 'total'):
+        ps = RM.get((f'pop_{k}', rc), [])
+        if len(ps) >= 6:
+            out[k] = [ps[-6][0], ps[-6][1], ps[-1][0], ps[-1][1]]
+    return out
 from collector.policy import zones_for
 import calendar
 def liq(seq, gr):
@@ -101,6 +113,7 @@ for seq in d['seqs']:
                'turnover_pct', 'turnover_state', 'e3_target_10k', 'e3_chg_12m', 'rel_strength_e3', 'e2_ratio', 'e2_n', 'e2_basis', 'e4_cap_10k', 'e4_cap_n', 'e4_compress', 'e4_sizes', 'f1_zone_24m', 'f1_sgg_24m', 'f1_ipju', 'f1_next')},
                'acc': next(({k: z[k] for k in ('station_name', 'station_m', 'h2_cbd_min', 'h2_cbd_tr', 'h2_ybd_min', 'h2_ybd_tr', 'h2_gbd_min', 'h2_gbd_tr')} for z in d.get('cx_access', []) if z['apt_seq'] == seq), None),
                'liq': liq(seq, gr),
+               'reg': reg(seq[:5]),
                'zone': next(({k: z[k] for k in ('name', 'e5_ratio', 'e5_n', 'e7_new_ppm', 'e7_mid_ppm', 'e7_old_ppm', 'e7_n', 'f1_react_rel', 'f1_react_n')} for z in d.get('cx_zone', []) if z['apt_seq'] == seq), None),
                'e3': m84 and m84['e3_seqs'] and [n['apt_name'] for n in d.get('e3_names', []) if n['apt_seq'] in m84['e3_seqs'].split(',')],
                'phase': ph and {k: ph[k] for k in ('phase', 'chg_12m', 'up_months', 'down_months', 'last3', 'region_chg_12m', 'rel_strength')}, 'seq': seq, 'name': name, 'region': REG[seq[:5]], 'P': P, 'T': T, 'C': C, 'conf': conf, 'cn': cn if C else 0, 'cs': cspread,
@@ -197,6 +210,7 @@ json.dump({'monthly': monthly, 'cx': cx, 'today': today,
            'g1': g1(), 'g2': g2(), 'e6': e6(),
            'unsold': [{k: (float(r[k]) if isinstance(r[k], str) and k in ('r', 'rn') else r[k]) for k in r} for r in d.get('unsold', [])],
            'policy': [[r['d'], r['kind'], r['title']] for r in d.get('policy_events', [])],
+           'sentiment': {k: v for (sr, k), v in RM.items() if sr == 'sentiment'},
            # 풍선효과: 사건별 [시군구, 그룹, 13주, 26주, 주 수, 지금까지, 외지인 전, 후, 서울 전, 후] / 그룹 중앙값 경로 [그룹, 주, 중앙값, n]
            'balloon': {e: {'rows': [[r['rc'], r['grp'], *[r[k] and float(r[k]) for k in ('chg_13w', 'chg_26w')], r['weeks_now'],
                                      *[r[k] and float(r[k]) for k in ('chg_now', 'ob', 'oa', 'sb', 'sa')]] for r in d.get('balloon', []) if r['e'] == e],
