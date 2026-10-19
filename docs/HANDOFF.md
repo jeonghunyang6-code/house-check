@@ -73,6 +73,19 @@
 - 시안 ④ 메모에 C6·E8·H3 학원가·H6 추가(재게시)
 - 다음: 3번 묶음(호가 기록 3%/5% 📖 P2 p.335, 임장 체크리스트 📖 p.171~182)은 화면 흐름 시안에 넣는다. 임장 체크리스트는 사용자의 책 메모 파일(book_notes_2026-10-11.md, 저장소에 올리지 않음)을 첨부받아야 한다
 
+**전월세 요약 저장 구조·경기 전월세 (2026-10-19, busy-meitner 3차, 0053 적용)** — 사용자 결정: 무료 플랜(500MB) 유지
+- 빈 공간: 같은 날 DB 522MB 로 다시 초과(complex_metrics 9→50MB, complexes 15→38MB, metrics 가 두 표를 여러 번 통째로 UPDATE) → 사용자 승인 후 `VACUUM FULL` 로 **459MB**. daily.yml 에 metrics 뒤 '빈 공간 정리' 단계 추가(머지 뒤부터 매일)
+- 구조: `rent_monthly` 는 최근 **17개월**만(`jobs/rent_archive.py KEEP_MONTHS`, D4 가 16개월 전 달까지 본다). 그 전 달은 시군구별 `rentsum_<시군구>.csv.gz`(Releases raw-data). 지역 합계 `rent_region_month`(0053, 전체 기간) → D5. daily 의 `rent_archive daily` 끝에 `roll_sums`(17개월 지난 달을 파일로 옮기고 DB 삭제, 많이 지우면 VACUUM FULL). backfill 은 오래된 달 단지 요약을 DB 대신 rentsum 파일로(12개월마다 씀). `rent_archive sumhist` 는 원본 월별 파일로 rentsum 을 다시 만든다
+- F1 입주 반응: `sql/f1_react.sql` → `collector/react.py`(DB 17개월 + rentsum 파일). presale.yml 에 HC_ARCHIVE=gh·GH_TOKEN. 실제 DB 로 옛 SQL 과 사건 84건·생활권 54곳 값이 완전히 같음 확인(반올림은 PostgreSQL 방식으로 맞춤)
+- D3 2년 전 전세는 원래 원본 파일(rent_j24)이라 영향 없음. metrics D3 의 rent_monthly 근사는 이제 거의 안 쓰인다. 시안 전세 차트는 DB + rentsum
+- **경기 전월세 backfill**: 2026-10-18 첫 시도(run 39143544324)는 공공데이터포털 연결 실패로 202001 에서 멈췄었다. 2026-10-19 13:20 UTC 이 브랜치 코드로 다시 실행(run 39259362147, regions=gyeonggi, months=202001-202608) — 202506 이후만 rent_monthly(약 +20MB 추정), 그 전은 rentsum 파일
+- **남은 단계**: 머지 뒤 `backfill.yml` kinds=rentroll(또는 다음 daily)로 서울·인천 rent_monthly 2020-01~2025-05 를 rentsum 파일로 옮기고 지운다(약 −100MB 추정). **머지 전에 하면 안 됨**: 기본 브랜치의 옛 presale(F1 SQL)·market 이 rent_monthly 과거분을 읽는다(presale 매주 월요일)
+
+**정비사업 H5 자료 확인 (2026-10-19)**
+- 건축물대장(용적률·대지면적·세대수): `apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo` → 403 SERVICE_KEY_IS_NOT_REGISTERED_ERROR. **사용자가 공공데이터포털에서 '국토교통부_건축HUB_건축물대장정보 서비스' 활용 신청 필요**(같은 키)
+- 서울 정비사업 단계: 서울 열린데이터광장(data.seoul.go.kr OA-23112 등, 오픈 API·CSV)이 이 클라우드 환경 네트워크 정책에 막힘(프록시 403, openapi.seoul.go.kr 이름 해석 안 됨). 환경 설정 '허용 도메인'에 추가하거나 Actions 에서 받는다. 서울 오픈 API 는 별도 인증키(열린데이터광장 회원 발급)가 필요 → GitHub secret 으로
+- 경기: 도 단위 정비사업 단계 자료를 못 찾음. 시 단위 파일만(공공데이터포털 '경기도 안양시 일반 정비사업 추진현황' 등, 조합설립·사업시행인가·착공·준공일 포함). 시마다 형식이 달라 모으는 방법은 미정
+
 **남은 지표 점검 (2026-10-18, indicators.md·viewpoints.md 대조)**
 - 새 데이터 없이 계산만 하면 되는 것: ~~C3·C4, A5, D4, L6·L9~~(완료), ~~E6 서버 표·후보 추천~~(완료), I3 재개발 시나리오(H5 뒤)
 - 새 데이터가 필요한 것: 경기·인천 전월세 이력(진행 중, 공간 문제) → D3·D5·F1 반응 / ~~F3 미분양·분양가~~(완료) / H5 정비사업(건축물대장 용적률·대지면적, 정비사업 단계: 서울 공개 자료, 경기는 출처 미확인) / ~~규제 이력 표~~(완료, 풍선효과도 완료) / H3 학령인구(KOSIS 연령별 주민등록인구) / ~~H4 호재 단계~~(완료, 시군구 단위) / G7 심리·검색량(국토연 소비심리지수, 네이버 데이터랩 미신청) / P2 호가(네이버, 보류)
@@ -82,7 +95,7 @@
 1. **Supabase 관리 API 토큰**: 2026-10-18 `SUPABASE_ACCESS_TOKEN` 이 만료돼 401 → 사용자가 새 토큰으로 교체함(새 세션부터 적용). 먼저 `select 1` 로 확인. 그동안 DB 작업은 Actions 임시 워크플로(psql + `DATABASE_URL`)로 했다. Actions 로그 다운로드 주소(blob.core.windows.net)는 이 환경에서 막혀 MCP `get_job_logs`(return_content, tail_lines)로 읽는다
 2. **DB 크기·읽기 전용 확인**: `pg_database_size`, `default_transaction_read_only`. 무료 500MB 한도(2026-10-14 약 350MB)
 3. ~~**시안 다시 올리기**~~ 2026-10-18 busy-meitner 에서 버전 20 으로 재게시(보관 파일은 Releases 에서 curl 로 받음: `https://github.com/jeonghunyang6-code/house-check/releases/download/raw-data/<파일>`, 인증 불필요). 옛 설명: `HC_ARCHIVE=dir:<보관 파일 폴더> python3 tools/prototype/extract.py && compute.py && build.py` → 아티팩트 https://claude.ai/artifact/RtjwRo7U1bq1UTYZNZsTqg 에 같은 파일 경로(`tools/prototype/out/house-check-screens.html`)로 재게시(지금 버전 19). 이번 변경(1층 제외, 자료 충분도 근거, 대출 판정, 전세 원본 중앙값·근사 표시)이 아직 시안에 안 보임. 보관 파일은 새 세션에 없으니 Releases(raw-data)의 deals_hist_*.csv.gz 를 받아야 한다(이 세션은 scratchpad/hist 에 있었음)
-4. **경기·인천 전월세 과거 이력**: 2026-10-18 15:42 UTC `backfill`(regions=incheon, months=202001-202608, kinds=rent) 실행 시작(run 39141686069). 결과 확인 후 경기를 시군구 묶음으로 나눠 실행(한 번 최대 350분, `concurrency: daily-snapshot` 이라 도는 동안 매일 수집이 밀린다). 끝나면 D3·rent_j24 가 경기·인천에도 생긴다(market d3_reverse_share 문구 '경기·인천은 아직 판정 못 함' 갱신)
+4. ~~**경기·인천 전월세 과거 이력**~~ → 아래 '전월세 요약 저장 구조' 참고(2026-10-19). 옛 기록: 2026-10-18 15:42 UTC `backfill`(regions=incheon, months=202001-202608, kinds=rent) 실행 시작(run 39141686069). 결과 확인 후 경기를 시군구 묶음으로 나눠 실행(한 번 최대 350분, `concurrency: daily-snapshot` 이라 도는 동안 매일 수집이 밀린다). 끝나면 D3·rent_j24 가 경기·인천에도 생긴다(market d3_reverse_share 문구 '경기·인천은 아직 판정 못 함' 갱신)
 5. **전월세 재확인 첫 실제 실행 확인**: 머지 후 첫 daily-snapshot 로그에서 '전월세 재확인 YYYYMM: … 늦은 신고 n건, 사라짐 n건', 'D3 2년 전 전세 …' 줄 확인(실제 API 로는 아직 안 돌려 봄)
 6. 매매 1년 일회 재확인은 경기 일부만 됨 → 매일 재확인이 10일 안에 채움(추가 작업 없음)
 
@@ -321,7 +334,7 @@ curl -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
   - 단지: `f1_zone_24m`(같은 생활권 24개월), `f1_sgg_24m`, `f1_ipju`(생활권 안 최근 6개월 입주 = 📖 입주장 p.55), `f1_next`(가장 큰 다음 입주). 명세의 '과거 입주 반응 분류'는 아직
 - **F1 총 세대 보정**(0035, `link_totals`, 2026-10-16): 청약홈에는 총 세대가 없다(입지톡도 같은 49칸). 입주한 공고 932건 중 277건을 K-apt 단지에 맞춤(🔧 500m, 준공 ±1년, 이름 3글자+). 입주 전 정비사업(`IMPRMN_BSNS_AT`)은 입주한 정비사업 67건의 K-apt÷공급 중앙값 **2.34배**(10~90% 1.17~4.72 → 단지별로 거칠다: 메이플자이 실제 3,307 vs 추정 380). 잔여·취소분 이름과 같은 단지 두 번째 공고는 0(중복 101건)
 - **F1 입주 예정 물량 공식 자료**(0037 `ipju_plan`, `load_plan`, presale 작업 끝에 매주 다시 받음): 한국부동산원 주택공급정보 입주 예정 물량(공공데이터포털 15111714, 반기 갱신, 칸 입주예정월·지역·사업유형·주소·아파트명·세대수 — **세대수는 조합원·임대 포함 실제 총 세대**). 2026-06-30 기준 파일: 수도권 389개 단지 240,797세대, 2026-07~2028-06. 생활권은 이름 맞는 청약홈 공고 좌표(246) → 같은 법정동 단지 다수(130) → 못 정함(13, 읍면 리·행정동 주소). F1 은 이 파일이 다루는 입주 월 범위 안이면 이 표만, 밖이면 presale(총 세대 보정)을 쓴다
-- **F1 과거 입주 반응**(0036, `sql/f1_react.sql`, presale 작업 끝에 실행): 🔧 총 500세대+ 입주(2021-01~7개월 전)마다 같은 생활권 기존 단지 전세 입주 전·후 6개월 비교 − 같은 시도. 41건·생활권 30곳, 중앙값 −0.56%p(10% −5.1, 90% +2.2). 강일(2021-02 SH 공공분양) −17.8%p, 노원 롯데캐슬 시그니처 −6.1, 올림픽파크포레온 +2.2. 신도시는 생활권 안 기존 단지가 🔧 5개 미만이라 대부분 빠진다. `lifezone.f1_react_rel·n`
+- **F1 과거 입주 반응**(0036, presale 작업 끝에 실행. 2026-10-19 `sql/f1_react.sql` → `collector/react.py` 로 옮김): 🔧 총 500세대+ 입주(2021-01~7개월 전)마다 같은 생활권 기존 단지 전세 입주 전·후 6개월 비교 − 같은 시도. 41건·생활권 30곳, 중앙값 −0.56%p(10% −5.1, 90% +2.2). 강일(2021-02 SH 공공분양) −17.8%p, 노원 롯데캐슬 시그니처 −6.1, 올림픽파크포레온 +2.2. 신도시는 생활권 안 기존 단지가 🔧 5개 미만이라 대부분 빠진다. `lifezone.f1_react_rel·n`
 - **E6 갈아타기 격차**(시안 ⑧, 2026-10-16): 과거 파일 + DB 로 단지별 84㎡ 분기 중앙가(최근 끝난 20분기, 🔧 12분기 이상 수도권 3,503곳)를 시안 데이터에 넣고 브라우저에서 두 단지 차이의 5년 분포 위치(🔧 하위 20% = 축소 구간)와 1.5배 확인. 서버 표·후보 자동 추천은 아직
 - **G6**(jobs/auction.py, auction.yml 매달 7·14일): 네이버 뉴스 검색 요약문 → `collector/sources/auction_news.py` 추출 → 같은 달 기사 2건 이상 같은 값만 확정(발행월 − 1달). 2026-10-16 로컬 실행: 서울 2025-04~2026-09 16개월(2026-01 107.8% → 2026-09 94.7%), 경기 3·인천 5·전국 9개월. 경기·인천은 기사가 적어 빈 달이 많다. 한 번 확정된 값은 이후 모호해져도 남는다(덮어쓰기만)
   - GitHub 저장소 Secrets 에 `NAVER_CLIENT_ID`·`NAVER_CLIENT_SECRET` 등록됨(2026-10-16 사용자). Actions 에서 실제 실행 확인(기사 668건, 확정 24건)
