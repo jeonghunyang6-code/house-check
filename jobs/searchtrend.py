@@ -35,7 +35,8 @@ def window(today: date) -> tuple[str, str]:
 
 def run(db: Db, limit: int, today: date, call=call) -> int:
     cx = select(db, f"""SELECT c.apt_seq, c.apt_name, c.umd_name, k.kapt_name FROM complexes c JOIN kapt_complexes k ON k.kapt_code = c.kapt_code
-WHERE k.households >= {MIN_HH} AND EXISTS (SELECT 1 FROM deals d WHERE d.apt_seq = c.apt_seq AND d.contract_date > {lit(today)}::date - 365)
+WHERE k.households >= {MIN_HH}
+  AND c.apt_seq IN (SELECT DISTINCT apt_seq FROM deals WHERE contract_month >= to_char({lit(today)}::date - 365, 'YYYYMM'))
   AND NOT EXISTS (SELECT 1 FROM complex_search s WHERE s.apt_seq = c.apt_seq AND date_trunc('month', s.fetched_at) = date_trunc('month', {lit(today)}::date))
 ORDER BY k.households DESC""")
     todo = [(c["apt_seq"], k) for c in cx if (k := keywords(c["apt_name"], c["umd_name"], (c["kapt_name"] or "",)))]
