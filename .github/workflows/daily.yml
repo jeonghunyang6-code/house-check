@@ -77,6 +77,13 @@ jobs:
           HC_DB_BACKEND: psql
           PYTHONUNBUFFERED: "1"
         run: python -m jobs.metrics
+      - name: 신고 지연 보정 거래량 (C1)
+        if: ${{ !cancelled() && !inputs.dry_run }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          HC_DB_BACKEND: psql
+          PYTHONUNBUFFERED: "1"
+        run: python -m jobs.volume
       - name: 빈 공간 정리 (지표 표)
         # metrics 가 두 표를 여러 번 통째로 UPDATE 해서 빈 공간이 하루 수십 MB 쌓인다(2026-10-19 complex_metrics 9→50MB).
         # 무료 한도 500MB 를 지키려고 매일 다시 쓴다. 두 표 합 약 25MB 라 몇 초면 끝난다

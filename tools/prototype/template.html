@@ -149,7 +149,8 @@ footer.foot { color: var(--ink-3); font-size: 12px; max-width: 90ch; display: gr
         <div class="sec">
           <h3>월별 매매 거래량</h3>
           <svg class="chart" id="volChart" viewBox="0 0 340 170" role="img" aria-label="서울 월별 아파트 매매 거래량 막대 차트"></svg>
-          <div class="legend"><span><i style="background:var(--s-trade)"></i>계약월 기준 거래</span><span><i style="background:var(--s-trade);opacity:.35"></i>신고 기한 전(집계 중)</span></div>
+          <div class="legend"><span><i style="background:var(--s-trade)"></i>계약월 기준 거래</span><span><i style="background:var(--s-trade);opacity:.35"></i>신고 기한 전(집계 중)</span><span><i style="background:none;border:1px dashed var(--s-trade)"></i>신고 지연 보정 추정(C1)</span></div>
+          <p class="src" id="volNote"></p>
         </div>
         <div class="sec">
           <h3>전용 84㎡ 실거래 중위가격</h3>
@@ -408,9 +409,18 @@ $('#notice').innerHTML = `<b>데이터 범위</b><span>서울 실거래는 2020�
     if (m.gap) { el('rect', { x, y: y(max * 0.12), width: w, height: H - B - y(max * 0.12), fill: css('--gap'), rx: 1 }, svg); return; }
     const h = H - B - y(m.n || 0);
     const r = el('rect', { x, y: y(m.n || 0), width: w, height: Math.max(h, 0.5), fill: css('--s-trade'), 'fill-opacity': m.partial ? 0.35 : 1, rx: 1 }, svg);
-    hover(r, `${m.m.slice(0, 4)}년 ${+m.m.slice(4)}월 · ${m.n.toLocaleString()}건${m.partial ? ' (집계 중)' : ''}`);
+    let tip = `${m.m.slice(0, 4)}년 ${+m.m.slice(4)}월 · ${m.n.toLocaleString()}건`;
+    if (m.est) {   // C1 신고 지연 보정: 아직 안 들어온 몫을 점선 테두리로
+      el('rect', { x: x + 0.5, y: y(m.est), width: Math.max(w - 1, 0.5), height: Math.max(y(m.n) - y(m.est), 0.5), fill: 'none', stroke: css('--s-trade'), 'stroke-dasharray': '2 1.5', 'stroke-width': 1 }, svg);
+      tip += ` (집계 중) · 신고 지연 보정 약 ${m.est.toLocaleString()}건 (${m.lo.toLocaleString()}~${m.hi.toLocaleString()})`;
+    } else if (m.partial) tip += m.share ? ` (집계 중, 지금까지 계약된 것 중 약 ${m.share}%만 신고됨 — 추정치는 신고가 80% 넘게 들어오면 보임)` : ' (집계 중)';
+    hover(r, tip);
     if (m.m.endsWith('01')) txt(svg, x + w / 2 + bw * 5.5, H - 6, m.m.slice(0, 4));
   });
+  const nc = ms.filter(m => m.partial && m.share);
+  if (nc.length) $('#volNote').textContent = '실거래는 계약 뒤 30일 안에 신고하면 돼 최근 달은 덜 잡힙니다(C1). 최근 4주 새로 들어온 거래의 신고 지연으로 추정: '
+    + nc.map(m => `${+m.m.slice(4)}월 계약분 신고 약 ${m.share}% 들어옴` + (m.est ? ` → 약 ${m.est.toLocaleString()}건` : '')).join(' · ')
+    + '. 신고가 80% 넘게 들어온 달만 추정 건수를 보입니다(🔧, 2026-10 한 주 자료로 맞혀 보니 당월 추정은 오차가 커서).';
   const peak = ms.reduce((a, b) => (b.n || 0) > (a.n || 0) ? b : a);
   const pi = ms.indexOf(peak);
   txt(svg, L + pi * bw + 6, y(peak.n) + 2, `${md(peak.m)} ${peak.n.toLocaleString()}건`, 'start').setAttribute('style', 'fill:var(--ink-2)');
@@ -1161,12 +1171,12 @@ function drawCx(c) {
   if (!c.C) notes.push('최근 180일 거래가 3건 미만이라 기준 시세를 정하지 않았습니다.');
   notes.push(`전세는 ${c.jsrc === '신규' ? '신규 계약' : '전체 계약(갱신 포함)'} ${c.japprox ? '월별 중앙값을 건수로 가중 평균한 근사값' : '중앙값'}(2026년 9~10월, ${c.jn}건)으로 전세가율을 계산했습니다.${c.jsrc === '전체' ? ' 이 기간 신규 계약이 없어 갱신 계약 보증금이 섞였습니다. 갱신청구권을 쓴 갱신은 인상 5% 상한이 있어 시세보다 낮게 나올 수 있습니다.' : ''}`);
   notes.push(c.phase
-    ? `국면(B1): 지난달까지 12개월 기준 시세 ${(+c.phase.chg_12m > 0 ? '+' : '') + (+c.phase.chg_12m).toFixed(1)}%, 오른 달 ${c.phase.up_months}개·내린 달 ${c.phase.down_months}개, 최근 3개월 ${c.phase.last3}. 12개월 ±3%·8개월 이상 같은 방향이면 상승장/하락장(🔧, 📖 추세 최소 1년 p.136).`
+    ? `국면(B1): 지난달까지 12개월 기준 시세 ${(+c.phase.chg_12m > 0 ? '+' : '') + (+c.phase.chg_12m).toFixed(1)}%, 오른 달 ${c.phase.up_months}개·내린 달 ${c.phase.down_months}개, 최근 3개월 ${c.phase.last3}. 12개월 ±3%·8개월 이상 같은 방향이면 상승장/하락장(🔧, 📖 추세 최소 1년 p.136). 단지 국면은 참고만: 백테스트(2020~26 단지 6,511곳)에서 단지 라벨은 같은 구 단지보다 더 오를지·덜 오를지를 가르지 못했습니다(구 중앙값보다 더 오른 비율 47~55%). 방향은 ① 지역 국면(R-ONE)을 봅니다.`
     : '국면(B1)은 최근 13개월 중 3개월 창에 거래가 없는 달이 있어 판정하지 않았습니다.');
   if (c.m && c.m.real_chg_2020 != null) notes.push(`실질 가격(A6): 2020년 1분기 ${eok(c.m.base2020_10k)} → 지금 ${eok(c.C)}. 물가를 빼면 ${(+c.m.real_chg_2020 > 0 ? '+' : '') + (+c.m.real_chg_2020).toFixed(1)}% (${+c.m.real_chg_2020 >= 0 ? '물가보다 더 오름' : '물가만큼도 못 오름'}, 📖 실물자산은 최소 물가만큼은 오른다 p.108~110). 지금 기준 시세를 2020년 돈으로 바꾸면 ${eok(c.m.real_ref_10k)}.`);
   if (c.m && c.m.reverse_risk != null) notes.push(`역전세(D3): 2년 전 전세 ${eok(c.m.jeonse_24m_10k)}(${c.m.jeonse_24m_n}건${c.m.jeonse_24m_approx === false ? ', 원본 중앙값' : ', 월별 중앙값의 건수 가중 평균(근사)'}) → 지금 ${eok(c.J)}. ${c.m.reverse_risk ? '<b>지금 전세가 더 낮아 역전세 위험</b>' : '지금 전세가 더 높아 역전세 위험 없음'}. 대비금(전세가의 10%) ${eok(c.m.reserve_10k)} (📖 p.153).`);
   notes.push(c.phase && c.phase.rel_strength != null
-    ? `상대강도(B6): 같은 생활권(판정 단지 5곳 미만이면 같은 구) 단지들의 12개월 중앙값 ${(+c.phase.region_chg_12m).toFixed(1)}% 대비 ${(+c.phase.rel_strength > 0 ? '+' : '') + (+c.phase.rel_strength).toFixed(1)}%p. ${+c.phase.rel_strength < 0 ? '지역보다 덜 오른 "약한 파도"' : '지역보다 더 오름'}(📖 상승의 차이 p.420~421). `
+    ? `상대강도(B6): 같은 생활권(판정 단지 5곳 미만이면 같은 구) 단지들의 12개월 중앙값 ${(+c.phase.region_chg_12m).toFixed(1)}% 대비 ${(+c.phase.rel_strength > 0 ? '+' : '') + (+c.phase.rel_strength).toFixed(1)}%p. ${+c.phase.rel_strength < 0 ? '지역보다 덜 오른 "약한 파도"' : '지역보다 더 오름'}(📖 상승의 차이 p.420~421). 백테스트: 지난 12개월 덜 오른 단지가 그 뒤 12개월에도 계속 덜 오르지는 않았습니다(하위 20% 단지 중 구 중앙값보다 더 오른 비율 52%, 상위 20%는 46%). 상대강도만으로 단지를 거르지 않습니다.`
     : '상대강도(B6)는 국면을 판정한 단지만 계산합니다.');
   if (c.m && c.m.turnover_pct != null) notes.push(`월 거래 회전율(C2): 단지 전체 월 거래 ÷ 세대수 = ${(+c.m.turnover_pct).toFixed(2)}% (집계 끝난 최근 12개월 평균). 📖 0.5~0.8%면 꽤 괜찮은 거래량(p.137) → <b>${c.m.turnover_state}</b>.`);
   if (c.m && c.m.c6_band_hh != null) notes.push(`이 평형대 거래(C6): 같은 전용면적 구간 ${Number(c.m.c6_band_hh).toLocaleString()}세대, 월 회전율 ${(+c.m.c6_band_turn).toFixed(2)}%(같은 구 같은 구간 중앙값 ${(+c.m.c6_region_med).toFixed(2)}%)`
