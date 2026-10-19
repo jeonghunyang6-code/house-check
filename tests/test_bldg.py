@@ -19,3 +19,8 @@ def test_recap_and_title_rows():
                    {"mainPurpsCdNm": "판매시설", "platArea": 9000, "vlRatEstmTotArea": 1000, "hhldCnt": 0}])
     assert (t["src"], t["plat_area"], t["vl_rat_calc"], t["hhld"], t["land_per_hh"], t["main_bld"]) == ("title", 5000, 200.0, 100, 50.0, 2)
     assert title_row([{"mainPurpsCdNm": "판매시설", "hhldCnt": 0}]) is None
+
+
+def test_absurd_vl_dropped():
+    r = recap_row([{"platArea": 10, "vlRat": 123456.7, "vlRatEstmTotArea": 500000, "totArea": 1, "hhldCnt": 5}])
+    assert r["vl_rat"] is None and r["vl_rat_calc"] is None and r["plat_area"] == 10

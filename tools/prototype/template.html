@@ -301,6 +301,7 @@ footer.foot { color: var(--ink-3); font-size: 12px; max-width: 90ch; display: gr
         <div class="chips" role="group" aria-label="면적" id="f_area"></div>
         <div class="chips" role="group" aria-label="국면" id="f_phase"></div>
         <div class="chips" role="group" aria-label="단지 규모" id="f_size"></div>
+        <div class="chips" role="group" aria-label="재건축" id="f_rebuild"></div>
         <div class="list" id="candList"></div>
         <p class="src" id="candSrc"></p>
       </div>
@@ -894,8 +895,11 @@ const Calc = {
 /* ⑦ 후보 단지 찾기: 예산(⑥) 안의 단지를 급지 순으로. 같은 급지 안에서는 신축 대단지 먼저, 그다음 기준 시세 높은 순.
    '노후 단지 많음'(30년+ 거래 비중)은 정비사업 진행이 아니라서 정렬에 쓰지 않는다 */
 (function () {
-  const rows = (D.cand || []).map(r => ({ name: r[0], rc: r[1], umd: r[2], ag: r[3], ref: r[4], conf: r[5], phase: r[6], grade: r[7], rebuild: r[8], gap: r[9], newbig: r[10], hh: r[11], by: r[12], tv: r[13], dr: r[14], est: r[15], pj: r[16] }));
-  const state = { region: '전체', area: '84형', phase: '전체', size: '300세대 이상' };
+  const rows = (D.cand || []).map(r => ({ name: r[0], rc: r[1], umd: r[2], ag: r[3], ref: r[4], conf: r[5], phase: r[6], grade: r[7], rebuild: r[8], gap: r[9], newbig: r[10], hh: r[11], by: r[12], tv: r[13], dr: r[14], est: r[15], pj: r[16], vl: r[17], lph: r[18], stage: r[19], sno: r[20], gp: r[21] }));
+  const state = { region: '전체', area: '84형', phase: '전체', size: '300세대 이상', rebuild: '전체' };
+  // H5 재건축 (📖 중·하급지는 조합설립인가 뒤, 상급지는 단계와 무관 p.374~397). 정비구역 단계는 서울만(서울시 도시정비사업 통계)
+  const REB = { '전체': () => true, '재건축 후보(2005년 이전)': (r) => r.by && r.by <= 2005, '정비구역(서울)': (r) => !!r.stage,
+                '조합설립 이후': (r) => r.sno != null && r.sno >= 3 };
   const AREA = { '전체': () => true, '59형': (a) => a >= 55 && a < 66, '84형': (a) => a >= 80 && a < 90, '중대형': (a) => a >= 90, '소형': (a) => a < 55 };
   const REG = { '전체': () => true, '서울': (c) => c.startsWith('11'), '경기': (c) => c.startsWith('41'), '인천': (c) => c.startsWith('28') };
   const PHASES = ['전체', '상승장', '보합장', '하락장'];
@@ -904,7 +908,7 @@ const Calc = {
     $(id).addEventListener('click', (e) => { const b = e.target.closest('.chip'); if (!b) return; state[key] = b.dataset.v; [...$(id).children].forEach(x => x.setAttribute('aria-pressed', x === b)); draw(); });
   };
   const SIZE = { '300세대 이상': (h) => h >= 300, '전체 규모': () => true };   // 급지 계산과 같이 소단지는 뒤로 (K-apt 세대수 없는 단지는 300세대 이상에서 빠진다)
-  chips('#f_region', Object.keys(REG), 'region'); chips('#f_area', Object.keys(AREA), 'area'); chips('#f_phase', PHASES, 'phase'); chips('#f_size', Object.keys(SIZE), 'size');
+  chips('#f_region', Object.keys(REG), 'region'); chips('#f_area', Object.keys(AREA), 'area'); chips('#f_phase', PHASES, 'phase'); chips('#f_size', Object.keys(SIZE), 'size'); chips('#f_rebuild', Object.keys(REB), 'rebuild');
   const fromCalc = () => { if (window.calcPrice) $('#f_budget').value = Math.round(window.calcPrice); draw(); };
   $('#f_fromCalc').addEventListener('click', fromCalc);
   $('#f_budget').addEventListener('input', () => draw());
@@ -915,12 +919,16 @@ const Calc = {
   function draw() {
     const budget = parseFloat(String($('#f_budget').value).replace(/,/g, '')) || 0;
     const list = rows.filter(r => r.ref <= budget && r.ref >= budget * 0.8 && REG[state.region](r.rc) && AREA[state.area](r.ag)
-      && (state.phase === '전체' || r.phase === state.phase) && SIZE[state.size](r.hh || 0))
-      .sort((a, b) => (a.grade || 9) - (b.grade || 9) || (b.newbig - a.newbig) || b.ref - a.ref);
+      && (state.phase === '전체' || r.phase === state.phase) && SIZE[state.size](r.hh || 0) && REB[state.rebuild](r))
+      .sort(state.rebuild === '전체' ? (a, b) => (a.grade || 9) - (b.grade || 9) || (b.newbig - a.newbig) || b.ref - a.ref
+        : (a, b) => (b.sno || 0) - (a.sno || 0) || (a.grade || 9) - (b.grade || 9) || (a.vl ?? 999) - (b.vl ?? 999));   // 재건축: 단계 많이 간 곳 → 급지 → 용적률 낮은 순
     $('#candCount').textContent = budget ? `${list.length.toLocaleString()}곳` : '';
     $('#candList').innerHTML = !budget ? '<p class="muted" style="padding:10px 2px">예산을 넣거나 ⑥ 계산기 값을 쓰세요.</p>'
       : list.length ? list.slice(0, 60).map(r => {
-        const flags = [r.est ? '<span class="pill warn">추정가(A5)</span>' : '', r.pj ? '<span class="pill acc">철도 착공·확정 역 700m</span>' : '', r.ref >= 300000 * r.ag / 84 ? '<span class="pill none">초고가</span>' : '', r.newbig ? '<span class="pill acc">신축 대단지</span>' : '', r.rebuild ? '<span class="pill none">노후 단지 많음</span>' : '', r.gap ? '<span class="pill warn">동 안 격차</span>' : ''].join(' ');
+        const flags = [r.est ? '<span class="pill warn">추정가(A5)</span>' : '', r.pj ? '<span class="pill acc">철도 착공·확정 역 700m</span>' : '', r.ref >= 300000 * r.ag / 84 ? '<span class="pill none">초고가</span>' : '', r.newbig ? '<span class="pill acc">신축 대단지</span>' : '', r.rebuild ? '<span class="pill none">노후 단지 많음</span>' : '', r.gap ? '<span class="pill warn">동 안 격차</span>' : '',
+          r.stage ? `<span class="pill ${r.sno >= 3 ? 'acc' : 'warn'}">정비 ${r.stage}${r.sno < 3 ? '(조합설립 전)' : ''}</span>` : '',
+          r.vl != null ? `<span class="pill none">용적률 ${Math.round(r.vl)}%</span>` : '', r.lph != null ? `<span class="pill none">세대당 대지 ${r.lph.toFixed(0)}㎡</span>` : '',
+          r.gp != null ? `<span class="pill none">일반분양 서울 ${r.gp >= 50 ? '상위 ' + Math.max(1, Math.round(100 - r.gp)) : '하위 ' + Math.max(1, Math.round(r.gp))}%</span>` : ''].join(' ');
         return `<div class="row"><span class="name">${r.name}</span><span class="price">${eok(r.ref)}</span>
           <span class="meta">${(D.region_names[r.rc] || '').replace(/^(서울|경기|인천) /, '')} ${r.umd} · ${r.ag}㎡ · ${r.by ? (2026 - r.by) + '년차' : ''}${r.hh ? ' · ' + Number(r.hh).toLocaleString() + '세대' : ''}${r.tv != null ? ' · 월 회전 ' + r.tv.toFixed(2) + '%' : ''}${r.dr != null ? ` · 하락기 거래 구 ${r.dr >= 50 ? '상위 ' + Math.max(1, Math.round(100 - r.dr)) : '하위 ' + Math.max(1, Math.round(r.dr))}%` : ''} · 제도 상한 ${capTxt(loanCap(r.ref, REG_NOW.has(r.rc)))}억${Loan.nearEdge(r.ref) ? '(경계 확인)' : ''}</span>
           <span class="st">${r.grade ? `<span class="pill none">${r.grade}급지</span>` : ''} ${r.phase ? `<span class="pill ${PH[r.phase] || 'none'}">${r.phase}</span>` : ''}</span>
@@ -928,7 +936,7 @@ const Calc = {
       }).join('') + (list.length > 60 ? `<p class="muted" style="padding:8px 2px">위 60곳만 보여줍니다 (전체 ${list.length.toLocaleString()}곳).</p>` : '')
       : '<p class="muted" style="padding:10px 2px">조건에 맞는 단지가 없습니다.</p>';
     $('#candSrc').textContent = '기준 시세(A1) = 같은 단지·면적 최근 60~180일 중개 거래 중앙값. 그 면적 거래가 적으면 같은 단지 다른 평형의 ㎡당 시세 비율로 추정(A5, "추정가", 📖 p.472~473). 급지 = 동 84㎡ 환산 실거래 대표가 8단계(30/25/20/15/12/9/6억). '
-      + '같은 급지 안에서는 신축 대단지를 먼저 보여줍니다. 노후 단지 많음은 30년 넘은 단지 거래가 절반 이상이라는 뜻일 뿐, 정비사업이 진행 중이라는 뜻은 아닙니다. 제도 상한은 이 단지 기준 시세로 고른 가격 구간 상한과 LTV(규제지역 40%, 그 밖 수도권 70%) 중 작은 값이고, 경계(15억·25억) ±5% 안이면 “경계 확인”을 붙입니다. 은행은 대출 신청일의 시세(감정가 등)로 판단하고 실제 한도는 LTV·DSR 과 중 작은 값이라, 내가 받을 수 있는 금액이 아닙니다.';
+      + '같은 급지 안에서는 신축 대단지를 먼저 보여줍니다. 노후 단지 많음은 30년 넘은 단지 거래가 절반 이상이라는 뜻일 뿐, 정비사업이 진행 중이라는 뜻은 아닙니다. 제도 상한은 이 단지 기준 시세로 고른 가격 구간 상한과 LTV(규제지역 40%, 그 밖 수도권 70%) 중 작은 값이고, 경계(15억·25억) ±5% 안이면 “경계 확인”을 붙입니다. 재건축: 정비 단계는 서울만(서울시 도시정비사업 통계), 용적률·세대당 대지는 건축물대장·VWorld 대표 필지라 여러 필지 단지는 용적률이 높게 나올 수 있습니다. 📖 중·하급지는 조합설립인가 뒤에, 상급지는 단계와 무관(p.374~397). 은행은 대출 신청일의 시세(감정가 등)로 판단하고 실제 한도는 LTV·DSR 과 중 작은 값이라, 내가 받을 수 있는 금액이 아닙니다.';
   }
   if (window.calcPrice) fromCalc(); else draw();
 })();
@@ -1252,10 +1260,12 @@ function drawCx(c) {
       + (pre ? '<b>조합설립인가 전</b>: 📖 중·하급지는 조합설립인가 뒤에 들어가라(상급지는 단계와 무관), 재건축은 20~25년 걸린다(p.374~397). ' : '📖 재건축 기간 20~25년, 가장 큰 위험은 시간(p.368~397). ')
       + '서울시 도시정비사업 통계(분기 갱신).');
   });
-  if (c.bldg && c.bldg.src !== 'none') {
-    const b = c.bldg, vr = b.vl_rat != null ? +b.vl_rat : (b.vl_rat_calc != null ? +b.vl_rat_calc : null);
-    notes.push(`건축물대장(H5): ${vr != null ? `용적률 <b>${vr.toFixed(0)}%</b>` : '용적률 대장에 없음'}${b.land_per_hh != null ? ` · 세대당 대지 ${(+b.land_per_hh).toFixed(1)}㎡(${(b.land_per_hh / 3.3058).toFixed(1)}평)` : ''}`
-      + `${b.hhld ? ` · 대장 세대수 ${Number(b.hhld).toLocaleString()}` : ''}. 📖 재건축 사업성은 용적률이 낮고 대지지분이 클수록 좋다(p.374~397). 오래된 단지는 대장에 대지면적이 비어 있는 경우가 많다.`);
+  if (c.bldg && c.bldg.land_area != null) {
+    const b = c.bldg;
+    notes.push(`재건축 사업성 재료(H5): ${b.vl_rat != null ? `용적률 <b>${(+b.vl_rat).toFixed(0)}%</b>` : '용적률 계산 못 함'}${b.land_per_hh != null ? ` · 세대당 대지 <b>${(+b.land_per_hh).toFixed(1)}㎡</b>(${(b.land_per_hh / 3.3058).toFixed(1)}평)` : ''}`
+      + `${b.use_zone ? ` · ${b.use_zone}${b.vl_cap ? `(법정 상한 ${b.vl_cap}%)` : ''}` : ''}${b.price_per_m2 ? ` · 공시지가 ㎡당 ${Math.round(b.price_per_m2 / 10000).toLocaleString()}만원` : ''}. `
+      + (b.suspect ? '<b>대표 필지만 잡혀 대지가 작게 나온 것으로 보여 용적률·대지지분을 비움</b>. ' : '')
+      + `대지면적 출처: ${b.land_src}${b.land_src === 'VWorld 대표 필지' ? '(단지가 여러 필지면 대지가 작게, 용적률이 높게 나온다)' : ''}. 📖 재건축 사업성은 용적률이 낮고 대지지분이 클수록 좋다(p.374~397).`);
   }
   if (c.search) notes.push(`인지도(R9): 네이버 검색량(검색어 ${c.search.keyword.split('|').map(k => `'${k}'`).join('·')} 합) 최근 12개월 = 헬리오시티의 <b>${(+c.search.idx).toFixed(2)}배</b>`
     + (+c.search.idx < 0.01 ? ' → <b>검색어로 거의 안 잡힘</b>(사람들이 다른 이름으로 부를 수 있어 인지도가 낮다고 단정하지 않음)'

@@ -17,6 +17,7 @@ from collector.market import (_shift, B5_HOT, B5_SPREAD, B5_WATCH, b4_applies, b
                              unemployment)
 
 SEOUL, CAPITAL = 50008, 50002
+GYEONGGI = 50016   # R-ONE 경기 (collector/liquidity.py SIDO_CLS 와 같음)
 
 
 def series(db: Db, stat: str, months: int = 30) -> dict[int, list[tuple[date, float]]]:
@@ -115,18 +116,19 @@ def run(db: Db) -> dict[str, tuple]:
         sig["g5_unemployment"] = (None, "데이터 없음", "계절조정 실업률")
     sig["b4_class"] = (met, cls if falling else "해당 없음",
                        f"수도권 국면 {sudo_phase}. 하락장·일시 조정 또는 최근 3개월 연속 하락일 때만 판정. 조건 {met}/{known}개 충족 (판단 가능 {known}/3)")
-    # D5 서울 신규 전세 감소 + 전세가 상승 (rent_region_month: 시군구 × 달 합계, 전체 기간 0053)
+    # D5 신규 전세 감소 + 전세가 상승 (rent_region_month: 시군구 × 달 합계, 전체 기간 0053). 서울·경기(2026-10-19 경기 이력 추가)
     last_complete = (date.today().replace(day=1) - timedelta(days=1)).replace(day=1) - timedelta(days=1)  # 지지난 달 말
-    cnt = {r["m"]: (int(r["jn"]), int(r["jr"])) for r in select(
-        db, "SELECT contract_month AS m, sum(n_jeonse_new) AS jn, sum(n_jeonse_renew) AS jr FROM rent_region_month "
-            "WHERE region_code LIKE '11%' AND contract_month >= '202106' GROUP BY 1")}
-    js = [v for _, v in series(db, "jeonse", 6).get(SEOUL, [])]
-    jchg = round((js[-1] / js[-14] - 1) * 100, 2) if len(js) >= 14 else None
-    nj = new_jeonse(cnt, last_complete.strftime("%Y%m"), jchg)
-    sig["d5_new_jeonse"] = (nj.yoy, nj.state,
-                            f"서울 신규 전세 {_ym(nj.months[0])}~{_ym(nj.months[-1])} {nj.n_new:,}건, 1년 전 {nj.n_new_prev:,}건 "
-                            f"({nj.yoy:+.1f}%), 갱신 비중 {nj.renew_share}%, 서울 전세지수 13주 {nj.jeonse_chg:+.2f}%. 신규 감소 + 전세가 상승이면 충족"
-                            if nj.yoy is not None and nj.jeonse_chg is not None else "서울 신규 전세 건수·전세지수")
+    for key, sd, cls, nm in (("d5_new_jeonse", "11", SEOUL, "서울"), ("d5_new_jeonse_gg", "41", GYEONGGI, "경기")):
+        cnt = {r["m"]: (int(r["jn"]), int(r["jr"])) for r in select(
+            db, "SELECT contract_month AS m, sum(n_jeonse_new) AS jn, sum(n_jeonse_renew) AS jr FROM rent_region_month "
+                f"WHERE region_code LIKE '{sd}%' AND contract_month >= '202106' GROUP BY 1")}
+        js = [v for _, v in series(db, "jeonse", 6).get(cls, [])]
+        jchg = round((js[-1] / js[-14] - 1) * 100, 2) if len(js) >= 14 else None
+        nj = new_jeonse(cnt, last_complete.strftime("%Y%m"), jchg)
+        sig[key] = (nj.yoy, nj.state,
+                    f"{nm} 신규 전세 {_ym(nj.months[0])}~{_ym(nj.months[-1])} {nj.n_new:,}건, 1년 전 {nj.n_new_prev:,}건 "
+                    f"({nj.yoy:+.1f}%), 갱신 비중 {nj.renew_share}%, {nm} 전세지수 13주 {nj.jeonse_chg:+.2f}%. 신규 감소 + 전세가 상승이면 충족"
+                    if nj.yoy is not None and nj.jeonse_chg is not None else f"{nm} 신규 전세 건수·전세지수")
     # D2 4분면 (▶ J2): 수도권 시군구 중 13주 매매↓·전세↑ ("부의 사다리" 칸)
     q = [{"full_name": r["full_name"], "s": c13s.get(("sale", r["cls_id"])), "j": c13s.get(("jeonse", r["cls_id"]))}
          for r in select(db, "SELECT cls_id, full_name FROM rone_regions WHERE region_code IS NOT NULL")]
@@ -222,11 +224,15 @@ def run(db: Db) -> dict[str, tuple]:
     else:
         sig["c5_direct"] = (None, "데이터 없음", "서울 직거래 비중")
     # D3 역전세 위험 (📖 p.153): 서울 단지·면적 중 지금 전세 < 24개월 전 전세 비율 (complex_metrics, 매일 계산)
-    d3 = select(db, "SELECT count(*) FILTER (WHERE reverse_risk) AS r, count(reverse_risk) AS n FROM complex_metrics WHERE apt_seq LIKE '11%'")
-    if d3 and d3[0]["n"]:
-        share = round(d3[0]["r"] * 100.0 / d3[0]["n"], 1)
-        sig["d3_reverse_share"] = (share, "참고", f"서울 단지·면적 {d3[0]['n']:,}개 중 지금 전세가 2년 전 전세보다 낮은 곳 {d3[0]['r']:,}개 ({share}%). "
-                                   "대비금 = 전세가의 10%(📖 p.153). 전월세 이력이 서울만 있어 경기·인천은 아직 판정 못 함")
+    d3 = {r["sd"]: r for r in select(db, "SELECT left(apt_seq, 2) AS sd, count(*) FILTER (WHERE reverse_risk) AS r, count(reverse_risk) AS n "
+                                        "FROM complex_metrics GROUP BY 1")}
+    tot_n, tot_r = sum(int(x["n"]) for x in d3.values()), sum(int(x["r"]) for x in d3.values())
+    if tot_n:
+        share = round(tot_r * 100.0 / tot_n, 1)
+        part = " · ".join(f"{nm} {int(d3[sd]['r']) * 100.0 / int(d3[sd]['n']):.1f}%({int(d3[sd]['n']):,}개)"
+                          for sd, nm in (("11", "서울"), ("41", "경기"), ("28", "인천")) if sd in d3 and int(d3[sd]["n"]))
+        sig["d3_reverse_share"] = (share, "참고", f"수도권 단지·면적 {tot_n:,}개 중 지금 전세가 2년 전 전세보다 낮은 곳 {tot_r:,}개 ({share}%): {part}. "
+                                   "대비금 = 전세가의 10%(📖 p.153)")
     else:
         sig["d3_reverse_share"] = (None, "데이터 없음", "역전세 위험 단지 비율")
     # G2 기준금리와 서울 아파트값 (동행/역행). 2006년부터 달마다 세고, 최신 달 관계를 신호로
