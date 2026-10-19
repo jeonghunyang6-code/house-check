@@ -1,4 +1,4 @@
-"""R9 인지도(검색량) 수집 (collector/searchtrend.py → complex_search, 0057). 데이터랩 하루 1,000회라 한 번에 limit 개 요청까지.
+"""R9 인지도(검색량) 수집 (collector/searchtrend.py → complex_search, 0057). NAVER API HUB 검색어 트렌드, 한 번에 limit 개 요청까지.
 대상: 🔧 300세대 이상이고 최근 1년 거래가 있는 단지, 큰 단지부터. 이번 달에 받은 단지는 건너뛴다.
 
     python -m jobs.searchtrend --limit 900
@@ -66,7 +66,7 @@ ORDER BY k.households DESC""")
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--limit", type=int, default=900, help="데이터랩 요청 수(하루 1,000)")
+    ap.add_argument("--limit", type=int, default=2000, help="요청 수 (API HUB 월 50,000)")
     ap.add_argument("--db", choices=["api", "psql"])
     a = ap.parse_args(argv)
     try:

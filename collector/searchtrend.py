@@ -1,11 +1,14 @@
 """R9 인지도 = 검색량 (관점 R9, 📖 인지도는 곧 수요, 남들이 모르는 싼 아파트엔 이유가 있다 p.401, p.409).
-네이버 데이터랩 검색어 트렌드(POST https://openapi.naver.com/v1/datalab/search, 하루 1,000회, 한 요청 키워드 묶음 5개).
+네이버 데이터랩 검색어 트렌드. 2026년부터 신규 이용은 개발자센터가 아니라 NAVER API HUB(네이버 클라우드):
+POST https://naverapihub.apigw.ntruss.com/search-trend/v1/search, 헤더 X-NCP-APIGW-API-KEY-ID / X-NCP-APIGW-API-KEY
+(시크릿 이름은 NAVER_CLIENT_ID·NAVER_CLIENT_SECRET 그대로, 값은 API HUB 키). 월 50,000회, 한 요청 키워드 묶음 5개.
+2026-10-19 이 키로 호출 → 401 "요청한 API는 이 Application에서 활성화되어 있지 않습니다" (키는 유효, 앱에 검색어 트렌드를 켜야 함).
 
 데이터랩 값은 한 요청 안에서 가장 많이 검색된 묶음·달을 100 으로 둔 상대값이라 요청끼리 비교가 안 된다.
 → 요청마다 기준 단지(ANCHOR, 헬리오시티)를 넣고 '단지 월평균 ÷ 기준 월평균' 을 인지도 지수로 쓴다(헬리오시티 = 1).
 검색이 너무 적은 키워드는 데이터랩이 값을 안 주거나 0 이라 지수 0. 🔧 기준선 없음(순위·값만).
 흔한 이름('현대', '우성2차')은 다른 단지와 섞이므로 동 이름을 앞에 붙인다('개포우성2차').
-2026-10-19: GitHub·세션의 NAVER 키가 개발자센터 키가 아니라 401(인증 실패) — 실제 응답으로 확인하지 못했다.
+응답 모양(results[].title·data[].period·ratio)은 옛 개발자센터와 같다고 보고 짰다 — 실제 응답으로 아직 확인 못 함.
 """
 
 from __future__ import annotations
@@ -19,7 +22,7 @@ import urllib.request
 from collector.kapt import norm_name
 from collector.sources.molit import ApiError, QuotaExceeded
 
-URL = "https://openapi.naver.com/v1/datalab/search"
+URL = "https://naverapihub.apigw.ntruss.com/search-trend/v1/search"
 ANCHOR = ("헬리오시티", ["헬리오시티"])
 PER_CALL = 4   # + 기준 1 = 5묶음
 GENERIC = re.compile(r"^(현대|삼성|대림|한신|우성|삼익|한양|극동|동아|주공|럭키|벽산|신동아|쌍용|롯데|대우|금호|코오롱|두산|풍림|동부|청구|건영|"
@@ -46,7 +49,7 @@ def body(start: str, end: str, groups: list[tuple[str, list[str]]]) -> dict:
 
 def call(b: dict) -> dict:
     req = urllib.request.Request(URL, data=json.dumps(b).encode(), method="POST", headers={
-        "X-Naver-Client-Id": os.environ["NAVER_CLIENT_ID"], "X-Naver-Client-Secret": os.environ["NAVER_CLIENT_SECRET"],
+        "X-NCP-APIGW-API-KEY-ID": os.environ["NAVER_CLIENT_ID"], "X-NCP-APIGW-API-KEY": os.environ["NAVER_CLIENT_SECRET"],
         "Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
