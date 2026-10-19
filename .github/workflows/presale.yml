@@ -5,6 +5,12 @@ on:
   schedule:
     - cron: "17 21 * * 0"   # 매주 월요일 06:17 KST
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "full = 공고·좌표·총 세대·분양가 전부, prices = 분양가(주택형별)만"
+        type: choice
+        options: [full, prices]
+        default: full
 
 permissions:
   contents: read
@@ -32,4 +38,4 @@ jobs:
           SGIS_CONSUMER_SECRET: ${{ secrets.SGIS_CONSUMER_SECRET }}
           HC_DB_BACKEND: psql
           PYTHONUNBUFFERED: "1"
-        run: python -m jobs.presale
+        run: python -m jobs.presale ${{ inputs.mode == 'prices' && '--prices-only' || '' }}

@@ -154,7 +154,8 @@ footer.foot { color: var(--ink-3); font-size: 12px; max-width: 90ch; display: gr
         <div class="sec">
           <h3>전용 84㎡ 실거래 중위가격</h3>
           <svg class="chart" id="p84Chart" viewBox="0 0 340 150" role="img" aria-label="서울 전용 84제곱미터 월별 중위 실거래가 선 차트"></svg>
-          <p class="src">중개거래·해제 제외. 단지 구성이 달마다 달라 가격지수가 아닙니다.</p>
+          <p class="src">중개거래·해제 제외. 단지 구성이 달마다 달라 가격지수가 아닙니다. 세로 점선 = 규제·대출 변화(아래 번호, 2019년 대출 규제는 차트 범위 밖이라 목록에서 빠짐).</p>
+          <ol class="src" id="policyList" style="margin:4px 0 0;padding-left:18px"></ol>
         </div>
         <div class="sec">
           <h3>시장 국면 <span class="muted" id="phaseAsof"></span></h3>
@@ -163,6 +164,29 @@ footer.foot { color: var(--ink-3); font-size: 12px; max-width: 90ch; display: gr
         <div class="sec">
           <h3>시장 체크리스트 <span class="muted">(송희구 관점)</span></h3>
           <div id="checks"></div>
+        </div>
+        <div class="sec">
+          <h3>가격대별 흐름 <span class="muted">(12개월, 84㎡ 환산)</span></h3>
+          <div class="tbl-wrap"><table id="bandTbl" style="min-width:0"></table></div>
+          <p class="src" id="bandSrc"></p>
+        </div>
+        <div class="sec">
+          <h3>규제와 풍선효과 <span class="muted">(토지거래허가 확대 뒤)</span></h3>
+          <div class="seg" role="group" aria-label="규제 사건" id="blEv"></div>
+          <svg class="chart" id="blChart" viewBox="0 0 340 190" role="img" aria-label="규제 확대 뒤 새로 규제된 곳, 붙은 바깥, 먼 바깥의 매매지수 누적 변화 중앙값"></svg>
+          <div class="legend"><span><i style="background:var(--c2)"></i>새로 규제된 곳</span><span><i style="background:var(--c1)"></i>붙은 바깥</span><span><i style="background:var(--ink-3)"></i>먼 바깥</span></div>
+          <div class="tbl-wrap"><table id="blTbl" style="min-width:0"></table></div>
+          <p class="src" id="blSrc"></p>
+        </div>
+        <div class="sec">
+          <h3>교통 호재 단계 <span class="muted">(수도권 철도)</span></h3>
+          <div id="projList"></div>
+          <p class="src">📖 교통 호재는 업무지구(사대문·여의도·강남) 연결이 핵심이고 어디서 내리는지가 중요하다(p.68~70, p.86~87). 지하철은 착공 뒤 들어가도 늦지 않고, 진짜 악재는 취소다(지연은 악재 아님, p.279~280). 단계·날짜는 2026-10-18 기사로 확인, 지나는 시군구는 손으로 적은 것이라 확인 필요. 도로·쇼핑몰 등은 넣지 않음(📖 p.277~278).</p>
+        </div>
+        <div class="sec">
+          <h3>미분양 많은 곳 <span class="muted" id="unsoldAsof"></span></h3>
+          <div class="tbl-wrap"><table id="unsoldTbl"></table></div>
+          <p class="src" id="unsoldSrc"></p>
         </div>
         <div class="sec">
           <h3>거시 지표 <span class="muted">(최근 2년)</span></h3>
@@ -253,6 +277,7 @@ footer.foot { color: var(--ink-3); font-size: 12px; max-width: 90ch; display: gr
           <p class="calc-intro">종잣돈과 대출로 살 수 있는 집값, 매달 갚을 원리금을 계산합니다.</p>
           <label class="calc-row" for="c_seed"><span>종잣돈</span><span class="calc-in"><input id="c_seed" inputmode="numeric" value="40000"><span class="unit">만원</span></span></label>
           <label class="calc-row" for="c_limit"><span>쓸 대출 (계획)</span><span class="calc-in"><input id="c_limit" inputmode="numeric" value="50000"><span class="unit">만원</span></span></label>
+          <label class="calc-row" for="c_reg"><span>집 위치</span><span class="calc-in" style="flex-basis:13em"><select id="c_reg"><option value="1">규제지역 (서울 전역·경기 12곳)</option><option value="0">그 밖 수도권</option></select></span></label>
           <label class="calc-row" for="c_bank"><span>은행에서 확인한 한도 (선택)</span><span class="calc-in"><input id="c_bank" inputmode="numeric" value="" placeholder="미확인"><span class="unit">만원</span></span></label>
           <label class="calc-row" for="c_reserve"><span>남겨 둘 예비자금</span><span class="calc-in"><input id="c_reserve" inputmode="numeric" value="0"><span class="unit">만원</span></span></label>
           <label class="calc-row" for="c_rate"><span>대출 금리</span><span class="calc-in"><input id="c_rate" inputmode="decimal" value=""><span class="unit">%</span></span></label>
@@ -319,6 +344,7 @@ footer.foot { color: var(--ink-3); font-size: 12px; max-width: 90ch; display: gr
           <label class="calc-row" for="e6_b"><span>목표 집</span><span class="calc-in" style="flex-basis:15em"><input id="e6_b" list="e6list" style="text-align:left"></span></label>
           <datalist id="e6list"></datalist>
         </form>
+        <div class="sec" id="e6Sug"></div>
         <div class="kpis" id="e6Out"></div>
         <svg class="chart" id="e6Chart" viewBox="0 0 340 170" role="img" aria-label="두 단지 84제곱미터 분기 중앙가 차이 추이"></svg>
         <div class="sec" id="e6Notes"></div>
@@ -337,8 +363,13 @@ footer.foot { color: var(--ink-3); font-size: 12px; max-width: 90ch; display: gr
 const D = /*DATA*/null;
 const $ = (s) => document.querySelector(s);
 const eok = (v) => v == null ? '–' : (v / 10000).toFixed(v >= 100000 ? 1 : 2).replace(/\.?0+$/, '') + '억';
-// 수도권·규제지역 주담대 상한(10·15 대책, 블로그로 확인): 15억 이하 6억, 25억 이하 4억, 초과 2억. 실제 한도는 LTV·DSR 과 중 작은 값
-const loanCap = (p) => p == null ? null : p <= 150000 ? 6 : p <= 250000 ? 4 : 2;
+// 주담대 제도 상한(억, collector/policy.py LOAN_RULES): 수도권·규제지역 가격 구간 상한(10·15 대책, 2025-10-16~: 15억 이하 6억, 25억 이하 4억, 초과 2억)과
+// LTV(규제지역 = 서울 전역·경기 12곳 40%, 그 밖 수도권 70%) 중 작은 값. 생애최초·서민 실수요자 예외와 DSR 은 반영 안 함(은행 확인)
+const REG_NOW = new Set(D.reg_now || []);
+const LTV = (reg) => reg ? 0.4 : 0.7;
+const bandCap = (p) => p <= 150000 ? 6 : p <= 250000 ? 4 : 2;
+const loanCap = (p, reg = true) => p == null ? null : Math.min(bandCap(p), p * LTV(reg) / 10000);
+const capTxt = (c) => (Math.round(c * 10) / 10).toString();
 const GRADE_CUTS = [30, 25, 20, 15, 12, 9, 6];
 function gradeFlags(g) {
   const f = [];
@@ -398,9 +429,104 @@ $('#notice').innerHTML = `<b>데이터 범위</b><span>서울 실거래는 2020�
   el('path', { d, fill: 'none', stroke: css('--s-trade'), 'stroke-width': 2, 'stroke-linejoin': 'round' }, svg);
   ms.forEach((m, i) => { if (m.m.endsWith('01')) txt(svg, x(i) + 14, H - 6, m.m.slice(0, 4)); });
   ms.forEach((m, i) => { if (!m.p84) return; const c = el('circle', { cx: x(i), cy: y(m.p84), r: 6, fill: 'transparent' }, svg); hover(c, `${m.m.slice(0, 4)}.${m.m.slice(4)} · ${eok(m.p84)}${m.partial ? ' (집계 중)' : ''}`); });
+  // 규제 사건 (collector/policy.py): 그 달 위치에 점선 + 번호. 📖 토허제는 거래를 줄이지만 가격을 떨어뜨리진 않는다 p.269~270
+  const PC = { '토허': '--c2', '규제지역': '--c4', '대출': '--c3' }, PN = { '토허': '토지거래허가', '규제지역': '규제지역', '대출': '대출' };
+  const P = (D.policy || []).filter(p => ms.some(m => m.m === p[0].slice(0, 4) + p[0].slice(5, 7))).sort((a, b) => a[0] < b[0] ? -1 : 1);
+  P.forEach((p, k) => {
+    const i = ms.findIndex(m => m.m === p[0].slice(0, 4) + p[0].slice(5, 7)), cx_ = x(i);
+    el('line', { x1: cx_, x2: cx_, y1: T, y2: H - B, stroke: css(PC[p[1]] || '--c4'), 'stroke-dasharray': '2 3', 'stroke-width': 1 }, svg);
+    const t = txt(svg, cx_ + 1, T + 8 + (k % 2) * 9, String(k + 1), 'start'); t.setAttribute('style', 'font-size:9px;fill:var(--ink-2)');
+    hover(el('rect', { x: cx_ - 4, y: T, width: 8, height: H - T - B, fill: 'transparent' }, svg), `${p[0].replace(/-/g, '.')} ${p[2]}`);
+  });
+  $('#policyList').innerHTML = P.map(p => `<li>${p[0].replace(/-/g, '.')} <span style="color:var(${PC[p[1]] || '--c4'})">${PN[p[1]] || p[1]}</span> ${p[2]}</li>`).join('');
   const last = ms.filter(m => m.p84 && !m.partial).pop(); const li = ms.indexOf(last);
   el('circle', { cx: x(li), cy: y(last.p84), r: 4, fill: css('--s-trade'), stroke: css('--screen'), 'stroke-width': 2 }, svg);
   txt(svg, x(li) - 2, y(last.p84) + 16, `${md(last.m)} ${eok(last.p84)}`, 'end').setAttribute('style', 'fill:var(--ink-2)');
+})();
+
+/* ① L9 가격대별 흐름 · L6 초고가 (jobs/market.py price_bands) */
+(function () {
+  const B = D.price_bands || [];
+  if (!B.length) { $('#bandSrc').textContent = '데이터 없음'; return; }
+  const bands = [...new Set(B.map(b => b.band))], get = (sc, bd) => B.find(b => b.scope === sc && b.band === bd);
+  const cell = (b) => b ? `<td class="r num"><b>${b.chg > 0 ? '+' : ''}${b.chg.toFixed(1)}%</b><br><span class="muted">${b.n}곳 · 최근 3개월 상승 ${b.up3}%</span></td>` : '<td class="r muted">–</td>';
+  $('#bandTbl').innerHTML = `<thead><tr><th>84㎡ 환산 시세</th><th class="r">서울</th><th class="r">경기·인천</th></tr></thead><tbody>`
+    + bands.map(bd => `<tr><td>${bd}${bd === '30억+' ? ' <span class="pill none">초고가</span>' : ''}</td>${cell(get('서울', bd))}${cell(get('경기·인천', bd))}</tr>`).join('') + '</tbody>';
+  const s = (D.signals || {}).l9_price_bands;
+  $('#bandSrc').innerHTML = (s ? `<b>${s.state}</b>. ` : '') + '단지별 12개월 기준 시세 변화(국면 B1 판정 단지)의 가격대별 중앙값. 구간 15·25억 = 주담대 한도 경계, 30억 = 급지 1급·초고가. '
+    + '▶ 가격대마다 다른 시장(고가 꺾임·저가 상승·중간 숨고르기, 금리상승의 후폭풍 4:36), 📖 초고가는 따로 본다(p.122).';
+})();
+
+/* ① H4 교통 호재 단계 (collector/projects.py) */
+const PROJ_PILL = { '개통': 'good', '착공': 'acc', '확정': 'none', '계획': 'none', '예타탈락': 'bad' };
+const PROJ_RULE = { '개통': '이미 가격에 반영된 편', '착공': '착공 뒤 들어가도 늦지 않음(지연은 악재 아님)', '확정': '착공 전 기대 단계', '계획': '계획만 있는 단계', '예타탈락': '취소에 가까운 악재 신호, 재추진 여부 확인' };
+(function () {
+  const P = D.projects || [], order = ['개통', '착공', '확정', '계획', '예타탈락'];
+  $('#projList').innerHTML = P.slice().sort((a, b) => order.indexOf(a[1]) - order.indexOf(b[1])).map(p =>
+    `<div class="check"><span class="pill ${PROJ_PILL[p[1]]}">${p[1] === '예타탈락' ? '예타 탈락' : p[1]}</span><span class="t">${p[0]}${p[4].length ? ` <span class="muted">→ ${p[4].join('·')}</span>` : ' <span class="muted">→ 업무지구 직결 아님</span>'}</span><span></span>`
+    + `<span class="why">${p[2] ? p[2].replace(/-/g, '.') + ' · ' : ''}${p[3]}. ${PROJ_RULE[p[1]]}</span></div>`).join('');
+})();
+
+/* ① F3 미분양 많은 곳 (📖 원인 5가지: 분양가·입지·상품성·공급 집중·거시 p.155~160) */
+(function () {
+  const U = (D.unsold || []).filter(r => r.unsold >= 300).slice(0, 12);
+  if (!U.length) { $('#unsoldSrc').textContent = '데이터 없음'; return; }
+  const p = U[0].period;
+  $('#unsoldAsof').textContent = `(${p.slice(0, 4)}.${p.slice(4)}, 300호 이상)`;
+  const n = (v) => v == null ? '–' : Number(v).toLocaleString(), r2 = (v) => v == null ? '–' : (+v).toFixed(2);
+  $('#unsoldTbl').style.minWidth = '0';
+  $('#unsoldTbl').innerHTML = `<thead><tr><th>시군구</th><th class="r">미분양<br>(1년 전)</th><th class="r">준공 후</th><th class="r">분양가 ÷ 주변<br>(÷ 신축)</th><th class="r">입주 예정<br>2년</th></tr></thead><tbody>`
+    + U.map(r => `<tr><td>${r.sido} ${r.name}</td><td class="r num"><b>${n(r.unsold)}</b><br><span class="muted">${n(r.u0)}</span></td><td class="r num">${n(r.unsold_done)}</td>`
+      + `<td class="r num">${r2(r.r)}<br><span class="muted">${r.rn != null ? r2(r.rn) : '–'}${r.n ? ` · ${r.n}건` : ''}</span></td><td class="r num">${r.hh ? n(r.hh) : '–'}</td></tr>`).join('') + '</tbody>';
+  $('#unsoldSrc').innerHTML = '미분양: 국토교통부 시·군·구별 미분양(KOSIS), 경기는 시 단위, 준공 후 = 다 지었는데 안 팔린 집. '
+    + '분양가 ÷ 주변: 최근 24개월 민영 공고(공공주택 제외)의 전용 ㎡당 분양가(주택형별 최고가) ÷ 같은 생활권 단지 ㎡당 기준 시세 중앙값, ÷ 신축 = 같은 생활권 준공 5년 이내 단지 시세(E7). 분양가에는 발코니 확장·옵션이 빠져 있고 주변 시세는 지금 값이라 거칠게 보세요. '
+    + '입주 예정: 한국부동산원 입주 예정 물량. 📖 미분양은 원인을 봐라 — 분양가 과다·입지·상품성·공급 집중·거시(p.155~160). '
+    + '분양가 비율은 미분양이 많은 곳(평택·양주·이천 ÷ 신축 1.2~1.3)과 없는 곳(동작·의왕 1.1~1.2)이 크게 다르지 않아 분양가만으로 원인을 판정하지 않습니다(2026-10-18 확인).';
+})();
+
+/* ① 풍선효과 (📖 규제 밖 비슷한 급지로 수요 이동 → 따라가지 마라 p.288~292, jobs/balloon.py) */
+(function () {
+  const B = D.balloon || {}, evs = Object.keys(B);
+  if (!evs.length) { $('#blSrc').textContent = '데이터 없음'; return; }
+  const GC = { inside: '--c2', adjacent: '--c1', far: '--ink-3' }, GN = { inside: '새로 규제', adjacent: '붙은 바깥', far: '먼 바깥' };
+  const title = { '2025-03-24': '25.03 강남3구·용산', '2025-10-20': '25.10 서울·경기 12곳' };
+  let cur = evs[evs.length - 1];
+  $('#blEv').innerHTML = evs.map(e => `<button data-v="${e}" aria-pressed="${e === cur}">${title[e] || e}</button>`).join('');
+  $('#blEv').addEventListener('click', (ev) => { const b = ev.target.closest('button'); if (!b) return; cur = b.dataset.v;
+    [...$('#blEv').children].forEach(x => x.setAttribute('aria-pressed', x === b)); draw(); });
+  const n1 = (v) => v == null ? '–' : (v > 0 ? '+' : '') + (+v).toFixed(1);
+  function draw() {
+    const svg = $('#blChart'); svg.innerHTML = '';
+    const P = B[cur].path, W = 340, H = 190, L = 34, R = 44, T = 10, B_ = 22;
+    const wmax = Math.max(...P.map(p => p[1])), vs = P.map(p => p[2]);
+    const lo = Math.min(0, Math.floor(Math.min(...vs))), hi = Math.max(1, Math.ceil(Math.max(...vs)));
+    const x = (w) => L + (W - L - R) * w / Math.max(wmax, 1), y = (v) => T + (H - T - B_) * (1 - (v - lo) / (hi - lo));
+    const step = (hi - lo) > 8 ? 4 : (hi - lo) > 4 ? 2 : 1;
+    for (let t = Math.ceil(lo / step) * step; t <= hi; t += step) { el('line', { x1: L, x2: W - R, y1: y(t), y2: y(t), class: 'grid' }, svg); txt(svg, L - 4, y(t) + 3, (t > 0 ? '+' : '') + t + '%', 'end'); }
+    for (let w = 0; w <= wmax; w += 13) txt(svg, x(w), H - 6, w + '주');
+    for (const g of ['far', 'adjacent', 'inside']) {
+      const pts = P.filter(p => p[0] === g);
+      if (!pts.length) continue;
+      el('path', { d: pts.map((p, i) => `${i ? 'L' : 'M'}${x(p[1]).toFixed(1)},${y(p[2]).toFixed(1)}`).join(''), fill: 'none', stroke: css(GC[g]), 'stroke-width': 2, 'stroke-linejoin': 'round' }, svg);
+      const l = pts[pts.length - 1];
+      txt(svg, x(l[1]) + 4, y(l[2]) + 3, n1(l[2]) + '%', 'start').setAttribute('style', `fill:var(${GC[g]});font-weight:600`);
+      pts.forEach(p => hover(el('circle', { cx: x(p[1]), cy: y(p[2]), r: 5, fill: 'transparent' }, svg), `${GN[g]} ${p[1]}주 ${n1(p[2])}% (${p[3]}곳 중앙값)`));
+    }
+    const rows = B[cur].rows.filter(r => r[1] === 'adjacent').sort((a, b) => (b[5] ?? -99) - (a[5] ?? -99));
+    const wk = Math.max(...B[cur].rows.map(r => r[4]));
+    $('#blTbl').innerHTML = `<thead><tr><th>붙은 바깥 시군구</th><th class="r">13주</th><th class="r">${wk}주</th><th class="r">외지인 매수<br>(전→후)</th></tr></thead><tbody>`
+      + rows.slice(0, 10).map(r => `<tr><td>${(D.region_names[r[0]] || r[0]).replace(/^(서울|경기|인천) /, '')}</td><td class="r num">${n1(r[2])}%</td><td class="r num"><b>${n1(r[5])}%</b></td>`
+        + `<td class="r num">${r[6] == null ? '–' : `${(+r[6]).toFixed(0)}→${(+r[7]).toFixed(0)}%`}${r[8] != null ? `<br><span class="muted">서울 ${(+r[8]).toFixed(0)}→${(+r[9]).toFixed(0)}%</span>` : ''}</td></tr>`).join('') + '</tbody>';
+    // 판정 (jobs/balloon.py verdict 와 같은 규칙, 🔧 0.5%p): 번짐 = 붙은 바깥 > 먼 바깥, 풍선 = 거기에 규제지역보다도 더 오름
+    const endm = (g) => { const p = P.filter(q => q[0] === g); return p.length ? p[p.length - 1][2] : null; };
+    const [mi, ma, mf] = ['inside', 'adjacent', 'far'].map(endm);
+    const st = mi == null || ma == null || mf == null ? null : (ma - mf > 0.5 && ma - mi > 0.5) ? '풍선(바깥이 규제지역보다 더 오름)' : ma - mf > 0.5 ? '번짐(붙은 바깥도 오름)' : '번짐 없음';
+    $('#blSrc').innerHTML = (st ? `<b>${st}</b> — ${wmax}주${cur !== evs[evs.length - 1] ? '(다음 확대 전까지)' : ''}: 새로 규제 ${n1(mi)}% · 붙은 바깥 ${n1(ma)}% · 먼 바깥 ${n1(mf)}% (R-ONE 주간 매매지수, 그룹 중앙값). `
+        + `📖 규제 밖 비슷한 급지로 수요가 옮겨 가도 따라가지 마라(p.288~292), 토허제는 거래를 줄일 뿐 가격을 떨어뜨리진 않는다(p.269~270).<br>` : '')
+      + '새로 규제 = 그날 시군구 전체가 토지거래허가로 묶인 곳, 붙은 바깥 = 규제 밖이면서 규제 시군구와 맞닿은 곳(한강 건너 포함), 먼 바깥 = 나머지 수도권. 기준 = 효력일 전 마지막 조사 주, 다음 확대 전까지만. '
+      + '외지인 매수 = 다른 시군구 거주자 매수 비중(한국부동산원 매입자거주지별, 사건 전·후 6개월). 작가는 "비슷한 급지"로 옮겨 간다고 했지만 여기서는 맞닿음만 봅니다.';
+  }
+  draw();
 })();
 
 /* ② 주간 가격 동향 (한국부동산원 R-ONE) */
@@ -521,6 +647,9 @@ $('#notice').innerHTML = `<b>데이터 범위</b><span>서울 실거래는 2020�
     '둔화': 'warn', '확대': 'none', '유지': 'none', '비교 불가': 'none',
     '상승 전환': 'good', '아님': 'none', '있음': 'good', '없음': 'none', '감소': 'none', '증가': 'none', '늘어남': 'warn', '보통': 'none', '유지': 'none', '대세 하락 의심': 'bad', '단기 조정': 'warn',
     '5% 미만': 'good', '5% 이상': 'warn', '10% 이상': 'warn', '20% 이상': 'bad',
+    '풍선(바깥이 규제지역보다 더 오름)': 'bad', '번짐(붙은 바깥도 오름)': 'warn', '번짐 없음': 'none',
+    '고가 덜 오름': 'none', '고가 더 오름': 'warn', '비슷': 'none',
+    '50% 미만(투자 수요 유입 어려움)': 'warn', '50~80%(60% 균형 부근)': 'none', '80% 이상(조심)': 'bad', '하강 국면': 'warn', '보합 국면': 'none', '상승 국면': 'acc',
   };
   const pill = (state) => `<span class="pill ${PILL[state] || 'acc'}">${state || '–'}</span>`;
   const row = (g, t, sig, extra = '') => sig
@@ -551,12 +680,15 @@ $('#notice').innerHTML = `<b>데이터 범위</b><span>서울 실거래는 2020�
     row('과열 신호', '하위 급지 신고가 비중 (B5 ②)', S.b5_low_highs, S.b5_low_highs && S.b5_low_highs.value != null ? ` <span class="muted num">${num(S.b5_low_highs.value)}%</span>` : ''),
     row('과열 신호', '상위 대비 하위 급지 신고가 (B5 ③)', S.b5_spread, S.b5_spread && S.b5_spread.value != null ? ` <span class="muted num">${num(S.b5_spread.value, 2)}배</span>` : ''),
     row('기회', '매매↓·전세↑ 지역 (D2)', S.d2_ladder, S.d2_ladder && S.d2_ladder.value != null ? ` <span class="muted num">${num(S.d2_ladder.value, 0)}곳</span>` : ''),
+    row('전세', '서울 평균 전세가율 (D1 지역)', S.d1_region_jeonse, S.d1_region_jeonse && S.d1_region_jeonse.value != null ? ` <span class="muted num">${num(S.d1_region_jeonse.value)}%</span>` : ''),
     row('반등 신호', '서울 급매 체결 비중 (A4)', S.a4_quick_sale, S.a4_quick_sale && S.a4_quick_sale.value != null ? ` <span class="muted num">${num(S.a4_quick_sale.value)}%</span>` : ''),
     row('반등 신호', '매매수급지수 상승 전환 · 서울', S.supply_seoul),
     row('반등 신호', '매매수급지수 상승 전환 · 수도권', S.supply_sudo),
     row('상승 압력', '서울 신규 전세 감소 + 전세가 상승 (D5)', S.d5_new_jeonse, S.d5_new_jeonse && S.d5_new_jeonse.value != null ? ` <span class="muted num">${S.d5_new_jeonse.value > 0 ? '+' : ''}${num(S.d5_new_jeonse.value)}%</span>` : ''),
     row('공급', '수도권 아파트 인허가 12개월 (F2)', S.f2_permits, S.f2_permits && S.f2_permits.value != null ? ` <span class="muted num">${Number(S.f2_permits.value).toLocaleString()}호</span>` : ''),
     row('공급', '수도권 아파트 착공 12개월 (F2)', S.f2_starts, S.f2_starts && S.f2_starts.value != null ? ` <span class="muted num">${Number(S.f2_starts.value).toLocaleString()}호</span>` : ''),
+    row('가격대', '서울 고가(25억+) − 중간(9~25억) 12개월 변화', S.l9_price_bands, S.l9_price_bands && S.l9_price_bands.value != null ? ` <span class="muted num">${S.l9_price_bands.value > 0 ? '+' : ''}${num(S.l9_price_bands.value)}%p</span>` : ''),
+    row('규제', '풍선효과 (붙은 바깥 − 먼 바깥)', S.g2_balloon, S.g2_balloon && S.g2_balloon.value != null ? ` <span class="muted num">${S.g2_balloon.value > 0 ? '+' : ''}${num(S.g2_balloon.value)}%p</span>` : ''),
     row('공급', '수도권 미분양 (F3)', S.f3_unsold, S.f3_unsold && S.f3_unsold.value != null ? ` <span class="muted num">${Number(S.f3_unsold.value).toLocaleString()}호</span>` : ''),
   ].join('').replace(/<span class="pill acc"><\/span>/g, '<span></span>');
 
@@ -578,6 +710,7 @@ $('#notice').innerHTML = `<b>데이터 범위</b><span>서울 실거래는 2020�
     mrow('주담대 금리 (G3)', S.g3_mortgage_rate, M.mortgage_rate, '%', S.g3_mortgage_rate ? num(S.g3_mortgage_rate.value, 2) + '%' : '–'),
     mrow('가계대출 증가율 (G4)', S.g4_household_loans, hl.length > 13 ? yoy(hl) : null, '%', S.g4_household_loans ? '+' + num(S.g4_household_loans.value, 2) + '%' : '–'),
     mrow('실업률 (G5)', S.g5_unemployment, M.unemployment_sa, '%', S.g5_unemployment ? num(S.g5_unemployment.value, 1) + '%' : '–'),
+    mrow('서울 부동산 소비심리 (G7, 보조)', S.g7_sentiment, (D.sentiment || {})['11'], '', S.g7_sentiment ? num(S.g7_sentiment.value, 1) : '–'),
     (() => {   // G6 경매 낙찰가율: 기사 2건 이상이 같은 값일 때만 확정한 달만 있다(빈 달 있음)
       const A = D.auction || {}, se = A['서울'] || [];
       if (!se.length) return mrow('서울 아파트 경매 낙찰가율 (G6)', null, null, '%', '–');
@@ -662,19 +795,20 @@ $('#notice').innerHTML = `<b>데이터 범위</b><span>서울 실거래는 2020�
    이 화면의 실거래 기준 가격이 경계 🔧 ±5% 안이면 구간이 바뀔 수 있다고 알린다 */
 const LOAN_EDGES = [150000, 250000], LOAN_EDGE_PCT = 0.05;
 const Loan = {
-  band: (p) => p <= 150000 ? '15억 이하' : p <= 250000 ? '15~25억' : '25억 초과',
+  band: (p, reg = true) => `${p <= 150000 ? '15억 이하' : p <= 250000 ? '15~25억' : '25억 초과'}·${reg ? '규제지역' : '비규제'} LTV ${LTV(reg) * 100}%`
+    + (p * LTV(reg) / 10000 < bandCap(p) ? ` → LTV가 더 작음` : ''),
   nearEdge: (p) => LOAN_EDGES.find(e => Math.abs(p - e) <= e * LOAN_EDGE_PCT),
-  check(price, need, bank) {
-    const cap = loanCap(price), notes = [], edge = Loan.nearEdge(price);
+  check(price, need, bank, reg = true) {
+    const cap = loanCap(price, reg), notes = [], edge = Loan.nearEdge(price);
     let state;
     if (need > cap * 10000) state = '제도 상한 초과';
     else if (bank == null) state = need > 0 ? '은행 확인 필요' : '대출 없음';
     else state = need <= bank ? '확인 한도 안' : '은행 한도 부족';
-    if (need > cap * 10000) notes.push(`<b>필요 대출 ${(need / 10000).toFixed(1)}억이 이 집값 구간(${Loan.band(price)})의 제도 상한 ${cap}억을 넘습니다.</b> 대출을 줄이거나 집값을 낮춰야 합니다.`);
-    else if (bank == null && need > 0) notes.push(`제도 상한 ${cap}억은 이 가격대에서 받을 수 있는 <b>최대치</b>이지 내 한도가 아닙니다. 실제 한도는 LTV·DSR(소득·다른 빚)로 은행이 정합니다. 은행에서 확인한 한도를 넣으면 판정합니다.`);
+    if (need > cap * 10000) notes.push(`<b>필요 대출 ${(need / 10000).toFixed(1)}억이 이 집값 구간(${Loan.band(price, reg)})의 제도 상한 ${capTxt(cap)}억을 넘습니다.</b> 대출을 줄이거나 집값을 낮춰야 합니다.`);
+    else if (bank == null && need > 0) notes.push(`제도 상한 ${capTxt(cap)}억은 이 가격대에서 받을 수 있는 <b>최대치</b>이지 내 한도가 아닙니다. 실제 한도는 LTV·DSR(소득·다른 빚)로 은행이 정합니다. 은행에서 확인한 한도를 넣으면 판정합니다.`);
     else if (bank != null && need > bank) notes.push(`<b>필요 대출이 은행 확인 한도보다 ${((need - bank) / 10000).toFixed(2)}억 많습니다.</b>`);
     if (edge) notes.push(`집값 ${(price / 10000).toFixed(1)}억이 ${edge / 10000}억 경계와 가깝습니다. 은행은 실거래 중앙값이 아니라 대출 신청일의 시세(KB 시세·감정가 등)로 구간을 정하므로 구간과 상한이 달라질 수 있습니다. 확인 필요.`);
-    return { cap, band: Loan.band(price), state, notes };
+    return { cap, band: Loan.band(price, reg), state, notes };
   },
 };
 
@@ -717,7 +851,7 @@ const Calc = {
 (function () {
   const $v = (id) => { const x = parseFloat(String($(id).value).replace(/,/g, '')); return isFinite(x) ? x : 0; };
   const rateSig = (D.signals || {}).g3_mortgage_rate;
-  const IDS = ['c_seed', 'c_limit', 'c_bank', 'c_reserve', 'c_rate', 'c_years'];
+  const IDS = ['c_seed', 'c_limit', 'c_reg', 'c_bank', 'c_reserve', 'c_rate', 'c_years'];
   const defaults = Object.fromEntries(IDS.map(k => [k, $('#' + k).value]));
   defaults.c_rate = rateSig && rateSig.value != null ? Number(rateSig.value).toFixed(2) : '4.5';
   $('#c_rate').value = defaults.c_rate;
@@ -731,14 +865,14 @@ const Calc = {
     const reserve = Math.max(0, $v('#c_reserve'));
     try { localStorage.setItem(KEY, JSON.stringify(Object.fromEntries(IDS.map(k => [k, $('#' + k).value])))); } catch (e) {}
     const price = Calc.priceFor(Math.max(0, seed - reserve) + loan);
-    const L = Loan.check(price, loan, bank);
+    const L = Loan.check(price, loan, bank, $('#c_reg').value === '1');
     window.calcPrice = price; window.dispatchEvent(new CustomEvent('calcprice', { detail: price }));   // ⑦ 후보 단지 찾기가 쓴다
     const pay = Calc.payment(loan * 10000, rate, yrs);
     const interest = pay * yrs * 12 - loan * 10000;
     const tax = Calc.acqTax(price), fee = Calc.brokerFee(price), legal = Calc.legalFee(price), mv = Calc.MOVING;
     $('#calcOut').innerHTML = `
       <div class="kpi"><span class="k">볼 수 있는 집값</span><span class="v">${man(price)}</span><span class="d">종잣돈 ${man(seed)}${reserve ? ` − 예비자금 ${man(reserve)}` : ''} + 대출 ${man(loan)} − 부대비용</span></div>
-      <div class="kpi"><span class="k">대출 판정</span><span class="v">${L.state}</span><span class="d">필요 대출 ${man(loan)} · 제도 상한 ${L.cap}억(${L.band}) · 은행 확인 ${bank == null ? '미확인' : man(bank)}</span></div>
+      <div class="kpi"><span class="k">대출 판정</span><span class="v">${L.state}</span><span class="d">필요 대출 ${man(loan)} · 제도 상한 ${capTxt(L.cap)}억(${L.band}) · 은행 확인 ${bank == null ? '미확인' : man(bank)}</span></div>
       <div class="kpi"><span class="k">월 원리금</span><span class="v">${won(pay)}</span><span class="d">${yrs}년 · 연 ${rate}%</span></div>
       <div class="kpi"><span class="k">총 대출 이자</span><span class="v">${man(interest / 10000)}</span><span class="d">총 상환 ${man((loan * 10000 + interest) / 10000)}</span></div>
       <div class="kpi"><span class="k">부대비용</span><span class="v">${man(tax + fee + legal + mv)}</span><span class="d">취득세 ${man(tax)} · 중개보수 ${man(fee)} · 법무사·등기 ${man(legal)} · 이사 ${man(mv)}</span></div>`;
@@ -760,7 +894,7 @@ const Calc = {
 /* ⑦ 후보 단지 찾기: 예산(⑥) 안의 단지를 급지 순으로. 같은 급지 안에서는 신축 대단지 먼저, 그다음 기준 시세 높은 순.
    '노후 단지 많음'(30년+ 거래 비중)은 정비사업 진행이 아니라서 정렬에 쓰지 않는다 */
 (function () {
-  const rows = (D.cand || []).map(r => ({ name: r[0], rc: r[1], umd: r[2], ag: r[3], ref: r[4], conf: r[5], phase: r[6], grade: r[7], rebuild: r[8], gap: r[9], newbig: r[10], hh: r[11], by: r[12], tv: r[13] }));
+  const rows = (D.cand || []).map(r => ({ name: r[0], rc: r[1], umd: r[2], ag: r[3], ref: r[4], conf: r[5], phase: r[6], grade: r[7], rebuild: r[8], gap: r[9], newbig: r[10], hh: r[11], by: r[12], tv: r[13], dr: r[14], est: r[15], pj: r[16] }));
   const state = { region: '전체', area: '84형', phase: '전체', size: '300세대 이상' };
   const AREA = { '전체': () => true, '59형': (a) => a >= 55 && a < 66, '84형': (a) => a >= 80 && a < 90, '중대형': (a) => a >= 90, '소형': (a) => a < 55 };
   const REG = { '전체': () => true, '서울': (c) => c.startsWith('11'), '경기': (c) => c.startsWith('41'), '인천': (c) => c.startsWith('28') };
@@ -786,15 +920,15 @@ const Calc = {
     $('#candCount').textContent = budget ? `${list.length.toLocaleString()}곳` : '';
     $('#candList').innerHTML = !budget ? '<p class="muted" style="padding:10px 2px">예산을 넣거나 ⑥ 계산기 값을 쓰세요.</p>'
       : list.length ? list.slice(0, 60).map(r => {
-        const flags = [r.newbig ? '<span class="pill acc">신축 대단지</span>' : '', r.rebuild ? '<span class="pill none">노후 단지 많음</span>' : '', r.gap ? '<span class="pill warn">동 안 격차</span>' : ''].join(' ');
+        const flags = [r.est ? '<span class="pill warn">추정가(A5)</span>' : '', r.pj ? '<span class="pill acc">철도 착공·확정 역 700m</span>' : '', r.ref >= 300000 * r.ag / 84 ? '<span class="pill none">초고가</span>' : '', r.newbig ? '<span class="pill acc">신축 대단지</span>' : '', r.rebuild ? '<span class="pill none">노후 단지 많음</span>' : '', r.gap ? '<span class="pill warn">동 안 격차</span>' : ''].join(' ');
         return `<div class="row"><span class="name">${r.name}</span><span class="price">${eok(r.ref)}</span>
-          <span class="meta">${(D.region_names[r.rc] || '').replace(/^(서울|경기|인천) /, '')} ${r.umd} · ${r.ag}㎡ · ${r.by ? (2026 - r.by) + '년차' : ''}${r.hh ? ' · ' + Number(r.hh).toLocaleString() + '세대' : ''}${r.tv != null ? ' · 월 회전 ' + r.tv.toFixed(2) + '%' : ''} · 제도 상한 ${loanCap(r.ref)}억${Loan.nearEdge(r.ref) ? '(경계 확인)' : ''}</span>
+          <span class="meta">${(D.region_names[r.rc] || '').replace(/^(서울|경기|인천) /, '')} ${r.umd} · ${r.ag}㎡ · ${r.by ? (2026 - r.by) + '년차' : ''}${r.hh ? ' · ' + Number(r.hh).toLocaleString() + '세대' : ''}${r.tv != null ? ' · 월 회전 ' + r.tv.toFixed(2) + '%' : ''}${r.dr != null ? ` · 하락기 거래 구 ${r.dr >= 50 ? '상위 ' + Math.max(1, Math.round(100 - r.dr)) : '하위 ' + Math.max(1, Math.round(r.dr))}%` : ''} · 제도 상한 ${capTxt(loanCap(r.ref, REG_NOW.has(r.rc)))}억${Loan.nearEdge(r.ref) ? '(경계 확인)' : ''}</span>
           <span class="st">${r.grade ? `<span class="pill none">${r.grade}급지</span>` : ''} ${r.phase ? `<span class="pill ${PH[r.phase] || 'none'}">${r.phase}</span>` : ''}</span>
           ${flags.trim() ? `<span class="meta" style="grid-column:1/3">${flags}</span>` : ''}</div>`;
       }).join('') + (list.length > 60 ? `<p class="muted" style="padding:8px 2px">위 60곳만 보여줍니다 (전체 ${list.length.toLocaleString()}곳).</p>` : '')
       : '<p class="muted" style="padding:10px 2px">조건에 맞는 단지가 없습니다.</p>';
-    $('#candSrc').textContent = '기준 시세(A1) = 같은 단지·면적 최근 60~180일 중개 거래 중앙값. 급지 = 동 84㎡ 환산 실거래 대표가 8단계(30/25/20/15/12/9/6억). '
-      + '같은 급지 안에서는 신축 대단지를 먼저 보여줍니다. 노후 단지 많음은 30년 넘은 단지 거래가 절반 이상이라는 뜻일 뿐, 정비사업이 진행 중이라는 뜻은 아닙니다. 제도 상한은 이 단지 기준 시세로 고른 수도권·규제지역 구간의 최대치이고, 경계(15억·25억) ±5% 안이면 “경계 확인”을 붙입니다. 은행은 대출 신청일의 시세(감정가 등)로 판단하고 실제 한도는 LTV·DSR 과 중 작은 값이라, 내가 받을 수 있는 금액이 아닙니다.';
+    $('#candSrc').textContent = '기준 시세(A1) = 같은 단지·면적 최근 60~180일 중개 거래 중앙값. 그 면적 거래가 적으면 같은 단지 다른 평형의 ㎡당 시세 비율로 추정(A5, "추정가", 📖 p.472~473). 급지 = 동 84㎡ 환산 실거래 대표가 8단계(30/25/20/15/12/9/6억). '
+      + '같은 급지 안에서는 신축 대단지를 먼저 보여줍니다. 노후 단지 많음은 30년 넘은 단지 거래가 절반 이상이라는 뜻일 뿐, 정비사업이 진행 중이라는 뜻은 아닙니다. 제도 상한은 이 단지 기준 시세로 고른 가격 구간 상한과 LTV(규제지역 40%, 그 밖 수도권 70%) 중 작은 값이고, 경계(15억·25억) ±5% 안이면 “경계 확인”을 붙입니다. 은행은 대출 신청일의 시세(감정가 등)로 판단하고 실제 한도는 LTV·DSR 과 중 작은 값이라, 내가 받을 수 있는 금액이 아닙니다.';
   }
   if (window.calcPrice) fromCalc(); else draw();
 })();
@@ -850,8 +984,8 @@ const Move = {
       <div class="kpi"><span class="k">종잣돈으로 모자란 현금</span><span class="v">${r.shortOwn || r.shortSplit ? `${r.shortOwn ? man(r.shortOwn) : '0'} / ${r.shortSplit ? man(r.shortSplit) : '0'}` : '없음'}</span><span class="d">실거주 / 분리 · ${r.shortOwn || r.shortSplit ? '부대비용을 낼 현금이나 대출이 더 필요' : '두 방식 모두 현금으로 가능'}</span></div>`;
     const ns = [];
     ns.unshift(`<b>먼저 확인:</b> ${TOH}`);
-    const lp = $v('#l_price'), lcap = loanCap(lp) * 10000;
-    if (r.loanOwn > lcap) ns.push(`<b>실거주 대출 ${man(r.loanOwn)}은 이 집값 구간(${Loan.band(lp)})의 제도 상한 ${man(lcap)}을 넘습니다.</b> 이 계산의 실거주는 그대로는 실행할 수 없습니다.`);
+    const lreg = !$('#c_reg') || $('#c_reg').value === '1', lp = $v('#l_price'), lcap = loanCap(lp, lreg) * 10000;
+    if (r.loanOwn > lcap) ns.push(`<b>실거주 대출 ${man(r.loanOwn)}은 이 집값 구간(${Loan.band(lp, lreg)}, 집 위치는 ⑥ 선택)의 제도 상한 ${man(lcap)}을 넘습니다.</b> 이 계산의 실거주는 그대로는 실행할 수 없습니다.`);
     else if (r.loanOwn > 0) ns.push(`대출 ${man(r.loanOwn)}은 제도 상한(${man(lcap)}) 안이지만, 실제 한도는 LTV·DSR로 은행이 정합니다. 은행 확인 전에는 가능으로 보지 마세요.${Loan.nearEdge(lp) ? ` 집값이 ${Loan.nearEdge(lp) / 10000}억 경계 근처라 은행 시세로 구간을 확인해야 합니다.` : ''}`);
     if (inc > 0) {
       ns.push(`참고: 실거주 원리금 ${man(r.monthOwn)}은 세후 월소득 ${man(inc)}의 <b>${(r.monthOwn / inc * 100).toFixed(0)}%</b>. 작가는 30% 이내를 권한다(📖 p.474). 생활비·다른 빚·소득 안정성은 빠진 간편 기준이라 이것만으로 방식을 정하지 않는다. 📖 종잣돈보다 소득이 넉넉하면 최대 대출 실거주, 소득보다 종잣돈이 많으면 전세를 지렛대로 쓰는 분리(p.293~294).`);
@@ -873,6 +1007,7 @@ const Move = {
     ]);
   }
   for (const f of ['#ls', '#mv']) { $(f).addEventListener('input', draw); $(f).addEventListener('submit', (e) => e.preventDefault()); }
+  $('#c_reg').addEventListener('change', draw);   // ⑧ 제도 상한은 ⑥ 의 집 위치를 쓴다
   $('#lsReset').addEventListener('click', () => { for (const k of IDS.filter(k => k.startsWith('l_'))) $('#' + k).value = defaults[k]; draw(); });
   $('#mvReset').addEventListener('click', () => { for (const k of IDS.filter(k => k.startsWith('m_'))) $('#' + k).value = defaults[k]; draw(); });
   draw();
@@ -894,6 +1029,12 @@ const Move = {
   const man = (v) => Math.abs(v) >= 10000 ? (v / 10000).toFixed(2).replace(/\.?0+$/, '') + '억' : Math.round(v).toLocaleString() + '만';
   function draw() {
     const ia = idx.get($('#e6_a').value), ib = idx.get($('#e6_b').value), svg = $('#e6Chart');
+    // 서버가 고른 목표 후보(jobs/gap.py): 1.5~2.5배·10km 안, 지금 격차가 5년 중 좁은 순. 누르면 목표 집에 넣는다
+    const sug = ia != null ? (E.t || {})[ia] || [] : [];
+    $('#e6Sug').innerHTML = ia == null ? '' : sug.length
+      ? `<p class="muted" style="margin:0 0 4px">갈아타기 목표 후보 (1.5~2.5배 · 10km 안 · 지금 격차가 좁은 순, 누르면 목표로)</p><div class="chips">`
+        + sug.map(([j, r, p, dm]) => `<button type="button" class="chip" data-j="${j}" aria-pressed="${j === ib}">${E.cx[j][0]} ${r.toFixed(2)}배 · 하위 ${Math.round(p)}%${p <= 20 ? ' ✓' : ''} · ${(dm / 1000).toFixed(1)}km</button>`).join('') + '</div>'
+      : '<p class="muted" style="margin:0">이 단지는 1.5~2.5배·10km 안에서 함께 12분기 이상 거래된 목표 후보가 없습니다.</p>';
     svg.innerHTML = '';
     if (ia == null || ib == null) {
       $('#e6Out').innerHTML = ''; $('#e6Notes').innerHTML = `<p class="muted" style="margin:0">목록에서 단지를 고르세요 (수도권 ${E.cx.length.toLocaleString()}곳: 최근 20분기 중 12분기 이상 84㎡ 거래가 있는 단지).</p>`;
@@ -926,6 +1067,7 @@ const Move = {
     $('#e6Notes').innerHTML = `<p class="muted" style="margin:0">📖 상승 초반에는 비싼 집이 먼저 올라 격차가 벌어지고 후반에 좁혀진다. 격차가 줄었을 때 갈아탄다(p.438~439). 목표가 지금 집의 1.5배가 안 되면 거래비용으로 남는 게 없다(p.436~438). 🔧 함께 거래된 분기들 중 지금 격차가 하위 20% 안이면 '격차가 작은 편'. 이건 지난 격차의 순위일 뿐 앞으로 오를 확률이 아닙니다. 1.5배는 작가의 투자 원칙이고, 출퇴근·가족 계획 때문에 그보다 작은 이동도 의미가 있을 수 있습니다. 분기마다 그 분기에 팔린 집의 층·동에 따라 값이 흔들리고, 두 단지 모두 84㎡ 기준입니다.</p>`;
   }
   for (const id of ['#e6_a', '#e6_b']) { $(id).addEventListener('change', draw); $(id).addEventListener('input', () => { if (idx.has($(id).value)) draw(); }); }
+  $('#e6Sug').addEventListener('click', (ev) => { const b = ev.target.closest('.chip'); if (!b) return; $('#e6_b').value = label(E.cx[+b.dataset.j]); draw(); });
   $('#e6').addEventListener('submit', (e) => e.preventDefault());
   draw();
 })();
@@ -981,7 +1123,7 @@ function drawCx(c) {
     <div class="kpi"><span class="k">전세가율</span><span class="v">${c.ratio == null ? '–' : pct(c.ratio)}</span><span class="d"><span class="pill ${rc}">${rl}</span>${c.band ? ` 정상 ${c.band[0]}~${c.band[1]}%` : ''}</span></div>
     <div class="kpi"><span class="k">최근 1년 거래</span><span class="v">${c.n12}건</span><span class="d">84㎡형${c.hh ? ` · 단지 ${Number(c.hh).toLocaleString()}세대` : ''}${c.m && c.m.turnover_pct != null ? ` · 월 회전율 ${(+c.m.turnover_pct).toFixed(2)}% <span class="pill ${c.m.turnover_state === '적음' ? 'warn' : 'good'}">${c.m.turnover_state}</span>` : ''}</span></div>
     <div class="kpi"><span class="k">급지 (${c.grade ? c.grade.umd_name : '동'})</span><span class="v">${c.grade ? c.grade.grade + '급지' : '–'}</span><span class="d">${c.grade ? `동 대표가 ${eok(c.grade.value_10k)} · ${gradeFlags(c.grade).join(' ') || '표시 없음'}` : '급지 계산 안 된 동'}</span></div>
-    <div class="kpi"><span class="k">주담대 제도 상한</span><span class="v">${c.C ? loanCap(c.C) + '억' : '–'}</span><span class="d">${c.C ? `기준 시세 ${eok(c.C)} → ${Loan.band(c.C)}. 내 한도 아님(은행이 LTV·DSR로 정함)${Loan.nearEdge(c.C) ? ` · <b>${Loan.nearEdge(c.C) / 10000}억 경계 근처, 은행 시세로 확인 필요</b>` : ''}` : ''}</span></div>`;
+    <div class="kpi"><span class="k">주담대 제도 상한</span><span class="v">${c.C ? capTxt(loanCap(c.C, REG_NOW.has(c.seq.slice(0, 5)))) + '억' : '–'}</span><span class="d">${c.C ? `기준 시세 ${eok(c.C)} → ${Loan.band(c.C, REG_NOW.has(c.seq.slice(0, 5)))}. 내 한도 아님(은행이 LTV·DSR로 정함)${Loan.nearEdge(c.C) ? ` · <b>${Loan.nearEdge(c.C) / 10000}억 경계 근처, 은행 시세로 확인 필요</b>` : ''}` : ''}</span></div>`;
   const svg = $('#cxChart'); svg.innerHTML = '';
   const W = 340, H = 210, L = 34, R = 8, T = 10, B = 22;
   const t0 = Date.parse('2020-01-01'), t1 = Date.parse('2026-11-01');
@@ -1019,6 +1161,35 @@ function drawCx(c) {
     ? `상대강도(B6): 같은 생활권(판정 단지 5곳 미만이면 같은 구) 단지들의 12개월 중앙값 ${(+c.phase.region_chg_12m).toFixed(1)}% 대비 ${(+c.phase.rel_strength > 0 ? '+' : '') + (+c.phase.rel_strength).toFixed(1)}%p. ${+c.phase.rel_strength < 0 ? '지역보다 덜 오른 "약한 파도"' : '지역보다 더 오름'}(📖 상승의 차이 p.420~421). `
     : '상대강도(B6)는 국면을 판정한 단지만 계산합니다.');
   if (c.m && c.m.turnover_pct != null) notes.push(`월 거래 회전율(C2): 단지 전체 월 거래 ÷ 세대수 = ${(+c.m.turnover_pct).toFixed(2)}% (집계 끝난 최근 12개월 평균). 📖 0.5~0.8%면 꽤 괜찮은 거래량(p.137) → <b>${c.m.turnover_state}</b>.`);
+  if (c.reg && c.reg.jr) notes.push(`같은 구 평균 전세가율(D1 지역): ${c.reg.jr[1].toFixed(1)}%(${c.reg.jr[0].slice(0, 4)}.${c.reg.jr[0].slice(4)}, 한국부동산원 표본 중위)${c.reg.jr_seoul ? ` · 서울 ${c.reg.jr_seoul[1].toFixed(1)}%` : ''}`
+    + `${c.ratio != null ? ` · 이 단지 ${c.ratio.toFixed(0)}%` : ''}. ▶ 시장 평균 60% 균형, 50% 이하면 투자 수요 유입 어려움, 80~90% 조심. 지역 평균과 단지값은 다를 수 있다(📖 p.131~132).`);
+  if (c.reg && c.reg.school) {
+    const ch = (a) => `${((a[3] / a[1] - 1) * 100 > 0 ? '+' : '')}${((a[3] / a[1] - 1) * 100).toFixed(1)}%`, yy = (a) => `${a[0].slice(0, 4)}→${a[2].slice(0, 4)}`;
+    notes.push(`구 인구(주민등록, ${yy(c.reg.school)} 12월): 학령인구(5~19세) ${Number(c.reg.school[3]).toLocaleString()}명 ${ch(c.reg.school)}`
+      + (c.reg.working ? ` · 생산가능인구(15~64세) ${ch(c.reg.working)}` : '') + (c.reg.total ? ` · 전체 ${ch(c.reg.total)}` : '')
+      + '. 📖 학령인구가 줄면 최상위 학군은 더 견고, 중간 학군은 약해진다(p.89~95). 생산가능인구는 상승 여력 점검 항목(▶ 상승여력 있는지 확인하는 법 0:47).');
+  }
+  if (c.m && c.m.d4_jeonse_chg != null) notes.push(`전세 1년 변화(D4): ${(+c.m.d4_jeonse_chg > 0 ? '+' : '') + (+c.m.d4_jeonse_chg).toFixed(1)}% (최근 3개월 vs 1년 전, 건수 ${c.m.d4_n}, 월별 중앙값 근사). `
+    + (c.m.d4_cause ? `<b>전세가 내림 → 원인: ${c.m.d4_cause}</b>. ` + (c.m.d4_cause === '둘 다 아님' ? '입주장도 매매 하락도 아니라 단지 사정(층·동 구성, 월세 전환, 표본)일 수 있음. ' : '') : '')
+    + '📖 전세가 하락 원인은 주변 신규 입주와 매매가 하락 두 가지, 20~30% 하락은 쉽지 않다(p.153~154). 🔧 -3% 이하일 때 원인 표시.');
+  if (c.C && c.C >= 300000) notes.push('초고가 시장(L6): 84㎡ 기준 시세 30억 이상. 📖 반포·압구정·한남 같은 초고가는 일반 시장과 따로 본다(p.122) — 가격대별 흐름(①)에서도 따로 봅니다.');
+  const pst = c.proj_st || [];
+  if (pst.length) notes.push(`철도 사업 역 근처(H4): ` + pst.map(z => `<b>${z[2]}역</b> ${z[3]}m — ${z[0]} ${z[1] === '예타탈락' ? '예타 탈락' : z[1]}(${PROJ_RULE[z[1]]})`).join(' / ')
+    + '. 📖 역세권 = 700m·도보 10분(p.220). 새로 생기는 역은 좌표가 없어 빠질 수 있음.');
+  const pj = (D.projects || []).filter(p => p[5].includes(c.seq.slice(0, 5)) && !pst.some(z => z[0] === p[0]));
+  if (pj.length) notes.push(`이 구를 지나는 ${pst.length ? '그 밖의 ' : ''}철도 사업(H4): ` + pj.map(p => `<b>${p[0]}</b> ${p[1] === '예타탈락' ? '예타 탈락' : p[1]}${p[4].length ? `(→ ${p[4].join('·')})` : ''} — ${PROJ_RULE[p[1]]}`).join(' / ')
+    + '. 구 안에서도 역과의 거리에 따라 다르고, 역 위치는 직접 확인. 📖 착공 뒤 들어가도 늦지 않고 취소가 악재(p.279~280).');
+  if (c.e6t && c.e6t.length) notes.push(`갈아타기 목표 후보(E6): ` + c.e6t.map(t => `${t[0]} ${t[1].toFixed(2)}배·격차 하위 ${Math.round(t[2])}%${t[2] <= 20 ? '(<b>좁아진 때</b>)' : ''}·${(t[3] / 1000).toFixed(1)}km`).join(' / ')
+    + '. 이 단지를 산 뒤 옮겨 갈 곳의 예시: 84㎡ 분기 중앙가가 1.5~2.5배(🔧 2.5·10km), 지금 격차가 지난 5년 중 좁은 순. 📖 갈아타기는 최소 1.5배(p.436~438), 격차가 줄어들 때(p.438~439). ⑧ 에서 추이를 볼 수 있음.');
+  if (c.liq) {
+    const L = c.liq, ymf = (m) => `${m.slice(0, 4)}.${m.slice(4)}`, top = (r) => r == null ? '' : ` — 같은 구 단지 중 <b>${r >= 50 ? `상위 ${Math.max(1, Math.round(100 - r))}%` : `하위 ${Math.max(1, Math.round(r))}%`}</b>`;
+    notes.push(`하락기 환금성(C3): 지역 매매지수 고점 ${ymf(L.peak_m)} → 저점 ${ymf(L.trough_m)}(${(+L.drop_pct).toFixed(1)}%${L.window_src === 'sido' ? ', 시군구 지수가 없어 시도 기준' : ''}) 사이 중개 거래 ${L.down_n}건, `
+      + `월 회전율 ${(+L.down_turnover).toFixed(3)}%(같은 구 중앙값 ${(+L.down_region_med).toFixed(3)}%)${top(L.down_rank)}. `
+      + (L.keep_ratio != null ? `거래 유지율(C4): 상승기(2020.01~고점) 회전율 ${(+L.up_turnover).toFixed(3)}%의 <b>${(+L.keep_ratio).toFixed(2)}배</b>(같은 구 중앙값 ${(+L.keep_region_med).toFixed(2)}배)${top(L.keep_rank)}. `
+                              : '거래 유지율(C4)은 2017년 이후 입주라 계산하지 않음(입주 초기 거래가 적다가 2년 보유 뒤 몰려 비교가 안 됨). ')
+      + (L.toh && L.toh.length && L.keep_ratio != null ? `<b>상승기에 토지거래허가구역</b>(${L.toh.join(' · ')})이라 상승기 거래가 눌려 유지율이 높게 나올 수 있습니다(📖 토허제는 거래를 줄인다 p.269~270). ` : '')
+      + '📖 하락장에 거래가 많았던 단지가 환금성이 좋다(p.138~142). 직거래는 뺐고, 작가 기준선이 없어 같은 구 안 순위만 보여 줍니다.');
+  }
   if (c.m && c.m.e2_ratio != null) notes.push(`주변 시세 위치(E2): ㎡당 기준 시세가 ${c.m.e2_basis === '생활권' ? '같은 생활권' : '반경 1.5km'} 다른 단지 ${c.m.e2_n}곳(비슷한 평형) 중앙값의 <b>${(+c.m.e2_ratio).toFixed(2)}배</b>. `
     + `${+c.m.e2_ratio < 1 ? '주변보다 낮은 편' : '주변보다 높은 편'}. 연식·동선·언덕·학교·단지 규모 같은 이유가 차이를 설명할 수 있으니 이유부터 확인. (작가 관점: 같은 10억이라도 주변이 12~14억인 곳이 상승 여력이 크다 📖 p.216~217, p.339 — 예측은 아님)`);
   if (c.e3 && c.e3.length) notes.push(`바로 위 급지 비교(E3): ${c.e3.join(', ')}. 비교 가격 ${eok(c.m.e3_target_10k)} (비교 단지 ㎡당 기준 시세 × 이 면적). 규칙상 더 비싼 주변 단지를 고르므로 이 단지보다 높게 나오는 게 당연하며, 이 단지의 미래 가격 예측이 아닙니다(작가 관점: 미래 시세 = 바로 위 급지 현재 시세 📖 p.358~359)`
@@ -1071,19 +1242,22 @@ drawCx(cxs[initial]);
     c.pattern == null ? null : c.pattern !== '회복 지연',
     c.ratio == null ? null : (c.ratio >= c.band[0] && c.ratio <= c.band[1] && c.ratio <= 80),
     c.m && c.m.turnover_state ? c.m.turnover_state !== '적음' : null,
+    c.liq && c.liq.down_rank != null ? +c.liq.down_rank >= 50 : null,
   ];
   const rows = cxs.map(c => ({ c, k: crit(c) })).map(r => ({ ...r, ok: r.k.filter(v => v === true).length, known: r.k.filter(v => v !== null).length }))
     .sort((a, b) => b.ok - a.ok || b.known - a.known || (b.c.C || 0) - (a.c.C || 0));
   const mark = (v) => v === true ? '<span class="pill good">충족</span>' : v === false ? '<span class="pill warn">미충족</span>' : '<span class="pill none">보류</span>';
-  $('#cmp').innerHTML = `<thead><tr><th>단지</th><th class="r">기준 시세</th><th>전고점 회복</th><th>전세가율</th><th>거래 활발</th><th class="r">충족</th></tr></thead><tbody>` +
+  $('#cmp').innerHTML = `<thead><tr><th>단지</th><th class="r">기준 시세</th><th>전고점 회복</th><th>전세가율</th><th>거래 활발</th><th>하락기 거래</th><th class="r">충족</th></tr></thead><tbody>` +
     rows.map(({ c, k, ok, known }) => `<tr><td class="nm"><b>${c.name}</b><br><span class="muted">${c.region.replace('서울 ', '')}</span></td>
       <td class="r">${eok(c.C)}</td><td>${mark(k[0])}<br><span class="muted">${c.rec == null ? '' : recLabel(c)}</span></td>
       <td>${mark(k[1])}<br><span class="muted">${c.ratio == null ? '' : pct(c.ratio)}</span></td><td>${mark(k[2])}<br><span class="muted">${c.m && c.m.turnover_pct != null ? '월 ' + (+c.m.turnover_pct).toFixed(2) + '%' : ''}</span></td>
+      <td>${mark(k[3])}<br><span class="muted">${c.liq && c.liq.down_rank != null ? '구 안 ' + Math.round(+c.liq.down_rank) + '분위' : ''}</span></td>
       <td class="r"><span class="score">${ok}</span><span class="muted">/${known}</span></td></tr>`).join('') + '</tbody>';
   $('#cmpNotes').innerHTML = [
     '전고점 회복: 신고가 돌파 또는 회복률 60% 이상(B2). 전세가율: 가격대별 정상 범위 안이고 80% 이하(D1).',
     '거래 활발: 월 거래 회전율(C2) 0.5% 이상 (📖 0.5~0.8% = 꽤 괜찮은 거래량 p.137).',
-    '아직 없는 기준: 하락기 환금성(C3), 갈아타기 격차(E6). 상대강도(B6)·바로 위 급지(E3)는 ④ 단지 상세에 있습니다.',
+    '하락기 거래: 2022~23 하락 구간 월 회전율(C3)이 같은 구 단지 중 가운데 이상(🔧 50분위). 📖 하락장에 거래가 많았던 단지 = 환금성 좋음 p.138~142.',
+    '갈아타기 격차(E6)는 ⑧, 상대강도(B6)·바로 위 급지(E3)는 ④ 단지 상세에 있습니다.',
   ].map(n => `<p class="muted" style="margin:0">${n}</p>`).join('');
 })();
 </script>

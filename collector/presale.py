@@ -170,3 +170,44 @@ def locate(addr: str, dong_index: dict, regions: dict) -> tuple[str | None, str 
                 (rc, z), _ = max(ok, key=lambda x: x[1])
                 return rc, z
     return None, None
+
+
+def _num(v) -> float | None:
+    try:
+        return float(str(v).replace(",", "").strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def parse_models(items: list[dict]) -> dict[str, dict]:
+    """청약홈 주택형별(getAPTLttotPblancMdl) → 공고별 분양가 요약.
+    HOUSE_TY '084.9800A' 의 숫자 = 전용면적(㎡), LTTOT_TOP_AMOUNT = 그 주택형 최고 분양가(만원), SUPLY_HSHLDCO(일반)·SPSPLY_HSHLDCO(특별) = 세대.
+    ㎡당 분양가 = 주택형별 (최고가 ÷ 전용)의 세대 가중 중앙값. 84형 = 전용 80~89㎡ 주택형 최고가 중 가장 큰 값."""
+    by: dict[str, list[tuple[float, float, int, float]]] = {}
+    seen: set[str] = set()
+    for it in items:
+        h = str(it.get("HOUSE_MANAGE_NO") or "").strip()
+        if not h:
+            continue
+        seen.add(h)
+        m = re.match(r"\s*(\d+(?:\.\d+)?)", str(it.get("HOUSE_TY") or ""))
+        area, price = (float(m.group(1)) if m else None), _num(it.get("LTTOT_TOP_AMOUNT"))
+        if not area or area < 10 or not price or price <= 0:
+            continue
+        hh = int((_num(it.get("SUPLY_HSHLDCO")) or 0) + (_num(it.get("SPSPLY_HSHLDCO")) or 0)) or 1
+        by.setdefault(h, []).append((price / area, area, hh, price))
+    out = {}
+    for h in seen:
+        xs = sorted(by.get(h, []))
+        if not xs:
+            out[h] = dict(price_ppm_10k=None, price84_10k=None, price_types=0)
+            continue
+        tot, acc, med = sum(x[2] for x in xs), 0, xs[-1][0]
+        for ppm, _, hh, _ in xs:
+            acc += hh
+            if acc * 2 >= tot:
+                med = ppm
+                break
+        p84 = [x[3] for x in xs if 80 <= x[1] < 90]
+        out[h] = dict(price_ppm_10k=round(med, 1), price84_10k=round(max(p84)) if p84 else None, price_types=len(xs))
+    return out

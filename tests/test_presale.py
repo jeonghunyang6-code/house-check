@@ -55,3 +55,18 @@ def test_parse_plan_and_locate():
     assert locate(rows[0]["address"], idx, regions) == ("11650", "Z9")
     assert locate(rows[1]["address"], idx, regions) == ("41597", "Z3")        # 특례시 → 시
     assert locate("서울특별시 강남구 반포동 1", idx, regions) == (None, None)   # 시군구가 다르면 아님
+
+
+def test_parse_models():
+    from collector.presale import parse_models
+    items = [
+        {"HOUSE_MANAGE_NO": "2025000001", "HOUSE_TY": "059.9800A", "LTTOT_TOP_AMOUNT": "90,000", "SUPLY_HSHLDCO": "100", "SPSPLY_HSHLDCO": "50"},
+        {"HOUSE_MANAGE_NO": "2025000001", "HOUSE_TY": "084.9700B", "LTTOT_TOP_AMOUNT": "120000", "SUPLY_HSHLDCO": "40", "SPSPLY_HSHLDCO": "10"},
+        {"HOUSE_MANAGE_NO": "2025000001", "HOUSE_TY": "084.9900A", "LTTOT_TOP_AMOUNT": "125000", "SUPLY_HSHLDCO": "40", "SPSPLY_HSHLDCO": "0"},
+        {"HOUSE_MANAGE_NO": "2025000002", "HOUSE_TY": "084.9900A", "LTTOT_TOP_AMOUNT": ""},       # 가격 없음
+    ]
+    out = parse_models(items)
+    a = out["2025000001"]
+    # ㎡당: 59형 1,500.5(150세대), 84형 1,412.3·1,470.8(50·40세대) → 세대 가중 중앙값은 59형 쪽
+    assert a["price_types"] == 3 and a["price84_10k"] == 125000 and abs(a["price_ppm_10k"] - 1500.5) < 0.1
+    assert out["2025000002"] == {"price_ppm_10k": None, "price84_10k": None, "price_types": 0}

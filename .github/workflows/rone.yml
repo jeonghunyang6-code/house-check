@@ -37,6 +37,8 @@ jobs:
           KOSIS_API_KEY: ${{ secrets.KOSIS_API_KEY }}
           ECOS_API_KEY: ${{ secrets.ECOS_API_KEY }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GH_TOKEN: ${{ github.token }}      # jobs.gap 이 보관 파일(Releases raw-data)을 읽는다
+          GH_REPO: ${{ github.repository }}
           HC_DB_BACKEND: psql
           PYTHONUNBUFFERED: "1"
           MODE: ${{ inputs.mode || 'weekly' }}
@@ -47,4 +49,8 @@ jobs:
           python -m jobs.macro || rc=$?    # 거시 월별 지표 (macro_monthly: 실업률·주담대 금리·가계대출)
           python -m jobs.grade || rc=$?    # 급지 E1 (dong_grade, 85일마다만 다시 계산)
           python -m jobs.market || rc=$?   # 국면·체크리스트 신호 (region_phase, market_signals)
+          python -m jobs.rone buyer || rc=$?   # 매입자 거주지별 아파트 매매 (월간, 최근 3개월 다시)
+          python -m jobs.balloon || rc=$?  # 풍선효과 (balloon, market_signals.g2_balloon)
+          python -m jobs.region_stats || rc=$?   # 지역 전세가율·소비심리(R-ONE 월간)·연령별 인구(KOSIS) → region_monthly
+          python -m jobs.gap --archive gh || rc=$?   # E6 갈아타기 목표 후보 (e6_targets)
           exit $rc
