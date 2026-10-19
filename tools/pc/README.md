@@ -25,6 +25,9 @@ VWorld 토지특성 API 로 채우려 했으나 클라우드 서버·GitHub Acti
 4. 끝나면 같은 폴더의 `vworld_land_result.csv` 를 Claude 대화에 첨부
 
 ### 오류가 나면
-- `INCORRECT_KEY`·도메인 관련 오류: VWorld 에서 키를 만들 때 적은 서비스 URL 이 필요할 수 있다 → `set VWORLD_DOMAIN=그 URL` 을 추가하고 다시 실행
+- `INCORRECT_KEY`(2026-10-19 실제로 나옴, 응답 `{"landCharacteristicss": {"resultCode": "INCORRECT_KEY", ...}}`): 확인할 것
+  1. 키를 정확히 넣었는지 — `set VWORLD_API_KEY=키` 에 따옴표·앞뒤 공백 없이
+  2. VWorld 인증키 관리 화면의 **서비스 URL** 을 `set VWORLD_DOMAIN=그 URL` 로 넣고 다시 실행 (키가 URL 에 묶여 있다)
+  3. 그 키의 활용 API 에 토지특성(국가중점데이터)이 들어 있는지, 키가 승인·사용 중 상태인지
 - `HTTP 403/429`·호출 한도: 그날은 멈추고 다음 날 다시 실행
 - 처음에 "첫 응답 모양"이 화면에 나온다. 결과가 이상하면 그 줄을 복사해 Claude 에게 보여 준다(키는 안 나온다)

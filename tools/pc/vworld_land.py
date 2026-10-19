@@ -65,7 +65,12 @@ def parse(d: dict) -> list[dict]:
         if any(k in msg for k in ("KEY", "DOMAIN", "LIMIT", "OVER")):
             raise Stop("VWorld 오류: " + msg)
         raise ValueError("VWorld 오류: " + msg)
-    f = (d.get("landCharacteristicss") or {}).get("field") or []
+    body = d.get("landCharacteristicss") or {}
+    code = str(body.get("resultCode") or "")
+    if code and code not in ("OK", "INFO-000", "0", "00"):
+        # 2026-10-19 실제 응답: {"landCharacteristicss": {"resultCode": "INCORRECT_KEY", "resultMsg": "인증키 정보가 올바르지 않습니다."}}
+        raise Stop(f"VWorld 오류: {code} {body.get('resultMsg', '')}")
+    f = body.get("field") or []
     return f if isinstance(f, list) else [f]
 
 
@@ -78,7 +83,7 @@ def main() -> int:
     pnus = sorted({r["pnu"] for r in csv.DictReader(TARGETS.open(encoding="utf-8"))})
     done = set()
     if OUT.exists():
-        done = {r["pnu"] for r in csv.DictReader(OUT.open(encoding="utf-8"))}
+        done = {r["pnu"] for r in csv.DictReader(OUT.open(encoding="utf-8")) if r["status"] == "ok"}   # '자료 없음'은 다시 묻는다
     todo = [p for p in pnus if p not in done]
     print(f"필지 {len(pnus):,}개 중 받은 것 {len(done):,}개, 남은 것 {len(todo):,}개")
     new = not OUT.exists()
