@@ -202,15 +202,49 @@ def load_plan(db: Db, path: str | None) -> int:
     return 0
 
 
-def react(db: Db) -> int:
-    """과거 큰 입주 때 같은 생활권 전세 반응 (sql/f1_react.sql) → presale_react, lifezone.f1_react_*."""
+def react(db: Db, store=None) -> int:
+    """과거 큰 입주 때 같은 생활권 전세 반응 (collector/react.py) → presale_react, lifezone.f1_react_*.
+    전세 요약은 DB(rent_monthly, 최근 17개월) + 보관 파일(rentsum_<시군구>, 그 전)."""
     from datetime import date
-    from pathlib import Path
-    sql = (Path(__file__).resolve().parent.parent / "sql" / "f1_react.sql").read_text(encoding="utf-8")
-    db.query(sql.replace("{TODAY}", lit(date.today())))
-    r = select(db, "SELECT count(*) AS n, percentile_cont(0.5) WITHIN GROUP (ORDER BY rel) AS m FROM presale_react")[0]
-    z = select(db, "SELECT count(*) AS n FROM lifezone WHERE f1_react_n IS NOT NULL")[0]["n"]
-    print(f"  과거 입주 반응: 사건 {r['n']}건(rel 중앙값 {r['m'] and round(float(r['m']), 2)}%p), 생활권 {z}곳")
+    from collector.archive import open_store
+    from collector.react import MIN_HH, SINCE, add_months, react_rows, zone_summary
+    from collector.regions import REGIONS
+    from jobs.rent_archive import iter_sums
+    store = store or open_store(None)
+    last = add_months(f"{date.today():%Y%m}", -7)
+    events = [dict(r, sd={"서울": "11", "경기": "41", "인천": "28"}[r["area"]]) for r in select(db, f"""
+SELECT house_no, lifezone_id AS z, move_in_ym, coalesce(total_hh, households) AS hh, area FROM presale
+WHERE coalesce(total_hh, households) >= {MIN_HH} AND lifezone_id IS NOT NULL AND area IN ('서울', '경기', '인천')
+  AND move_in_ym BETWEEN '202101' AND {lit(last)}""")]
+    cx = {r["apt_seq"]: (r["z"], int(r["by"]) if r["by"] is not None else None)
+          for r in select(db, "SELECT apt_seq, lifezone_id AS z, build_year AS by FROM complexes")}
+    seen, rents = set(), []
+    for r in select(db, "SELECT apt_seq, area_group, contract_month, jeonse_median_10k, n_jeonse, region_code FROM rent_monthly "
+                        f"WHERE jeonse_median_10k > 0 AND n_jeonse > 0 AND contract_month >= {lit(SINCE)}"):
+        seen.add((r["apt_seq"], int(r["area_group"]), r["contract_month"]))
+        rents.append((r["apt_seq"], int(r["area_group"]), r["contract_month"], float(r["jeonse_median_10k"]), int(r["n_jeonse"]), r["region_code"][:2]))
+    n_file = 0
+    for r in iter_sums(store, sorted(REGIONS), SINCE):
+        k = (r["apt_seq"], int(r["area_group"]), r["contract_month"])
+        if k in seen or not r["jeonse_median_10k"] or int(r["n_jeonse"]) <= 0 or int(r["jeonse_median_10k"]) <= 0:
+            continue
+        rents.append((k[0], k[1], k[2], float(r["jeonse_median_10k"]), int(r["n_jeonse"]), r["region_code"][:2]))
+        n_file += 1
+    rows = react_rows(events, rents, cx)
+    cols = ("house_no", "lifezone_id", "move_in_ym", "total_hh", "zone_chg", "base_chg", "rel", "n")
+    stmts = ["BEGIN;", "DELETE FROM presale_react;"]
+    if rows:
+        stmts.append(f"INSERT INTO presale_react ({', '.join(cols)}) VALUES "
+                     + ", ".join("(" + ", ".join(lit(r[c]) for c in cols) + ")" for r in rows) + ";")
+    stmts.append("UPDATE lifezone SET f1_react_rel = NULL, f1_react_n = NULL;")
+    zs = zone_summary(rows)
+    if zs:
+        stmts.append("UPDATE lifezone l SET f1_react_rel = v.r, f1_react_n = v.n FROM (VALUES "
+                     + ", ".join(f"({lit(z)}, {lit(r)}::numeric, {n})" for z, (r, n) in zs.items()) + ") AS v(z, r, n) WHERE l.zone_id = v.z;")
+    db.query("\n".join(stmts + ["COMMIT;"]))
+    rel = sorted(r["rel"] for r in rows if r["rel"] is not None)
+    print(f"  과거 입주 반응: 큰 입주 {len(events)}건 중 {len(rows)}건(rel 중앙값 {rel[len(rel) // 2] if rel else '-'}%p), "
+          f"생활권 {len(zs)}곳 (전세 요약 DB {len(rents) - n_file:,}행 + 보관 파일 {n_file:,}행)")
     return 0
 
 

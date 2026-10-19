@@ -9,7 +9,7 @@ from collector.pg_store import RENT, apply_snapshot_pg
 from collector.rent_stats import rent_to_row, summarize
 from collector.snapshot import keyed
 from collector.sources.molit import parse_rent_page
-from jobs.rent_archive import backfill, daily
+from jobs.rent_archive import backfill, daily, iter_sums, region_rows, roll_sums, sum_cutoff, sum_name
 
 ROOT = Path(__file__).parent.parent
 RENT_XML = (Path(__file__).parent / "fixtures" / "molit_rent_sample.xml").read_text(encoding="utf-8")
@@ -58,9 +58,9 @@ def test_summarize_counts():
 def _db():
     db = PsqlDb(URL)
     db.query("DROP TABLE IF EXISTS deal_events, deals, rent_events, rents, snapshot_runs, rent_monthly, "
-             "archive_cells, rent_j24 CASCADE;")
+             "archive_cells, rent_j24, rent_region_month CASCADE;")
     for m in ("0001_deals.sql", "0005_snapshot_runs.sql", "0006_rents.sql", "0007_rent_archive.sql",
-              "0038_archive_recheck.sql"):
+              "0038_archive_recheck.sql", "0053_rent_region_month.sql"):
         db.query((ROOT / "db" / "migrations" / m).read_text(encoding="utf-8"))
     return db
 
@@ -80,7 +80,12 @@ def test_backfill_writes_file_and_summary_then_skips():
     cells = select(db, "SELECT contract_month, n_rows, source FROM archive_cells ORDER BY 1")
     assert [(c["contract_month"], c["n_rows"], c["source"]) for c in cells] == \
            [("202301", 5, "api_backfill"), ("202302", 5, "api_backfill")]
-    assert select(db, "SELECT sum(n_jeonse + n_wolse) AS n FROM rent_monthly WHERE contract_month = '202301'")[0]["n"] == 5
+    # 202301 은 17개월보다 오래돼 단지 요약은 DB 가 아니라 rentsum 파일, 지역 합계만 DB
+    assert select(db, "SELECT count(*) AS n FROM rent_monthly")[0]["n"] == 0
+    assert select(db, "SELECT sum(n_jeonse + n_wolse) AS n FROM rent_region_month WHERE contract_month = '202301'")[0]["n"] == 5
+    sums = decode(store.get(sum_name("11680")))
+    assert {r["contract_month"] for r in sums} == {"202301", "202302"}
+    assert sum(int(r["n_jeonse"]) + int(r["n_wolse"]) for r in sums if r["contract_month"] == "202301") == 5
     assert select(db, "SELECT count(*) AS n FROM rents")[0]["n"] == 0  # 과거 이력은 DB 원본에 넣지 않는다
     calls.clear()
     assert backfill(db, store, ["11680"], ["202301", "202302"], date(2026, 10, 12), fetch=fake_fetch) == 0
@@ -169,3 +174,30 @@ def test_refresh_j24_writes_table():
     assert refresh_j24(db, store, today) == 0
     got = select(db, "SELECT sum(n) AS n, min(from_month) AS fm, max(to_month) AS tm FROM rent_j24")[0]
     assert (got["fm"], got["tm"]) == ("202409", "202411") and got["n"] > 0
+
+
+def test_sum_cutoff_and_region_rows():
+    assert sum_cutoff(date(2026, 10, 19)) == "202506" and sum_cutoff(date(2026, 1, 5)) == "202409"
+    other = [dict(r, apt_seq="11710-" + r["apt_seq"]) for r in _rows("11710", "202609")]
+    sums = summarize(_rows("11680", "202609") + other)
+    rr = region_rows(sums)
+    assert [r["region_code"] for r in rr] == ["11680", "11710"]
+    assert rr[0]["n_jeonse"] + rr[0]["n_wolse"] == 5 and rr[0]["n_jeonse_new"] + rr[0]["n_jeonse_renew"] <= rr[0]["n_jeonse"]
+
+
+def test_roll_sums_moves_old_months_to_files():
+    if not URL:
+        return
+    db, store = _db(), LocalDirStore(tempfile.mkdtemp())
+    from jobs.rent_archive import SUMMARY_COLUMNS, summary_sql
+    for m in ("202504", "202505", "202506"):
+        db.query("\n".join(["BEGIN;", *summary_sql(m, ["11680"], summarize(_rows("11680", m))), "COMMIT;"]))
+    store.put(sum_name("11680"), encode([{c: "x" if c == "apt_name" else "1" for c in SUMMARY_COLUMNS} | {"contract_month": "202001", "apt_seq": "old", "area_group": "84"}],
+                                        SUMMARY_COLUMNS))
+    assert roll_sums(db, store, date(2026, 10, 19)) == 0           # 202506 부터 남긴다
+    assert [r["m"] for r in select(db, "SELECT DISTINCT contract_month AS m FROM rent_monthly")] == ["202506"]
+    f = list(iter_sums(store, ["11680", "11710"]))
+    assert {r["contract_month"] for r in f} == {"202001", "202504", "202505"}   # 있던 달은 그대로, 옮긴 달 추가
+    assert list(iter_sums(store, ["11680"], "202505"))[0]["contract_month"] == "202505"
+    assert select(db, "SELECT count(*) AS n FROM rent_region_month")[0]["n"] == 3   # 지역 합계는 DB 에 계속
+    assert roll_sums(db, store, date(2026, 10, 19)) == 0           # 옮길 것 없음

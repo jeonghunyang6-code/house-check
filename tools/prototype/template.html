@@ -1161,6 +1161,9 @@ function drawCx(c) {
     ? `상대강도(B6): 같은 생활권(판정 단지 5곳 미만이면 같은 구) 단지들의 12개월 중앙값 ${(+c.phase.region_chg_12m).toFixed(1)}% 대비 ${(+c.phase.rel_strength > 0 ? '+' : '') + (+c.phase.rel_strength).toFixed(1)}%p. ${+c.phase.rel_strength < 0 ? '지역보다 덜 오른 "약한 파도"' : '지역보다 더 오름'}(📖 상승의 차이 p.420~421). `
     : '상대강도(B6)는 국면을 판정한 단지만 계산합니다.');
   if (c.m && c.m.turnover_pct != null) notes.push(`월 거래 회전율(C2): 단지 전체 월 거래 ÷ 세대수 = ${(+c.m.turnover_pct).toFixed(2)}% (집계 끝난 최근 12개월 평균). 📖 0.5~0.8%면 꽤 괜찮은 거래량(p.137) → <b>${c.m.turnover_state}</b>.`);
+  if (c.m && c.m.c6_band_hh != null) notes.push(`이 평형대 거래(C6): 같은 전용면적 구간 ${Number(c.m.c6_band_hh).toLocaleString()}세대, 월 회전율 ${(+c.m.c6_band_turn).toFixed(2)}%(같은 구 같은 구간 중앙값 ${(+c.m.c6_region_med).toFixed(2)}%)`
+    + (c.m.c6_reason ? ` → 거래가 적음, 이유: <b>${{'세대수 적음': '이 평형 세대수가 적음(공급 부족)', '이 평형만 적음': '단지 전체는 괜찮은데 이 평형만 적음', '단지 전체 적음': '단지 전체 거래가 적음(수요 부족 의심)'}[c.m.c6_reason]}</b>` : ' → 거래 적지 않음')
+    + `. ▶ 거래가 없으면 수요 부족인지 세대수(공급) 부족인지 나눠 본다(도대체 얼마야? 3:51). 🔧 구 중앙값의 절반 미만이면 '적음', 구간 100세대 미만이면 '세대수 적음'(1년 거래 0건 비율이 100세대 미만 29~53%, 이상 6~10%). 토지거래허가구역은 거래 자체가 눌린다.`);
   if (c.reg && c.reg.jr) notes.push(`같은 구 평균 전세가율(D1 지역): ${c.reg.jr[1].toFixed(1)}%(${c.reg.jr[0].slice(0, 4)}.${c.reg.jr[0].slice(4)}, 한국부동산원 표본 중위)${c.reg.jr_seoul ? ` · 서울 ${c.reg.jr_seoul[1].toFixed(1)}%` : ''}`
     + `${c.ratio != null ? ` · 이 단지 ${c.ratio.toFixed(0)}%` : ''}. ▶ 시장 평균 60% 균형, 50% 이하면 투자 수요 유입 어려움, 80~90% 조심. 지역 평균과 단지값은 다를 수 있다(📖 p.131~132).`);
   if (c.reg && c.reg.school) {
@@ -1168,6 +1171,13 @@ function drawCx(c) {
     notes.push(`구 인구(주민등록, ${yy(c.reg.school)} 12월): 학령인구(5~19세) ${Number(c.reg.school[3]).toLocaleString()}명 ${ch(c.reg.school)}`
       + (c.reg.working ? ` · 생산가능인구(15~64세) ${ch(c.reg.working)}` : '') + (c.reg.total ? ` · 전체 ${ch(c.reg.total)}` : '')
       + '. 📖 학령인구가 줄면 최상위 학군은 더 견고, 중간 학군은 약해진다(p.89~95). 생산가능인구는 상승 여력 점검 항목(▶ 상승여력 있는지 확인하는 법 0:47).');
+  }
+  if (c.loc && c.loc.ac != null) notes.push(`학원가(H3): ${c.loc.umd_name} 입시·보습 학원·교습소 ${Number(c.loc.ac).toLocaleString()}곳 → 수도권 ${Number(c.loc.n).toLocaleString()}개 동 중 <b>${c.loc.rk}위</b>. `
+    + '▶ 학군지는 구축인데도 전세가 높고 하락장에 강하다, 학령인구가 줄면 최상위 학군만 견고(학생이 없어 2:22·6:37). 법정동이 크면(송도·다산·청라) 학원 수가 많아 학군지가 아니어도 순위가 높다 — 2026-10-19 확인 결과 학원 수만으로는 하락장 강세가 뚜렷하지 않음(상위 급지에선 덜 빠지고 하위 급지에선 오히려 더 빠짐).');
+  if (c.reg && c.reg.income) {
+    const I = c.reg.income;
+    notes.push(`주민 소득(H6): ${I[6]} 1인당 근로소득(총급여, 사는 곳 기준) ${I[2]}년 <b>${Number(I[3]).toLocaleString()}만원</b> → 수도권 ${I[5]}곳 중 ${I[4]}위${I[1] ? ` (${I[0]}년 ${Number(I[1]).toLocaleString()}만원에서 ${((I[3] / I[1] - 1) * 100).toFixed(0)}% 증가)` : ''}. `
+      + '📖 한계 시세는 그 지역 주민 소득·자산이 정한다(p.218~219). 근로소득만이라 자산·사업소득은 빠짐. 2026-10-19 확인: 시군구 84㎡ 대표가와 소득은 함께 움직이지만(로그 상관 0.73) 강남(36배)·강동(36배)처럼 소득 대비 배율은 비슷해 이 값만으로 천장을 판정하지 않는다.');
   }
   if (c.m && c.m.d4_jeonse_chg != null) notes.push(`전세 1년 변화(D4): ${(+c.m.d4_jeonse_chg > 0 ? '+' : '') + (+c.m.d4_jeonse_chg).toFixed(1)}% (최근 3개월 vs 1년 전, 건수 ${c.m.d4_n}, 월별 중앙값 근사). `
     + (c.m.d4_cause ? `<b>전세가 내림 → 원인: ${c.m.d4_cause}</b>. ` + (c.m.d4_cause === '둘 다 아님' ? '입주장도 매매 하락도 아니라 단지 사정(층·동 구성, 월세 전환, 표본)일 수 있음. ' : '') : '')
@@ -1231,6 +1241,12 @@ function drawCx(c) {
     if (g.flag_rebuild) extra.push(`30년 넘은 단지 거래 ${Math.round(g.old_share * 100)}%(노후 비중일 뿐 정비사업 진행 여부와 다름)`);
     if (g.flag_gap) extra.push(`동 안 가격 폭 ${eok(g.q1_10k)}~${eok(g.q3_10k)}`);
     notes.push(`급지(E1): ${g.umd_name} 84㎡ 환산 실거래 대표가 ${eok(g.value_10k)} → ${g.grade}급지(${rng}, 단지 ${g.n_complex}곳, ${g.asof} 계산)${extra.length ? '. ' + extra.join(' · ') : ''}. 경계 15억·25억은 주담대 상한 경계, 나머지는 🔧.`);
+  }
+  if (c.loc && (c.loc.up_m != null || c.loc.top_m != null)) {
+    const km = (m) => `${(m / 1000).toFixed(1)}km`;
+    notes.push(`상급지까지 거리(E8): ` + [c.loc.up_m != null ? `가장 가까운 위 급지 <b>${c.loc.up_dong}</b>(${c.loc.up_grade}급지) ${km(c.loc.up_m)}` : '',
+      c.loc.top_m != null && c.loc.top_dong !== c.loc.up_dong ? `1~2급지 <b>${c.loc.top_dong}</b> ${km(c.loc.top_m)}` : ''].filter(Boolean).join(' · ')
+      + '. 동 중심까지 직선거리. 📖 입지는 업무지구·학군·상급지와의 절대거리(p.85~103). 🔧 1~2급지 = 84㎡ 환산 25억+.');
   }
   $('#cxNotes').innerHTML = notes.map(n => `<p class="muted" style="margin:0">${n}</p>`).join('');
 }

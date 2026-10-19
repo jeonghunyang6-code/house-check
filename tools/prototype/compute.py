@@ -42,7 +42,20 @@ def reg(rc):
         ps = RM.get((f'pop_{k}', rc), [])
         if len(ps) >= 6:
             out[k] = [ps[-6][0], ps[-6][1], ps[-1][0], ps[-1][1]]
+    inc = d.get('income', [])
+    if inc:
+        y1 = max(r['year'] for r in inc)
+        last = [r for r in inc if r['year'] == y1]          # 1인당 많은 순
+        me = next((r for r in last if rc in (r['region_codes'] or '').split(',')), None)
+        old = me and next((r for r in inc if r['year'] != y1 and r['sido'] == me['sido'] and r['name'] == me['name']), None)
+        if me:
+            out['income'] = [old['year'] if old else None, old['avg_pay_10k'] if old else None, y1, me['avg_pay_10k'],
+                             last.index(me) + 1, len(last), f"{me['sido']} {me['name']}"]
     return out
+def loc(seq):
+    """E8 상급지까지 거리 + H3 학원가 순위."""
+    z = next((x for x in d.get('cx_loc', []) if x['apt_seq'] == seq), None)
+    return {k: v for k, v in z.items() if k != 'apt_seq'} if z else None
 from collector.policy import regulated_now, zones_for
 from collector.projects import PROJECTS
 import calendar
@@ -113,12 +126,13 @@ for seq in d['seqs']:
     cx.append({'grade': gr and gr['grade'] is not None and {k: gr[k] for k in ('umd_name', 'grade', 'value_10k', 'q1_10k', 'q3_10k', 'n_complex', 'old_share', 'flag_rebuild', 'flag_gap', 'new_big_name', 'new_big_10k', 'asof')},
                'hh': gr and gr['households'],
                'm': m84 and {k: m84.get(k) for k in ('jeonse_24m_10k', 'jeonse_24m_n', 'jeonse_24m_approx', 'reverse_risk', 'reserve_10k', 'real_ref_10k', 'base2020_10k', 'real_chg_2020',
-               'turnover_pct', 'turnover_state', 'e3_target_10k', 'e3_chg_12m', 'rel_strength_e3', 'e2_ratio', 'e2_n', 'e2_basis', 'e4_cap_10k', 'e4_cap_n', 'e4_compress', 'e4_sizes', 'f1_zone_24m', 'f1_sgg_24m', 'f1_ipju', 'f1_next', 'd4_jeonse_chg', 'd4_n', 'd4_cause', 'a5_est_10k', 'a5_from_ag', 'a5_n')},
+               'turnover_pct', 'turnover_state', 'e3_target_10k', 'e3_chg_12m', 'rel_strength_e3', 'e2_ratio', 'e2_n', 'e2_basis', 'e4_cap_10k', 'e4_cap_n', 'e4_compress', 'e4_sizes', 'f1_zone_24m', 'f1_sgg_24m', 'f1_ipju', 'f1_next', 'd4_jeonse_chg', 'd4_n', 'd4_cause', 'a5_est_10k', 'a5_from_ag', 'a5_n', 'c6_band_hh', 'c6_band_turn', 'c6_region_med', 'c6_reason')},
                'proj_st': [[z['name'], z['status'], z['st'], int(float(z['m']))] for z in d.get('cx_proj', []) if z['apt_seq'] == seq],
                'acc': next(({k: z[k] for k in ('station_name', 'station_m', 'h2_cbd_min', 'h2_cbd_tr', 'h2_ybd_min', 'h2_ybd_tr', 'h2_gbd_min', 'h2_gbd_tr')} for z in d.get('cx_access', []) if z['apt_seq'] == seq), None),
                'liq': liq(seq, gr),
                'e6t': [[nm6.get(r['target_seq'], r['target_seq']), float(r['ratio_now']), float(r['gap_pct']), r['dist_m']] for r in d.get('e6_targets', []) if r['apt_seq'] == seq][:3],
                'reg': reg(seq[:5]),
+               'loc': loc(seq),
                'zone': next(({k: z[k] for k in ('name', 'e5_ratio', 'e5_n', 'e7_new_ppm', 'e7_mid_ppm', 'e7_old_ppm', 'e7_n', 'f1_react_rel', 'f1_react_n')} for z in d.get('cx_zone', []) if z['apt_seq'] == seq), None),
                'e3': m84 and m84['e3_seqs'] and [n['apt_name'] for n in d.get('e3_names', []) if n['apt_seq'] in m84['e3_seqs'].split(',')],
                'phase': ph and {k: ph[k] for k in ('phase', 'chg_12m', 'up_months', 'down_months', 'last3', 'region_chg_12m', 'rel_strength')}, 'seq': seq, 'name': name, 'region': REG[seq[:5]], 'P': P, 'T': T, 'C': C, 'conf': conf, 'cn': cn if C else 0, 'cs': cspread,

@@ -437,4 +437,36 @@ c AS (
 UPDATE complex_metrics m SET a5_est_10k = round(c.o_ref::numeric / c.o_ag * c.ratio * c.area_group), a5_from_ag = c.o_ag, a5_n = c.n
 FROM c WHERE m.apt_seq = c.apt_seq AND m.area_group = c.area_group;
 
+-- 11) C6 거래 적은 이유 (관점 V3, ▶ "도대체 얼마야?" 3:51, 📖 p.472~473): 수요 부족 vs 공급(세대수) 부족.
+--     면적군 → K-apt 전용면적 구간(60 미만·85 미만·135 미만·그 위, 면적군은 전용 내림이라 60.x 는 60~85 구간), 구간 월 회전율 = C2 와 같은 12개월.
+--     거래가 적다 = 같은 시군구·같은 구간 단지들 중앙값의 🔧 절반 미만 (📖 0.5%(p.137)를 구간에 그대로 쓰면 2025~26년엔 거의 다 걸려서 상대 비교).
+--     이유: 구간 🔧 100세대 미만 '세대수 적음' / 단지 C2 가 같은 구 중앙값 이상 '이 평형만 적음' / 그 밖 '단지 전체 적음'.
+--     근거 2026-10-19: 1년 거래 0건 비율이 구간 100세대 미만 29~53%, 이상 6~10%
+UPDATE complex_metrics SET c6_band_hh = NULL, c6_band_turn = NULL, c6_region_med = NULL, c6_reason = NULL;
+WITH tv AS (
+  SELECT d.apt_seq, CASE WHEN d.area_group < 60 THEN 1 WHEN d.area_group < 85 THEN 2 WHEN d.area_group < 135 THEN 3 ELSE 4 END AS band,
+         count(*) / 12.0 AS per_month FROM deals d
+  WHERE NOT d.is_cancelled
+    AND d.contract_month BETWEEN to_char(date_trunc('month', {TODAY}::date) - INTERVAL '13 month', 'YYYYMM')
+                             AND to_char(date_trunc('month', {TODAY}::date) - INTERVAL '2 month', 'YYYYMM')
+  GROUP BY 1, 2
+), b AS (
+  SELECT c.apt_seq, c.region_code, x.band, x.hh FROM complexes c JOIN kapt_complexes k ON k.kapt_code = c.kapt_code,
+  LATERAL (VALUES (1, k.hh_lt60), (2, k.hh_60_85), (3, k.hh_85_135), (4, k.hh_gt135)) AS x(band, hh)
+  WHERE k.households > 0 AND x.hh > 0
+), j AS (
+  SELECT b.apt_seq, b.region_code, b.band, b.hh, coalesce(tv.per_month, 0) * 100.0 / b.hh AS t FROM b LEFT JOIN tv USING (apt_seq, band)
+), rm AS (
+  SELECT region_code, band, percentile_cont(0.5) WITHIN GROUP (ORDER BY t) AS med FROM j GROUP BY 1, 2
+), cm AS (
+  SELECT c.region_code, percentile_cont(0.5) WITHIN GROUP (ORDER BY x.turnover_pct) AS med
+  FROM (SELECT DISTINCT apt_seq, turnover_pct FROM complex_metrics WHERE turnover_pct IS NOT NULL) x JOIN complexes c USING (apt_seq) GROUP BY 1
+)
+UPDATE complex_metrics m SET c6_band_hh = j.hh, c6_band_turn = round(j.t::numeric, 2), c6_region_med = round(rm.med::numeric, 2),
+  c6_reason = CASE WHEN j.t >= rm.med * 0.5 THEN NULL WHEN j.hh < 100 THEN '세대수 적음'
+                   WHEN m.turnover_pct >= cm.med THEN '이 평형만 적음' ELSE '단지 전체 적음' END
+FROM j JOIN rm USING (region_code, band) LEFT JOIN cm USING (region_code)
+WHERE m.apt_seq = j.apt_seq
+  AND j.band = CASE WHEN m.area_group < 60 THEN 1 WHEN m.area_group < 85 THEN 2 WHEN m.area_group < 135 THEN 3 ELSE 4 END;
+
 COMMIT;

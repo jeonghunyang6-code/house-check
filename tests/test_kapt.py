@@ -24,6 +24,7 @@ def test_info_row():
                   "codeHeatNm": "지역난방", "kaptMparea85": 1848.0})
     assert r["households"] == 3375 and r["use_date"] == date(2023, 2, 28) and r["dong_cnt"] == 35 and r["hh_60_85"] == 1848
     assert info_row({"kaptUsedate": "00000000"})["use_date"] is None
+    assert info_row({"kaptdaCnt": 0.0, "hoCnt": 2529})["households"] == 2529     # 세대수 0 → 호수
 
 
 def test_match_priority_and_ambiguity():
@@ -44,6 +45,27 @@ def test_match_priority_and_ambiguity():
     m = match_complexes(cx, kapts)
     assert {k: (v.kapt_code, v.method) for k, v in m.items()} == {
         "s1": ("A1", "jibun"), "s2": ("A3", "jibun"), "s4": ("A4", "road"), "s5": ("A5", "name")}
+
+
+def test_match_narrows_same_jibun():
+    # 2026-10-19 실제 DB에서 미연결이던 사례 (같은 지번에 K-apt 단지 여럿)
+    def k(code, name, sale="분양"):
+        return {"kapt_code": code, "kapt_name": name, "bjd_code": "1", "addr": f"서울 중구 신당동 844 {name}", "road_addr": None, "sale_type": sale}
+    kapts = [k("N1", "신당남산타운임대", "임대"), k("N2", "신당남산타운(분양)")]
+    cx = [{"apt_seq": "s", "apt_name": "남산타운", "bjd_code": "1", "jibun": "844", "road_addr": ""}]
+    assert match_complexes(cx, kapts)["s"].kapt_code == "N2"                      # 임대 동 빼기
+    kapts = [k("P1", "중동포도마을삼보"), k("P2", "중동포도마을영남")]
+    cx = [{"apt_seq": "s", "apt_name": "포도마을(영남)", "bjd_code": "1", "jibun": "844", "road_addr": ""}]
+    assert match_complexes(cx, kapts)["s"].kapt_code == "P2"                      # 건설사 이름 조각
+    kapts = [k("D2", "덕유마을주공2단지"), k("D4", "중동덕유마을주공4단지"), k("D1", "중동덕유1(공단)", "임대")]
+    cx = [{"apt_seq": "s", "apt_name": "덕유마을(주공4)", "bjd_code": "1", "jibun": "844", "road_addr": ""}]
+    assert match_complexes(cx, kapts)["s"].kapt_code == "D4"                      # 차수·단지 번호
+    kapts = [k("T1", "산본주공퇴계1차아파트"), k("T2", "금정퇴계2차")]
+    cx = [{"apt_seq": "s", "apt_name": "퇴계주공(360~368동)", "bjd_code": "1", "jibun": "844", "road_addr": ""}]
+    assert "s" not in match_complexes(cx, kapts)                                  # 가릴 근거 없음 → 미연결
+    kapts = [k("S1", "연수시영1차(분양)"), k("S2", "연수승기마을"), k("S3", "연수1차시영임", "임대")]
+    cx = [{"apt_seq": "s", "apt_name": "승기마을,연수1차시영", "bjd_code": "1", "jibun": "844", "road_addr": ""}]
+    assert "s" not in match_complexes(cx, kapts)                                  # 묶은 이름은 하나만 고르지 않음
 
 
 def test_get_json_unexpected_body_is_api_error():

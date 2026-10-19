@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 import urllib.error
 import urllib.parse
@@ -125,6 +126,27 @@ def fetch_unsold_sgg(start: str, end: str) -> list[dict]:
             if r["C2_NM"] != "계" and k in out:
                 out[k]["unsold_done"] = int(float(r["DT"]))
     return sorted(out.values(), key=lambda x: (x["period"], x["sido"], x["name"]))
+
+
+# H6 주민 소득 (관점 D7, 📖 한계 시세 = 그 지역 주민 소득·자산 p.218~219, ▶ D7 0:47): 국세청 시·군·구별 근로소득 연말정산 신고현황(주소지),
+# orgId 133 DT_133001N_4215, 연간 2016~ (2026-10-19 확인, 2023년까지). 총급여 = 신고현황 B02 '과세대상근로소득(총급여)', 금액 백만원·인원 명.
+# 일하는 곳이 아니라 사는 곳 기준. 경기는 시 단위('수원시'), 인천 '미추홀구(남구)'처럼 옛 이름이 괄호로 붙는다
+INCOME_TABLE = "DT_133001N_4215"
+INCOME_SIDO = {"A01": "서울", "A02": "인천", "A03": "경기"}
+
+
+def fetch_income(start: str, end: str) -> list[dict]:
+    """[{year, sido, name, persons, pay_mil}] 수도권 시군구만 (시도 합계 행은 뺀다)."""
+    out: dict[tuple[str, str], dict] = {}
+    for r in _rows(_call({"orgId": "133", "tblId": INCOME_TABLE, "itmId": "ALL", "objL1": "ALL", "objL2": "B02",
+                          "prdSe": "Y", "startPrdDe": start, "endPrdDe": end})):
+        sido = INCOME_SIDO.get(r["C1"][:3])
+        if not sido or len(r["C1"]) == 3:
+            continue
+        name = re.sub(r"\(.*?\)", "", r["C1_NM"]).strip()
+        g = out.setdefault((r["PRD_DE"], r["C1"]), dict(year=r["PRD_DE"], sido=sido, name=name, persons=None, pay_mil=None))
+        g["persons" if r["ITM_ID"] == "T001" else "pay_mil"] = int(float(r["DT"]))
+    return sorted((x for x in out.values() if x["persons"] and x["pay_mil"] is not None), key=lambda x: (x["year"], x["sido"], x["name"]))
 
 
 def _rows(j: list | dict) -> list[dict]:

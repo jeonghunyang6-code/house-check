@@ -115,10 +115,10 @@ def run(db: Db) -> dict[str, tuple]:
         sig["g5_unemployment"] = (None, "데이터 없음", "계절조정 실업률")
     sig["b4_class"] = (met, cls if falling else "해당 없음",
                        f"수도권 국면 {sudo_phase}. 하락장·일시 조정 또는 최근 3개월 연속 하락일 때만 판정. 조건 {met}/{known}개 충족 (판단 가능 {known}/3)")
-    # D5 서울 신규 전세 감소 + 전세가 상승 (rent_monthly 는 서울만 2020년~)
+    # D5 서울 신규 전세 감소 + 전세가 상승 (rent_region_month: 시군구 × 달 합계, 전체 기간 0053)
     last_complete = (date.today().replace(day=1) - timedelta(days=1)).replace(day=1) - timedelta(days=1)  # 지지난 달 말
     cnt = {r["m"]: (int(r["jn"]), int(r["jr"])) for r in select(
-        db, "SELECT contract_month AS m, sum(n_jeonse_new) AS jn, sum(n_jeonse_renew) AS jr FROM rent_monthly "
+        db, "SELECT contract_month AS m, sum(n_jeonse_new) AS jn, sum(n_jeonse_renew) AS jr FROM rent_region_month "
             "WHERE region_code LIKE '11%' AND contract_month >= '202106' GROUP BY 1")}
     js = [v for _, v in series(db, "jeonse", 6).get(SEOUL, [])]
     jchg = round((js[-1] / js[-14] - 1) * 100, 2) if len(js) >= 14 else None

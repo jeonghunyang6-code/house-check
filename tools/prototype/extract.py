@@ -54,15 +54,32 @@ for _rc in sorted({s.split('-')[0] for s in SEQS}):
 out['cx_deals'].sort(key=lambda r: r['cd'])
 out['cx_rent'] = select(db, f"""SELECT apt_seq, contract_month m, area_group, n_jeonse, jeonse_median_10k, n_jeonse_new, jeonse_new_median_10k, n_jeonse_renew
  FROM rent_monthly WHERE apt_seq IN ({sl}) AND area_group IN (84,85) ORDER BY contract_month""")
+# DB 에는 최근 17개월만(0053). 그 전은 시군구별 rentsum 파일
+from jobs.rent_archive import iter_sums
+_rfirst = min((r['m'] for r in out['cx_rent']), default='999999')
+for r in iter_sums(_store, sorted({s.split('-')[0] for s in SEQS})):
+    if r['apt_seq'] in SEQS and int(r['area_group']) in (84, 85) and r['contract_month'] < _rfirst:
+        out['cx_rent'].append(dict(apt_seq=r['apt_seq'], m=r['contract_month'], area_group=int(r['area_group']),
+                                   **{k: (int(r[k]) if r[k] != '' else None) for k in ('n_jeonse', 'jeonse_median_10k', 'n_jeonse_new', 'jeonse_new_median_10k', 'n_jeonse_renew')}))
+out['cx_rent'].sort(key=lambda r: r['m'])
 out['cx_phase'] = select(db, f"""SELECT apt_seq, area_group, phase, pattern, chg_12m, up_months, down_months, last3, region_chg_12m, rel_strength,
  jeonse_10k, jeonse_n, jeonse_src, jeonse_24m_10k, jeonse_24m_n, jeonse_24m_approx, reverse_risk, reserve_10k, real_ref_10k, base2020_10k, real_chg_2020,
  households, turnover_pct, turnover_state, e3_seqs, e3_target_10k, e3_chg_12m, rel_strength_e3, e2_ratio, e2_n, e2_basis, e4_cap_10k, e4_cap_n, e4_compress, e4_sizes,
- f1_zone_24m, f1_sgg_24m, f1_ipju, f1_next, d4_jeonse_chg, d4_n, d4_cause, a5_est_10k, a5_from_ag, a5_n
+ f1_zone_24m, f1_sgg_24m, f1_ipju, f1_next, d4_jeonse_chg, d4_n, d4_cause, a5_est_10k, a5_from_ag, a5_n, c6_band_hh, c6_band_turn, c6_region_med, c6_reason
  FROM complex_metrics WHERE apt_seq IN ({sl}) AND area_group IN (84,85)""")
 out['e3_names'] = select(db, f"""SELECT apt_seq, apt_name FROM complexes WHERE apt_seq IN (
  SELECT unnest(string_to_array(e3_seqs, ',')) FROM complex_metrics WHERE apt_seq IN ({sl}) AND area_group IN (84,85))""")
 out['cx_access'] = select(db, f"""SELECT apt_seq, station_name, station_m, h2_cbd_min, h2_cbd_tr, h2_ybd_min, h2_ybd_tr, h2_gbd_min, h2_gbd_tr
  FROM complexes WHERE apt_seq IN ({sl})""")
+# E8 상급지까지 거리 (complex_e8, jobs/locality.py) + H3 학원가 규모의 수도권 동 순위 (complexes.academy_exam, 법정동 단위)
+out['cx_loc'] = select(db, f"""WITH a AS (SELECT region_code, umd_name, max(academy_exam) ac FROM complexes WHERE academy_exam IS NOT NULL GROUP BY 1, 2),
+ r AS (SELECT region_code, umd_name, ac, rank() OVER (ORDER BY ac DESC) rk, count(*) OVER () n FROM a)
+SELECT c.apt_seq, c.umd_name, r.ac, r.rk, r.n, d.grade, d.up_dong, d.up_grade, d.up_m, d.top_dong, d.top_m
+ FROM complexes c LEFT JOIN r ON r.region_code = c.region_code AND r.umd_name = c.umd_name LEFT JOIN complex_e8 d ON d.apt_seq = c.apt_seq
+ WHERE c.apt_seq IN ({sl})""")
+# H6 주민 소득 (region_income, jobs/macro.py): 수도권 시군구 1인당 근로소득, 5년 전과 최신
+out['income'] = select(db, """SELECT year, sido, name, region_codes, avg_pay_10k FROM region_income
+ WHERE year IN ((SELECT max(year) FROM region_income), (SELECT (max(year)::int - 5)::text FROM region_income)) ORDER BY year, avg_pay_10k DESC""")
 # C3·C4 하락기 환금성 (complex_liquidity, jobs/liquidity.py)
 out['cx_liq'] = select(db, f"""SELECT apt_seq, households, peak_m, trough_m, drop_pct, window_src, down_n, down_turnover, down_rank, up_n, up_turnover, keep_ratio, keep_rank,
   (SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY keep_ratio) FROM complex_liquidity x WHERE x.region_code = l.region_code) AS keep_region_med,

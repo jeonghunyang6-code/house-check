@@ -37,5 +37,8 @@ jobs:
           SGIS_CONSUMER_KEY: ${{ secrets.SGIS_CONSUMER_KEY }}
           SGIS_CONSUMER_SECRET: ${{ secrets.SGIS_CONSUMER_SECRET }}
           HC_DB_BACKEND: psql
+          HC_ARCHIVE: gh               # F1 입주 반응이 전세 요약 보관 파일(rentsum_<시군구>)을 읽는다
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           PYTHONUNBUFFERED: "1"
         run: python -m jobs.presale ${{ inputs.mode == 'prices' && '--prices-only' || '' }}
