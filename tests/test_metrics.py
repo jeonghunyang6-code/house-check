@@ -20,7 +20,7 @@ def _db():
               "0009_rone_weekly.sql", "0011_market.sql", "0012_macro.sql", "0013_macro_annual.sql", "0014_complex_phase.sql", "0015_quadrant_strength.sql",
               "0016_reverse_real.sql", "0008_complexes.sql", "0019_deal_anchor.sql", "0020_turnover_e3.sql",
               "0022_complex_geo.sql", "0023_adm_dong.sql", "0030_lifezone.sql", "0031_e2.sql", "0032_e4_e5_e7.sql", "0034_presale.sql", "0035_presale_total.sql", "0037_ipju_plan.sql",
-              "0039_rent_j24.sql", "0040_ref_spread.sql", "0047_d4_a5.sql"):
+              "0039_rent_j24.sql", "0040_ref_spread.sql", "0047_d4_a5.sql", "0051_c6_band.sql"):
         db.query((ROOT / "db" / "migrations" / m).read_text(encoding="utf-8"))
     return db
 
@@ -104,7 +104,8 @@ def test_metrics_turnover_e3():
     if not URL:
         return
     db = _db()
-    db.query("INSERT INTO kapt_complexes (kapt_code, kapt_name, region_code, households, listed_at) VALUES ('KA', 'a', '11680', 200, '2026-10-01'), ('KB', 'b', '11680', 1000, '2026-10-01');")
+    db.query("INSERT INTO kapt_complexes (kapt_code, kapt_name, region_code, households, hh_lt60, hh_60_85, listed_at) VALUES "
+             "('KA', 'a', '11680', 200, 0, 200, '2026-10-01'), ('KB', 'b', '11680', 1000, 940, 60, '2026-10-01');")
     db.query("INSERT INTO complexes (apt_seq, apt_name, region_code, umd_name, kapt_code, updated_at) VALUES "
              "('A', 'a', '11680', '역삼동', 'KA', '2026-10-01'), ('B', 'b', '11680', '역삼동', 'KB', '2026-10-01'), "
              "('C', 'c', '11680', '대치동', NULL, '2026-10-01');")
@@ -124,6 +125,9 @@ def test_metrics_turnover_e3():
     assert m["B"]["turnover_state"] == "적음" and m["C"]["turnover_pct"] is None
     assert (a["e3_seqs"], a["e3_target_10k"]) == ("B", 120000)
     assert m["B"]["e3_seqs"] is None          # C 는 B 보다 67% 비싸 범위 밖
+    # V3: 같은 구 84㎡ 구간 중앙값 0.25%. A 구간 200세대 0.5% → 이유 없음. B 구간 60세대, 12개월 거래 0 (절반 미만) → '세대수 적음'
+    assert (a["c6_band_hh"], float(a["c6_band_turn"]), float(a["c6_region_med"]), a["c6_reason"]) == (200, 0.5, 0.25, None)
+    assert (m["B"]["c6_band_hh"], float(m["B"]["c6_band_turn"]), m["B"]["c6_reason"]) == (60, 0.0, "세대수 적음")
 
 
 def test_metrics_e3_lifezone():

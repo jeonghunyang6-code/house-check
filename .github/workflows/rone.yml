@@ -46,8 +46,9 @@ jobs:
           case "$MODE" in weekly|backfill|breadth) ;; *) echo "알 수 없는 mode: $MODE"; exit 1 ;; esac
           rc=0
           python -m jobs.rone "$MODE" || rc=$?
-          python -m jobs.macro || rc=$?    # 거시 월별 지표 (macro_monthly: 실업률·주담대 금리·가계대출)
+          python -m jobs.macro || rc=$?    # 거시 월별 지표 (macro_monthly: 실업률·주담대 금리·가계대출), 시군구 미분양·근로소득(H6)
           python -m jobs.grade || rc=$?    # 급지 E1 (dong_grade, 85일마다만 다시 계산)
+          python -m jobs.locality || rc=$?   # E8 상급지까지 거리 (complex_e8)
           python -m jobs.market || rc=$?   # 국면·체크리스트 신호 (region_phase, market_signals)
           python -m jobs.rone buyer || rc=$?   # 매입자 거주지별 아파트 매매 (월간, 최근 3개월 다시)
           python -m jobs.balloon || rc=$?  # 풍선효과 (balloon, market_signals.g2_balloon)

@@ -157,7 +157,7 @@ def run_match(db: Db, regions: list[str]) -> int:
     rl = ", ".join(lit(r) for r in regions)
     cx = select(db, "SELECT apt_seq, apt_name, bjd_code, jibun, road_addr FROM complexes "
                     f"WHERE region_code IN ({rl}) AND (match_method IS NULL OR match_method <> 'manual')")
-    kp = select(db, f"SELECT kapt_code, kapt_name, bjd_code, addr, road_addr FROM kapt_complexes WHERE region_code IN ({rl})")
+    kp = select(db, f"SELECT kapt_code, kapt_name, bjd_code, addr, road_addr, sale_type FROM kapt_complexes WHERE region_code IN ({rl})")
     m = match_complexes(cx, kp)
     stmts = ["BEGIN;",
              f"UPDATE complexes SET kapt_code = NULL, match_method = NULL WHERE region_code IN ({rl}) AND match_method IS DISTINCT FROM 'manual';"]

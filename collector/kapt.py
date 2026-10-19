@@ -110,7 +110,8 @@ def info_row(item: dict) -> dict:
     return {
         "addr": (item.get("kaptAddr") or "").strip() or None,
         "road_addr": (item.get("doroJuso") or "").strip() or None,
-        "households": _int(item.get("kaptdaCnt")),
+        # 세대수(kaptdaCnt)가 0인 단지가 있다(2026-10-19 센트라스: 세대수 0, 호수 2,529, 면적별 세대수도 0) → 호수로
+        "households": _int(item.get("kaptdaCnt")) or _int(item.get("hoCnt")),
         "use_date": date(int(ud[:4]), int(ud[4:6]), int(ud[6:8])) if re.fullmatch(r"\d{8}", ud) and ud[4:] != "0000" else None,
         "dong_cnt": _int(item.get("kaptDongCnt")),
         "top_floor": _int(item.get("kaptTopFloor")),
@@ -210,6 +211,36 @@ def _names_match(a: str, b: str) -> bool:
     return bool(a and b) and (a in b or b in a)
 
 
+_TOKEN = re.compile(r"[가-힣a-z]{2,}")
+_ORD = re.compile(r"(?<![0-9])([0-9]{1,2})(?![0-9])")
+_GENERIC = {"아파트", "단지", "마을", "apt"}
+
+
+def _ords(s: str) -> set[str]:
+    return set(_ORD.findall(s.replace("-", " ")))
+
+
+def _narrow(cands: list[dict], name: str) -> dict | None:
+    """같은 지번·도로명에 K-apt 단지가 여럿일 때 하나로 좁힌다. 좁혀지지 않으면 None.
+    1) 임대 동 빼기(실거래는 분양분만 있다) 2) 이름 속 차수·단지 번호 3) 다른 후보엔 없는 이름 조각(건설사 등)
+    'A,B'처럼 여러 단지를 묶은 이름은 하나만 고르면 세대수가 작게 잡히므로 1)만 한다."""
+    pool = cands
+    if "임대" not in name:
+        pool = [k for k in pool if k.get("sale_type") != "임대" and "임대" not in (k["kapt_name"] or "")] or pool
+    if "," in name:
+        return pool[0] if len(pool) == 1 else None
+    if len(pool) > 1:
+        n = _ords(name)
+        hit = [k for k in pool if n & _ords(k["kapt_name"] or "")]
+        pool = hit or pool
+    if len(pool) > 1:
+        toks = [t for t in _TOKEN.findall(name.lower()) if t not in _GENERIC]
+        score = [sum(t in norm_name(k["kapt_name"]) for t in toks) for k in pool]
+        if max(score) > min(score):
+            pool = [k for k, x in zip(pool, score) if x == max(score)]
+    return pool[0] if len(pool) == 1 else None
+
+
 @dataclass(frozen=True)
 class Match:
     kapt_code: str
@@ -237,7 +268,9 @@ def match_complexes(complexes: list[dict], kapts: list[dict]) -> dict[str, Match
         if len(cands) == 1:
             return cands[0]
         named = [k for k in cands if _names_match(name, k["kapt_name"])]
-        return named[0] if len(named) == 1 else None
+        if len(named) == 1:
+            return named[0]
+        return _narrow(cands, name)
 
     out: dict[str, Match] = {}
     for c in complexes:
@@ -253,6 +286,7 @@ def match_complexes(complexes: list[dict], kapts: list[dict]) -> dict[str, Match
             out[c["apt_seq"]] = Match(k["kapt_code"], "road")
             continue
         named = [k for k in by_bjd.get(c.get("bjd_code") or "", []) if _names_match(name, k["kapt_name"])]
-        if len(named) == 1:
-            out[c["apt_seq"]] = Match(named[0]["kapt_code"], "name")
+        k = named[0] if len(named) == 1 else (_narrow(named, name) if named else None)
+        if k:
+            out[c["apt_seq"]] = Match(k["kapt_code"], "name")
     return out
