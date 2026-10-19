@@ -36,8 +36,13 @@ def _f(v) -> float:
         return 0.0
 
 
+VL_MAX = 2000   # 🔧 이보다 큰 용적률은 대장 입력 오류로 보고 버린다(2026-10-19 10만% 넘는 값으로 저장이 멈췄다)
+
+
 def _row(src: str, plat: float, vl: float, estm: float, tot: float, hh: int, nb: int) -> dict:
     calc = round(estm / plat * 100, 1) if plat > 0 and estm > 0 else None
+    vl = vl if 0 < vl <= VL_MAX else 0
+    calc = calc if calc is not None and calc <= VL_MAX else None
     return {"src": src, "plat_area": plat or None, "vl_rat": vl or None, "vl_rat_calc": calc, "estm_area": estm or None,
             "tot_area": tot or None, "hhld": hh or None, "main_bld": nb or None,
             "land_per_hh": round(plat / hh, 1) if plat > 0 and hh > 0 else None}

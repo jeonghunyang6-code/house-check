@@ -2,7 +2,10 @@
 -- 대지면적: 건축물대장 총괄표제부 값이 있으면 그것, 없으면 VWorld 대표 필지 면적(2026-10-19 두 값이 다 있는 877곳 중 82%가 ±10% 안, 중앙값 비 1.00).
 -- 대표 필지 하나만 잡혀 작게 나오는 단지(여러 필지)는 계산 용적률이 용도지역 법정 상한(국토계획법 시행령 제85조:
 -- 1종 200·2종 250·3종 300·준주거 500%)의 🔧 1.3배를 넘으면 suspect 로 표시하고 용적률·대지지분을 비운다
-CREATE OR REPLACE VIEW complex_rebuild AS
+-- complex_bldg 칸 넓히기: 대장에 비정상 용적률(10만% 이상)이 있어 2026-10-19 bldg 수집이 numeric overflow 로 멈췄다(값은 collector/bldg.py 가 거른다)
+DROP VIEW IF EXISTS complex_rebuild;
+ALTER TABLE complex_bldg ALTER COLUMN vl_rat TYPE NUMERIC(12, 2), ALTER COLUMN vl_rat_calc TYPE NUMERIC(12, 1), ALTER COLUMN land_per_hh TYPE NUMERIC(12, 1);
+CREATE VIEW complex_rebuild AS
 WITH c AS (
   SELECT c.apt_seq, c.build_year, k.households,
     c.bjd_code || '1' || lpad(split_part(c.jibun, '-', 1), 4, '0') || lpad(coalesce(nullif(split_part(c.jibun, '-', 2), ''), '0'), 4, '0') AS pnu,
