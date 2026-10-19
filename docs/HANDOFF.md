@@ -86,7 +86,9 @@
 - **H5 서울 정비사업 단계**: `redev_zone`·`complex_redev`(0055), `collector/redev.py`·`jobs/redev.py`·`redev.yml`(매주 수 06:27 KST). 서비스명 TbSeoulRedevStatus 는 임시 점검 워크플로로 러너에서 찾음(OA-23112 서울플랜+ `upisRebuild` 는 구역 고시 기록이라 단계가 없음). 첫 실행 2026-10-19 496곳. 지번 주소 표기가 제각각('양천구목동903', '쌍문2동 81번지', '압구정동414') → `parse_addr`(구 이름은 목록으로만 뗌). 재건축 145/166 구역 연결
 - **H5 건축물대장**: `complex_bldg`(0054), `collector/bldg.py`·`jobs/bldg.py`·`bldg.yml`(매일 04:07 KST, 4,000곳씩). 오래된 단지는 총괄표제부 대지면적·용적률이 0 인 경우가 많다
 - 시안 ④: 정비사업 단계(날짜순)·조합설립 전 경고(📖 p.374~397), 건축물대장 용적률·세대당 대지. 예시 8곳은 정비사업 구역이 아니라 안 보임(은마로 따로 확인함). 버전 27
-- **머지 전에 지울 것**: redev.yml·bldg.yml 의 임시 `push:` 조건(브랜치에서 첫 실행하려고 붙임)
+- redev.yml·bldg.yml 의 첫 실행용 임시 `push:` 조건은 머지 전에 지움
+- **경기 전월세 백필 완료**(run 39259362147, 성공): 47개 시군구 × 2020-01~2026-08 = 3,760칸. rent_monthly 경기 2025-06~ 14.5만 행, 그 전은 rentsum 파일. DB 461 → 481MB
+- **rentroll 첫 실행 실패**(run 39261749559): `roll_sums` 가 서울·인천 옛 요약 약 68만 행을 한 번에 select 하다 psql 300초 제한. 머지된 daily 도 같은 단계에서 실패할 뻔 → 달마다 읽게 고치고, daily 에서는 실패해도 다른 단계를 막지 않게 try/except. 머지 뒤 rentroll 다시 실행
 - **대지면적 보충 막힘(2026-10-19)**: `VWORLD_API_KEY` 는 GitHub secret 에 있음(길이 36 확인). 그러나 api.vworld.kr 토지특성이 이 세션·Actions 러너 모두 'Connection died' — 해외 IP 차단으로 보임, 우회 안 함. 공공데이터포털의 옛 NSDI 토지특성·토지이용·개별공시지가(1611000/nsdi/...)는 'NO_OPENAPI_SERVICE_ERROR'(폐기, VWorld 로 이전). 남은 길: 사용자 PC(국내 IP)에서 VWorld 로 받아 올리기
 
 **D9 일반분양·R9 검색량 (2026-10-19 busy-meitner 4차)**

@@ -6,9 +6,6 @@ on:
   schedule:
     - cron: "27 21 * * 2"   # 매주 수요일 06:27 KST
   workflow_dispatch:
-  push:                     # 첫 실행 확인용(브랜치 머지 전). 머지할 때 지운다
-    branches: [claude/busy-meitner-ojizbi]
-    paths: [.github/workflows/redev.yml, jobs/redev.py, collector/redev.py]
 
 permissions:
   contents: read

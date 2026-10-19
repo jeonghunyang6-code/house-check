@@ -9,9 +9,6 @@ on:
       limit:
         description: "한 번에 받을 단지 수"
         default: "4000"
-  push:                     # 첫 실행용(브랜치 머지 전). 머지할 때 지운다
-    branches: [claude/busy-meitner-ojizbi]
-    paths: [.github/workflows/bldg.yml]
 
 permissions:
   contents: read
