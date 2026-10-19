@@ -1,0 +1,31 @@
+name: probe_gg
+# 임시: 경기데이터드림(경기 정비사업) 접속 확인. 머지 전에 지운다
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/busy-meitner-ojizbi]
+    paths: [.github/workflows/probe_gg.yml]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: 접속 확인
+        run: |
+          set +e
+          for u in https://data.gg.go.kr/ https://openapi.gg.go.kr/; do echo "$u $(curl -s -o /dev/null -w '%{http_code}' -m 30 $u)"; done
+          curl -s -m 60 'https://data.gg.go.kr/portal/data/service/selectServicePage.do?infId=S62GFEEN7JMLMA0PH6CF19108891&infSeq=1' -o page.html
+          wc -c page.html
+          grep -o 'openapi.gg.go.kr/[A-Za-z0-9_]*' page.html | sort -u
+          grep -o -i 'srvUrl[^<]\{0,200\}\|apiNm[^<]\{0,120\}\|[A-Za-z]*[Ii]mprv[A-Za-z]*' page.html | sort -u | head -20
+          for s in $(grep -o 'openapi.gg.go.kr/[A-Za-z0-9_]*' page.html | sort -u | sed 's#openapi.gg.go.kr/##'); do
+            echo "== $s"; curl -s -m 60 "https://openapi.gg.go.kr/$s?Type=json&pIndex=1&pSize=3" | head -c 3000; echo
+          done
+          python3 - <<'PY'
+          import re
+          t = open('page.html', encoding='utf-8', errors='replace').read()
+          for m in re.finditer(r'(컬럼|항목|출력|설명)[^<]{0,40}', t):
+              pass
+          rows = re.findall(r'<td[^>]*>([^<]{1,60})</td>', t)
+          print('td 샘플:', rows[:120])
+          PY
