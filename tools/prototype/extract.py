@@ -31,7 +31,7 @@ out['recent_highs'] = select(db, f"""
   FROM deals d WHERE d.region_code LIKE '11%' AND d.contract_month IN ('202609','202610')
   AND NOT d.is_cancelled AND d.deal_type='중개') t WHERE prev_high IS NOT NULL ORDER BY cd""")
 # D. 비교 단지
-SEQS = ['11710-8865','11740-4628','11200-3120','11590-3954','11410-4479','11230-2587','11500-5419','11350-133']
+SEQS = ['11710-8865','11680-218','11740-4628','11200-3120','11590-3954','11410-4479','11230-2587','11500-5419','11350-133']
 sl = ",".join(f"'{s}'" for s in SEQS)
 out['cx_deals'] = select(db, f"""SELECT apt_seq, apt_name, contract_date::text cd, area_group, floor, price_10k, deal_type, is_cancelled
  FROM deals WHERE apt_seq IN ({sl}) AND area_group IN (84,85) ORDER BY contract_date""")

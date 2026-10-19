@@ -11,6 +11,14 @@ def test_keywords():
     assert keywords("남산타운", "신당동", ("신당남산타운(분양)",)) == ["남산타운", "남산타운아파트", "신당남산타운", "신당남산타운아파트"]
 
 
+def test_aliases():
+    from collector.searchtrend import aliases
+    assert aliases("목동신시가지7", "목") == ["목동7단지", "목동신시가지7단지", "목동신시가지7차"]
+    assert aliases("주공17단지", "창") == ["주공17단지", "창주공17단지"]
+    assert aliases("산내마을9단지힐스테이트운정", "목") == ["산내마을9단지", "산내9단지"]
+    assert aliases("헬리오시티", "가락") == []
+
+
 def test_body_and_index():
     b = body("2025-10-01", "2026-09-30", [("A", ["대치은마"]), ("B", ["개포우성2차"])])
     assert b["keywordGroups"][0]["groupName"] == ANCHOR[0] and len(b["keywordGroups"]) == 3

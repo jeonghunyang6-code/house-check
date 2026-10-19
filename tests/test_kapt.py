@@ -150,3 +150,15 @@ def test_detail_row_and_walk():
     assert detail_row({})["ev_charger"] is None
     assert [walk_minutes(s) for s in ("5분이내", "5~10분이내", "10~15분이내", "20분초과", "", None, "해당없음")] == [5, 10, 15, 99, None, None, None]
     assert [station_area(s) for s in ("5~10분이내", "10~15분이내", None)] == [True, False, None]
+
+
+def test_match_fuzzy_last():
+    def k(code, name, addr_jibun, sale="분양"):
+        return {"kapt_code": code, "kapt_name": name, "bjd_code": "1", "addr": f"경기도 안산단원구 원곡동 {addr_jibun} {name}", "road_addr": None, "sale_type": sale}
+    kapts = [k("F1", "이편한세상 초지역 센트럴포레아파트", "838"), k("F2", "원곡주공", "100"), k("F3", "서초프라임헤센 아파트", "9"),
+             k("F4", "선경무궁화임대", "900", "임대"), k("F5", "선경무궁화", "854-855")]
+    cx = [{"apt_seq": "a", "apt_name": "e편한세상초지역센트럴포레", "bjd_code": "1", "jibun": "1002", "road_addr": ""},   # 이름 매우 비슷(0.8+)
+          {"apt_seq": "b", "apt_name": "서초프라임빌", "bjd_code": "1", "jibun": "1566-9", "road_addr": ""},             # 0.77 이고 지번 다름 → 안 잇는다
+          {"apt_seq": "c", "apt_name": "무궁화선경", "bjd_code": "1", "jibun": "854", "road_addr": ""}]                  # 0.6 이고 본번 같음, 임대 제외
+    m = {s: (v.kapt_code, v.method) for s, v in match_complexes(cx, kapts).items()}
+    assert m == {"a": ("F1", "fuzzy"), "c": ("F5", "fuzzy")}

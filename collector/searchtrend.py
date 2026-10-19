@@ -33,10 +33,29 @@ GENERIC = re.compile(r"^(현대|삼성|대림|한신|우성|삼익|한양|극동
                      r"[0-9]*(차|단지)?$")
 
 
+def aliases(n: str, stem: str) -> list[str]:
+    """사람들이 부르는 이름 규칙(2026-10-19 '검색어로 안 잡힘' 35% 를 보고): 'OO신시가지7'·'OO주공17' → 'OO7단지'·'OO주공17단지',
+    'OO마을9단지XX' → 'OO마을9단지'·'OO9단지', 끝이 숫자면 'N단지'·'N차'."""
+    out = []
+    m = re.match(r"^([가-힣]+?)신시가지(\d+)$", n)
+    if m:
+        out += [f"{m.group(1)}{m.group(2)}단지"]
+    m = re.match(r"^([가-힣]*주공)(\d+)(단지)?$", n)
+    if m:
+        out += [f"{m.group(1)}{m.group(2)}단지"] + ([f"{stem}{m.group(1)}{m.group(2)}단지"] if stem and not m.group(1).startswith(stem) else [])
+    m = re.match(r"^([가-힣]+?)마을(\d+)단지.+$", n)
+    if m:
+        out += [f"{m.group(1)}마을{m.group(2)}단지", f"{m.group(1)}{m.group(2)}단지"]
+    m = re.match(r"^(.*[가-힣a-z])(\d+)$", n)
+    if m and not GENERIC.match(n):
+        out += [f"{n}단지", f"{n}차"]
+    return out
+
+
 def keywords(apt_name: str, umd_name: str | None, other_names: tuple[str, ...] = ()) -> list[str] | None:
-    """검색어 묶음(🔧 최대 6개). 이름이 한 글자 이하면 None. 흔한 이름은 동 이름을 붙인 것만(동 이름이 없으면 None).
-    other_names: K-apt 단지 이름 등 다른 공식 이름(같은 규칙). 사람들이 부르는 이름('목동7단지')과 공식 이름('목동신시가지7')이
-    다르면 여전히 못 잡는다(2026-10-19 확인) → 지수가 거의 0 이면 '인지도 낮음'이 아니라 '검색어로 안 잡힘'으로 본다"""
+    """검색어 묶음(🔧 최대 8개). 이름이 한 글자 이하면 None. 흔한 이름은 동 이름을 붙인 것만(동 이름이 없으면 None).
+    other_names: K-apt 단지 이름 등 다른 공식 이름(같은 규칙) + aliases() 의 부르는 이름.
+    그래도 못 잡는 이름(신천동 '장미1' ↔ '잠실장미')이 있다 → 지수가 거의 0 이면 '인지도 낮음'이 아니라 '검색어로 안 잡힘'으로 본다"""
     stem = re.sub(r"\d*동\d*가?$", "", umd_name or "")
     out: list[str] = []
     for name in (apt_name, *other_names):
@@ -47,7 +66,8 @@ def keywords(apt_name: str, umd_name: str | None, other_names: tuple[str, ...] =
             out += [stem + n, stem + n + "아파트"] if stem else []
         else:
             out += [n, n + "아파트"] + ([stem + n] if stem and not n.startswith(stem) else [])
-    out = list(dict.fromkeys(out))[:6]
+        out += aliases(n, stem)
+    out = list(dict.fromkeys(out))[:8]
     return out or None
 
 

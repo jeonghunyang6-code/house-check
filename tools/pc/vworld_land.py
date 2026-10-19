@@ -7,6 +7,7 @@ DB 비밀번호는 필요 없다. 입력: 같은 폴더의 vworld_targets.csv(�
     (Windows 명령 프롬프트)
     set VWORLD_API_KEY=발급받은키
     python vworld_land.py
+    python vworld_land.py vworld_targets_atch.csv   # 다른 대상 목록(부속 필지 등). 결과는 같은 vworld_land_result.csv 에 이어 붙는다
 
 - 키는 환경 변수 VWORLD_API_KEY 로만 읽는다. 화면·파일에 키를 쓰지 않는다
 - 중간에 끊겨도 다시 실행하면 이미 받은 필지는 건너뛴다
@@ -28,7 +29,7 @@ from datetime import date
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-TARGETS = HERE / "vworld_targets.csv"
+TARGETS = HERE / (sys.argv[1] if len(sys.argv) > 1 else "vworld_targets.csv")
 OUT = HERE / "vworld_land_result.csv"
 URL = "https://api.vworld.kr/ned/data/getLandCharacteristics"
 COLS = ("pnu", "stdr_year", "land_area", "jimok", "use_zone", "price_per_m2", "status")

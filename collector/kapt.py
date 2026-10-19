@@ -25,6 +25,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 from datetime import date
 
 from collector.sources.molit import ApiError, QuotaExceeded, conn_failed, conn_pause, note_ok
@@ -244,7 +245,7 @@ def _narrow(cands: list[dict], name: str) -> dict | None:
 @dataclass(frozen=True)
 class Match:
     kapt_code: str
-    method: str  # 'jibun' | 'road' | 'name'
+    method: str  # 'jibun' | 'road' | 'name' | 'fuzzy'
 
 
 def match_complexes(complexes: list[dict], kapts: list[dict]) -> dict[str, Match]:
@@ -289,4 +290,31 @@ def match_complexes(complexes: list[dict], kapts: list[dict]) -> dict[str, Match
         k = named[0] if len(named) == 1 else (_narrow(named, name) if named else None)
         if k:
             out[c["apt_seq"]] = Match(k["kapt_code"], "name")
+    # 마지막: 같은 법정동에서 아직 아무 단지와도 안 이어진 K-apt 단지 중 이름이 가장 비슷한 곳(🔧 유사도 0.8+(0.75 는 서초프라임빌 ↔ 서초프라임헤센 오연결), 또는 0.6+ 이고 지번 본번이 같음,
+    # 다음 후보보다 0.2 이상 높을 때만, 임대 제외). 2026-10-20 바쁜 미연결 155곳 중 'e편한세상초지역센트럴포레 ↔ 이편한세상 초지역 센트럴포레아파트' 등
+    used = {m.kapt_code for m in out.values()}
+    for c in complexes:
+        if c["apt_seq"] in out:
+            continue
+        n = _fuzzy_key(c["apt_name"])
+        cands = [k for k in by_bjd.get(c.get("bjd_code") or "", [])
+                 if k["kapt_code"] not in used and k.get("sale_type") != "임대" and "임대" not in (k["kapt_name"] or "")]
+        sc = sorted(((SequenceMatcher(None, n, _fuzzy_key(k["kapt_name"])).ratio(), k) for k in cands), key=lambda x: -x[0])
+        if not sc or (len(sc) > 1 and sc[1][0] > sc[0][0] - 0.2):
+            continue
+        best, k = sc[0]
+        same_main = norm_jibun(c.get("jibun")).split("-")[0] == jibun_from_addr(k.get("addr")).split("-")[0] != ""
+        if best >= 0.8 or (best >= 0.6 and same_main):
+            out[c["apt_seq"]] = Match(k["kapt_code"], "fuzzy")
+            used.add(k["kapt_code"])
     return out
+
+
+_SYN = (("e편한세상", "이편한세상"), ("lg", "엘지"), ("sk", "에스케이"), ("kcc", "케이씨씨"), ("gs", "지에스"))
+
+
+def _fuzzy_key(s: str | None) -> str:
+    n = norm_name(s)
+    for a, b in _SYN:
+        n = n.replace(a, b)
+    return n
