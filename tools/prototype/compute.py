@@ -133,6 +133,7 @@ for seq in d['seqs']:
                'e6t': [[nm6.get(r['target_seq'], r['target_seq']), float(r['ratio_now']), float(r['gap_pct']), r['dist_m']] for r in d.get('e6_targets', []) if r['apt_seq'] == seq][:3],
                'reg': reg(seq[:5]),
                'loc': loc(seq),
+               'search': next(({k: v for k, v in z.items() if k != 'apt_seq'} for z in d.get('cx_search', []) if z['apt_seq'] == seq), None),
                'redev': [{k: v for k, v in z.items() if k != 'apt_seq'} for z in d.get('cx_redev', []) if z['apt_seq'] == seq],
                'bldg': next(({k: v for k, v in z.items() if k != 'apt_seq'} for z in d.get('cx_bldg', []) if z['apt_seq'] == seq), None),
                'zone': next(({k: z[k] for k in ('name', 'e5_ratio', 'e5_n', 'e7_new_ppm', 'e7_mid_ppm', 'e7_old_ppm', 'e7_n', 'f1_react_rel', 'f1_react_n')} for z in d.get('cx_zone', []) if z['apt_seq'] == seq), None),

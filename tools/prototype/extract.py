@@ -82,6 +82,10 @@ out['cx_redev'] = select(db, f"""SELECT r.apt_seq, z.zone_nm, z.biz_type, z.stag
   z.assoc_ymd::text, z.impl_ymd::text, z.mgmt_ymd::text, z.construction_ymd::text, z.public_private, z.sale_hh, z.gen_sale_est, z.gen_ratio, z.gen_pct
  FROM complex_redev r JOIN redev_zone z USING (code) WHERE r.apt_seq IN ({sl})""")
 out['cx_bldg'] = select(db, f"SELECT apt_seq, src, plat_area, vl_rat, vl_rat_calc, hhld, land_per_hh FROM complex_bldg WHERE apt_seq IN ({sl})")
+# R9 인지도(검색량, complex_search, jobs/searchtrend.py): 지수와 받은 단지 중 백분위
+out['cx_search'] = select(db, f"""SELECT apt_seq, keyword, n_months, idx, round((100 * percent_rank() OVER (ORDER BY idx))::numeric, 1) AS pct, fetched_at::text
+ FROM complex_search WHERE idx IS NOT NULL""")
+out['cx_search'] = [r for r in out['cx_search'] if r['apt_seq'] in SEQS]
 # H6 주민 소득 (region_income, jobs/macro.py): 수도권 시군구 1인당 근로소득, 5년 전과 최신
 out['income'] = select(db, """SELECT year, sido, name, region_codes, avg_pay_10k FROM region_income
  WHERE year IN ((SELECT max(year) FROM region_income), (SELECT (max(year)::int - 5)::text FROM region_income)) ORDER BY year, avg_pay_10k DESC""")

@@ -89,6 +89,11 @@
 - **머지 전에 지울 것**: redev.yml·bldg.yml 의 임시 `push:` 조건(브랜치에서 첫 실행하려고 붙임)
 - **대지면적 보충 막힘(2026-10-19)**: `VWORLD_API_KEY` 는 GitHub secret 에 있음(길이 36 확인). 그러나 api.vworld.kr 토지특성이 이 세션·Actions 러너 모두 'Connection died' — 해외 IP 차단으로 보임, 우회 안 함. 공공데이터포털의 옛 NSDI 토지특성·토지이용·개별공시지가(1611000/nsdi/...)는 'NO_OPENAPI_SERVICE_ERROR'(폐기, VWorld 로 이전). 남은 길: 사용자 PC(국내 IP)에서 VWorld 로 받아 올리기
 
+**D9 일반분양·R9 검색량 (2026-10-19 busy-meitner 4차)**
+- D9: `redev_zone.gen_sale_est·gen_ratio·gen_pct`(0056) = 계획 분양 세대 − 기존 세대(조합원 몫 근사). 서울 재건축 145곳, ÷기존 세대 중앙값 0.36(10~90% 0.1~0.84). 대치쌍용2차 2.2배 최고. 시안 ④ 정비사업 메모에 포함. 🔧 판정 없이 순위
+- R9: `collector/searchtrend.py`·`jobs/searchtrend.py`·`searchtrend.yml`·`complex_search`(0057) 코드·테스트만. **NAVER_CLIENT_ID(10자)·SECRET(40자)가 GitHub·세션 모두 401 'NID AUTH Result Invalid'**(이미 있던 뉴스 검색도 같음, auction.yml 은 한 번도 안 돌았음). 네이버 개발자센터 앱 키는 보통 ID 20자 안팎·Secret 10자 → 사용자가 개발자센터에서 앱 등록(검색 + 데이터랩 검색어트렌드) 후 두 시크릿을 바꿔야 함. 바꾸면 searchtrend.yml 수동 실행
+- VWorld 대지면적: 사용자 PC 에서 `tools/pc/vworld_land.py` 실행 중(첫 응답 정상 확인 — 항목 이름 lndpclAr 등 문서와 같음). 결과 CSV 를 받으면 적재·용적률 재계산 코드를 만든다
+
 **정비사업 H5 자료 확인 (2026-10-19)**
 - 건축물대장(용적률·대지면적·세대수): `apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo` → 403 SERVICE_KEY_IS_NOT_REGISTERED_ERROR. **사용자가 공공데이터포털에서 '국토교통부_건축HUB_건축물대장정보 서비스' 활용 신청 필요**(같은 키)
 - 서울 정비사업 단계: 서울 열린데이터광장(data.seoul.go.kr OA-23112 등, 오픈 API·CSV)이 이 클라우드 환경 네트워크 정책에 막힘(프록시 403, openapi.seoul.go.kr 이름 해석 안 됨). 환경 설정 '허용 도메인'에 추가하거나 Actions 에서 받는다. 서울 오픈 API 는 별도 인증키(열린데이터광장 회원 발급)가 필요 → GitHub secret 으로

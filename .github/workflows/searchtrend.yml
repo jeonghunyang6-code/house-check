@@ -1,0 +1,39 @@
+# R9 인지도: 네이버 데이터랩 검색량 (jobs/searchtrend.py → complex_search). 하루 1,000회라 매달 초 며칠에 나눠 받는다(이번 달 받은 단지는 건너뜀).
+# 필요한 시크릿: NAVER_CLIENT_ID·NAVER_CLIENT_SECRET (네이버 개발자센터 앱, '데이터랩(검색어트렌드)' 사용 추가), DATABASE_URL
+name: searchtrend
+
+on:
+  schedule:
+    - cron: "13 20 2-6 * *"   # 매달 3~7일 05:13 KST
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "데이터랩 요청 수 (하루 1,000)"
+        default: "900"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: searchtrend
+  cancel-in-progress: false
+
+jobs:
+  searchtrend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: psql 확인
+        run: command -v psql || (sudo apt-get update -q && sudo apt-get install -y -q postgresql-client)
+      - name: 검색량
+        env:
+          NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
+          NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          HC_DB_BACKEND: psql
+          PYTHONUNBUFFERED: "1"
+        run: python -m jobs.searchtrend --limit "${{ inputs.limit || '900' }}"
