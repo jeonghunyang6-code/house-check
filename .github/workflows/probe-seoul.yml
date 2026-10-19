@@ -11,34 +11,25 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - name: API 상세 페이지·파일 목록
-        run: |
-          for oa in OA-2253 OA-22856; do
-            for u in "https://data.seoul.go.kr/dataList/openApiView.do?infId=$oa&srvType=A" \
-                     "https://data.seoul.go.kr/dataList/$oa/A/1/datasetView.do" \
-                     "https://data.seoul.go.kr/dataList/$oa/F/1/datasetView.do"; do
-              h=$(curl -sS -m 30 -L "$u" || true)
-              echo "== $u ($(echo "$h" | wc -c) bytes)"
-              echo "$h" | grep -oE "8088/[^\"' <]{0,80}" | sort -u | head -8
-              echo "$h" | grep -oE "(srvcId|seq|fileSeq|infSeq|svcNm|SERVICE)[\"'= :]+[A-Za-z0-9_.-]{2,40}" | sort -u | head -10
-              echo "$h" | grep -oE "[가-힣A-Za-z0-9_ ()]{0,30}\.(csv|xlsx|xls)" | sort -u | head -8
-              echo "$h" | grep -oE "최종수정일자[^<]{0,40}|수정일[^<]{0,30}|갱신주기[^<]{0,30}" | head -3
-            done
-          done
-      - name: 서비스 호출
+      - name: TbSeoulRedevStatus
         env:
           K: ${{ secrets.SEOUL_API_KEY }}
         run: |
-          for svc in upisRebuild CleanupBussinessInfo GetCleanupBusinessInfo ReconstructionInfo cleanupBussinessInfo; do
-            r=$(curl -sS -m 30 "http://openapi.seoul.go.kr:8088/$K/json/$svc/1/1/" || true)
-            echo "== $svc: $(echo "$r" | head -c 300)"
-          done
-          r=$(curl -sS -m 60 "http://openapi.seoul.go.kr:8088/$K/json/upisRebuild/1/1000/" || true)
-          echo "$r" | python3 -c "
-          import json,sys,collections
-          d=json.load(sys.stdin)['upisRebuild']; rows=d['row']
-          print('cols', list(rows[0].keys()))
-          print(collections.Counter((r['MCLSF'], r['SCLSF']) for r in rows).most_common(15))
-          print(collections.Counter(r['RPT_TYPE'] for r in rows).most_common(8))
-          for r in rows[-3:]: print(r)
-          "
+          curl -sS -m 60 "http://openapi.seoul.go.kr:8088/$K/json/TbSeoulRedevStatus/1/1000/" -o a.json || true
+          curl -sS -m 60 "http://openapi.seoul.go.kr:8088/$K/json/TbSeoulRedevStatus/1001/2000/" -o b.json || true
+          python3 - <<'PY'
+          import json, collections
+          d = json.load(open('a.json'))
+          k = next(iter(d)); x = d[k]
+          print('keys', k, {kk: v for kk, v in x.items() if kk != 'row'})
+          rows = x.get('row', [])
+          try: rows += json.load(open('b.json'))[k].get('row', [])
+          except Exception as e: print('b', e)
+          print('n', len(rows)); print('cols', list(rows[0].keys()) if rows else None)
+          for c in rows[0].keys():
+              vals = collections.Counter(str(r[c]) for r in rows)
+              print(c, len(vals), vals.most_common(6))
+          for r in rows[:3]: print(r)
+          am = [r for r in rows if any('아파트' in str(v) or '재건축' in str(v) for v in r.values())][:5]
+          for r in am: print('APT', r)
+          PY
