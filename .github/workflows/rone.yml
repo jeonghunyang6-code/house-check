@@ -50,6 +50,7 @@ jobs:
           python -m jobs.grade || rc=$?    # 급지 E1 (dong_grade, 85일마다만 다시 계산)
           python -m jobs.locality || rc=$?   # E8 상급지까지 거리 (complex_e8)
           python -m jobs.market || rc=$?   # 국면·체크리스트 신호 (region_phase, market_signals)
+          python -m jobs.b2_check || rc=$?   # B2 회복 패턴 계속 검증 (분기마다 스냅숏, 12·24개월 뒤 평가)
           python -m jobs.rone buyer || rc=$?   # 매입자 거주지별 아파트 매매 (월간, 최근 3개월 다시)
           python -m jobs.balloon || rc=$?  # 풍선효과 (balloon, market_signals.g2_balloon)
           python -m jobs.region_stats || rc=$?   # 지역 전세가율·소비심리(R-ONE 월간)·연령별 인구(KOSIS) → region_monthly

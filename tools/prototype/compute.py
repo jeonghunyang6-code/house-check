@@ -259,6 +259,7 @@ json.dump({'monthly': monthly, 'cx': cx, 'today': today,
                      r.get('vl_rat') and float(r['vl_rat']), r.get('land_per_hh') and float(r['land_per_hh']), r.get('stage'), r.get('stage_no'),
                      r.get('gen_pct') and float(r['gen_pct'])] for r in d.get('cand', [])],
            'price_bands': d.get('price_bands', []),
+           'b2_validation': d.get('b2_validation', []),
            'geo': json.load(open(ROOT / 'data/geo/sudogwon_sgg_20260701.json')),
            'region_names': REGIONS, 'asof': TODAY.isoformat()}, open(OUT / 'data.json', 'w'), ensure_ascii=False)
 for c in cx: print(c['name'], c['region'], c['P'], c['T'], c['C'], c['conf'], c['cn'], c['pattern'], c['rec'] and round(c['rec'],2), c['J'], c['jn'], c['ratio'] and round(c['ratio']), c['band'], c['n12'])
