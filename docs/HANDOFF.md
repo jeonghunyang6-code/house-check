@@ -87,6 +87,7 @@
 - **H5 건축물대장**: `complex_bldg`(0054), `collector/bldg.py`·`jobs/bldg.py`·`bldg.yml`(매일 04:07 KST, 4,000곳씩). 오래된 단지는 총괄표제부 대지면적·용적률이 0 인 경우가 많다
 - 시안 ④: 정비사업 단계(날짜순)·조합설립 전 경고(📖 p.374~397), 건축물대장 용적률·세대당 대지. 예시 8곳은 정비사업 구역이 아니라 안 보임(은마로 따로 확인함). 버전 27
 - **머지 전에 지울 것**: redev.yml·bldg.yml 의 임시 `push:` 조건(브랜치에서 첫 실행하려고 붙임)
+- **대지면적 보충 막힘(2026-10-19)**: `VWORLD_API_KEY` 는 GitHub secret 에 있음(길이 36 확인). 그러나 api.vworld.kr 토지특성이 이 세션·Actions 러너 모두 'Connection died' — 해외 IP 차단으로 보임, 우회 안 함. 공공데이터포털의 옛 NSDI 토지특성·토지이용·개별공시지가(1611000/nsdi/...)는 'NO_OPENAPI_SERVICE_ERROR'(폐기, VWorld 로 이전). 남은 길: 사용자 PC(국내 IP)에서 VWorld 로 받아 올리기
 
 **정비사업 H5 자료 확인 (2026-10-19)**
 - 건축물대장(용적률·대지면적·세대수): `apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo` → 403 SERVICE_KEY_IS_NOT_REGISTERED_ERROR. **사용자가 공공데이터포털에서 '국토교통부_건축HUB_건축물대장정보 서비스' 활용 신청 필요**(같은 키)
