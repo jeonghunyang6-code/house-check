@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 import urllib.error
 import urllib.request
 
@@ -55,18 +56,24 @@ def body(start: str, end: str, groups: list[tuple[str, list[str]]]) -> dict:
             "keywordGroups": [{"groupName": g, "keywords": kw} for g, kw in [ANCHOR, *groups]]}
 
 
-def call(b: dict) -> dict:
+def call(b: dict, retries: int = 4) -> dict:
     req = urllib.request.Request(URL, data=json.dumps(b).encode(), method="POST", headers={
         "X-NCP-APIGW-API-KEY-ID": os.environ["NAVER_CLIENT_ID"], "X-NCP-APIGW-API-KEY": os.environ["NAVER_CLIENT_SECRET"],
         "Content-Type": "application/json"})
-    try:
-        with urllib.request.urlopen(req, timeout=30) as r:
-            return json.loads(r.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        msg = e.read().decode(errors="replace")[:200]
-        if e.code == 429:
-            raise QuotaExceeded(msg) from None
-        raise ApiError(f"HTTP {e.code} {msg}") from None
+    for attempt in range(retries):
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return json.loads(r.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            msg = e.read().decode(errors="replace")[:200]
+            if e.code == 429:
+                raise QuotaExceeded(msg) from None
+            raise ApiError(f"HTTP {e.code} {msg}") from None
+        except (urllib.error.URLError, ConnectionError, TimeoutError) as e:   # 2026-10-19 3,084곳째에 연결 끊김으로 작업 전체가 죽었다
+            if attempt == retries - 1:
+                raise ApiError(f"연결 실패 {e}") from None
+            time.sleep(2 * 2 ** attempt)
+    raise ApiError("unreachable")
 
 
 def index(resp: dict, months: int) -> dict[str, dict]:
