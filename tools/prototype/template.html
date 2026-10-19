@@ -1252,10 +1252,12 @@ function drawCx(c) {
       + (pre ? '<b>조합설립인가 전</b>: 📖 중·하급지는 조합설립인가 뒤에 들어가라(상급지는 단계와 무관), 재건축은 20~25년 걸린다(p.374~397). ' : '📖 재건축 기간 20~25년, 가장 큰 위험은 시간(p.368~397). ')
       + '서울시 도시정비사업 통계(분기 갱신).');
   });
-  if (c.bldg && c.bldg.src !== 'none') {
-    const b = c.bldg, vr = b.vl_rat != null ? +b.vl_rat : (b.vl_rat_calc != null ? +b.vl_rat_calc : null);
-    notes.push(`건축물대장(H5): ${vr != null ? `용적률 <b>${vr.toFixed(0)}%</b>` : '용적률 대장에 없음'}${b.land_per_hh != null ? ` · 세대당 대지 ${(+b.land_per_hh).toFixed(1)}㎡(${(b.land_per_hh / 3.3058).toFixed(1)}평)` : ''}`
-      + `${b.hhld ? ` · 대장 세대수 ${Number(b.hhld).toLocaleString()}` : ''}. 📖 재건축 사업성은 용적률이 낮고 대지지분이 클수록 좋다(p.374~397). 오래된 단지는 대장에 대지면적이 비어 있는 경우가 많다.`);
+  if (c.bldg && c.bldg.land_area != null) {
+    const b = c.bldg;
+    notes.push(`재건축 사업성 재료(H5): ${b.vl_rat != null ? `용적률 <b>${(+b.vl_rat).toFixed(0)}%</b>` : '용적률 계산 못 함'}${b.land_per_hh != null ? ` · 세대당 대지 <b>${(+b.land_per_hh).toFixed(1)}㎡</b>(${(b.land_per_hh / 3.3058).toFixed(1)}평)` : ''}`
+      + `${b.use_zone ? ` · ${b.use_zone}${b.vl_cap ? `(법정 상한 ${b.vl_cap}%)` : ''}` : ''}${b.price_per_m2 ? ` · 공시지가 ㎡당 ${Math.round(b.price_per_m2 / 10000).toLocaleString()}만원` : ''}. `
+      + (b.suspect ? '<b>대표 필지만 잡혀 대지가 작게 나온 것으로 보여 용적률·대지지분을 비움</b>. ' : '')
+      + `대지면적 출처: ${b.land_src}${b.land_src === 'VWorld 대표 필지' ? '(단지가 여러 필지면 대지가 작게, 용적률이 높게 나온다)' : ''}. 📖 재건축 사업성은 용적률이 낮고 대지지분이 클수록 좋다(p.374~397).`);
   }
   if (c.search) notes.push(`인지도(R9): 네이버 검색량(검색어 ${c.search.keyword.split('|').map(k => `'${k}'`).join('·')} 합) 최근 12개월 = 헬리오시티의 <b>${(+c.search.idx).toFixed(2)}배</b>`
     + (+c.search.idx < 0.01 ? ' → <b>검색어로 거의 안 잡힘</b>(사람들이 다른 이름으로 부를 수 있어 인지도가 낮다고 단정하지 않음)'

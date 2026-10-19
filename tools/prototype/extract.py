@@ -81,7 +81,7 @@ SELECT c.apt_seq, c.umd_name, r.ac, r.rk, r.n, d.grade, d.up_dong, d.up_grade, d
 out['cx_redev'] = select(db, f"""SELECT r.apt_seq, z.zone_nm, z.biz_type, z.stage, z.stage_no, z.existing_hh, z.built_hh, z.zone_ymd::text, z.committee_ymd::text,
   z.assoc_ymd::text, z.impl_ymd::text, z.mgmt_ymd::text, z.construction_ymd::text, z.public_private, z.sale_hh, z.gen_sale_est, z.gen_ratio, z.gen_pct
  FROM complex_redev r JOIN redev_zone z USING (code) WHERE r.apt_seq IN ({sl})""")
-out['cx_bldg'] = select(db, f"SELECT apt_seq, src, plat_area, vl_rat, vl_rat_calc, hhld, land_per_hh FROM complex_bldg WHERE apt_seq IN ({sl})")
+out['cx_bldg'] = select(db, f"SELECT apt_seq, land_area, land_src, use_zone, price_per_m2, vl_cap, hh, suspect, vl_rat, land_per_hh FROM complex_rebuild WHERE apt_seq IN ({sl})")
 # R9 인지도(검색량, complex_search, jobs/searchtrend.py): 지수와 받은 단지 중 백분위
 out['cx_search'] = select(db, f"""SELECT apt_seq, keyword, n_months, idx, round((100 * percent_rank() OVER (ORDER BY idx))::numeric, 1) AS pct, fetched_at::text
  FROM complex_search WHERE idx IS NOT NULL""")
