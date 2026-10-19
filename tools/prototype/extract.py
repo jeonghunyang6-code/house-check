@@ -107,14 +107,16 @@ out['cx_grade'] = select(db, f"""SELECT c.apt_seq, c.umd_name, g.grade, g.value_
   g.flag_rebuild, g.flag_gap, g.new_big_name, g.new_big_10k, g.asof::text asof, k.households
  FROM complexes c LEFT JOIN {G} g ON g.region_code = c.region_code AND g.umd_name = c.umd_name
  LEFT JOIN kapt_complexes k ON k.kapt_code = c.kapt_code WHERE c.apt_seq IN ({sl})""")
+out['cx_rphase'] = select(db, f"SELECT apt_seq, region_name, phase, chg_12m, asof, sido_level FROM complex_region_phase WHERE apt_seq IN ({sl})")
 # D3. 후보 단지 찾기 (⑦): 기준 시세가 있는 단지·면적 전체 + 급지·표시
-out['cand'] = select(db, f"""SELECT m.apt_seq, m.area_group, coalesce(m.ref_10k, m.a5_est_10k) AS ref_10k, m.ref_10k IS NULL AS est, m.confidence, m.phase, m.pattern, m.turnover_pct, c.apt_name, c.region_code, c.umd_name,
+out['cand'] = select(db, f"""SELECT m.apt_seq, m.area_group, coalesce(m.ref_10k, m.a5_est_10k) AS ref_10k, m.ref_10k IS NULL AS est, m.confidence, rp.phase, m.pattern, m.turnover_pct, c.apt_name, c.region_code, c.umd_name,
   c.build_year, k.households, g.grade, g.flag_rebuild, g.flag_gap, g.new_big_name, l.down_rank,
   rb.vl_rat, rb.land_per_hh, rz.stage, rz.stage_no, rz.gen_pct
  FROM complex_metrics m JOIN complexes c USING (apt_seq)
  LEFT JOIN kapt_complexes k ON k.kapt_code = c.kapt_code
  LEFT JOIN complex_liquidity l ON l.apt_seq = m.apt_seq
  LEFT JOIN complex_rebuild rb ON rb.apt_seq = m.apt_seq
+ LEFT JOIN complex_region_phase rp ON rp.apt_seq = m.apt_seq   -- ⑦ 국면 필터 = 지역 B1(R-ONE). 단지 B1 은 백테스트에서 예측력 없음(2026-10-20)
  LEFT JOIN LATERAL (SELECT z.stage, z.stage_no, z.gen_pct FROM complex_redev r JOIN redev_zone z USING (code)
                     WHERE r.apt_seq = m.apt_seq ORDER BY z.stage_no DESC NULLS LAST LIMIT 1) rz ON true
  LEFT JOIN {G} g ON g.region_code = c.region_code AND g.umd_name = c.umd_name

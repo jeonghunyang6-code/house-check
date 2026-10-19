@@ -142,6 +142,7 @@ for seq in d['seqs']:
                'loc': loc(seq),
                'search': next(({k: v for k, v in z.items() if k != 'apt_seq'} for z in d.get('cx_search', []) if z['apt_seq'] == seq), None),
                'redev': [{k: v for k, v in z.items() if k != 'apt_seq'} for z in d.get('cx_redev', []) if z['apt_seq'] == seq],
+               'rph': next(({k: z[k] for k in ('region_name', 'phase', 'chg_12m', 'asof', 'sido_level')} for z in d.get('cx_rphase', []) if z['apt_seq'] == seq), None),
                'bldg': next(({k: v for k, v in z.items() if k != 'apt_seq'} for z in d.get('cx_bldg', []) if z['apt_seq'] == seq), None),
                'zone': next(({k: z[k] for k in ('name', 'e5_ratio', 'e5_n', 'e7_new_ppm', 'e7_mid_ppm', 'e7_old_ppm', 'e7_n', 'f1_react_rel', 'f1_react_n')} for z in d.get('cx_zone', []) if z['apt_seq'] == seq), None),
                'e3': m84 and m84['e3_seqs'] and [n['apt_name'] for n in d.get('e3_names', []) if n['apt_seq'] in m84['e3_seqs'].split(',')],
