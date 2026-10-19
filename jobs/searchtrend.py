@@ -33,11 +33,12 @@ def window(today: date) -> tuple[str, str]:
     return f"{sy}-{sm:02d}-01", date.fromordinal(end).isoformat()
 
 
-def run(db: Db, limit: int, today: date, call=call) -> int:
+def run(db: Db, limit: int, today: date, call=call, retry_zero: bool = False) -> int:
     cx = select(db, f"""SELECT c.apt_seq, c.apt_name, c.umd_name, k.kapt_name FROM complexes c JOIN kapt_complexes k ON k.kapt_code = c.kapt_code
 WHERE k.households >= {MIN_HH}
   AND c.apt_seq IN (SELECT DISTINCT apt_seq FROM deals WHERE contract_month >= to_char({lit(today)}::date - 365, 'YYYYMM'))
-  AND NOT EXISTS (SELECT 1 FROM complex_search s WHERE s.apt_seq = c.apt_seq AND date_trunc('month', s.fetched_at) = date_trunc('month', {lit(today)}::date))
+  AND {"EXISTS (SELECT 1 FROM complex_search s WHERE s.apt_seq = c.apt_seq AND s.idx < 0.01)" if retry_zero else
+       f"NOT EXISTS (SELECT 1 FROM complex_search s WHERE s.apt_seq = c.apt_seq AND date_trunc('month', s.fetched_at) = date_trunc('month', {lit(today)}::date))"}
 ORDER BY k.households DESC""")
     todo = [(c["apt_seq"], k) for c in cx if (k := keywords(c["apt_name"], c["umd_name"], (c["kapt_name"] or "",)))]
     start, end = window(today)
@@ -87,10 +88,11 @@ ORDER BY k.households DESC""")
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=2000, help="요청 수 (API HUB 월 50,000)")
+    ap.add_argument("--retry-zero", action="store_true", help="지수가 거의 0 인 단지만 새 검색어 규칙으로 다시")
     ap.add_argument("--db", choices=["api", "psql"])
     a = ap.parse_args(argv)
     try:
-        return run(connect(a.db), a.limit, datetime.now(KST).date())
+        return run(connect(a.db), a.limit, datetime.now(KST).date(), retry_zero=a.retry_zero)
     except DbError as e:
         print(f"[searchtrend] 실패: {e}", file=sys.stderr)
         return 1

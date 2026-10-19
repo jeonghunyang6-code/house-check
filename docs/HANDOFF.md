@@ -1,11 +1,49 @@
-# 진행 현황과 인수인계 (최종 갱신 2026-10-19)
+# 진행 현황과 인수인계 (최종 갱신 2026-10-20)
 
 새 세션은 이 문서부터 읽고, **그다음 `docs/PRODUCT_PLAN.md`(사용자 상황·합의 결정·Supabase 설정·진행 트랙)를 읽는다.**
 작업 브랜치는 세션 시스템이 지정한 것을 따른다. **세션마다 브랜치가 달라 작업이 흩어진 적이 있다** (`inspiring-bell`, `vigilant-fermi`, `festive-heisenberg`, `brave-lamport`).
 새 세션은 시작할 때 `git fetch origin` 후 `git branch -r`로 다른 `claude/*` 브랜치에 더 새 커밋이 있는지 먼저 확인하고, 있으면 합친다.
 2026-10-11 `brave-lamport` 세션에서 앞의 세 브랜치를 모두 합쳤다.
 
-## ★ 최신 상태 (2026-10-18, brave-lamport 세션 마감) — 새 세션은 여기부터
+## ★ 최신 상태 (2026-10-20, busy-meitner 세션) — 새 세션은 여기부터
+
+**한 줄 요약**: 화면 흐름 재구성 전 데이터·지표 보강을 거의 끝냈다. 작가 관점 카드는 대부분 지표·시안에 반영됨. 다음 큰 일은 **화면 흐름 재구성 시안**.
+기본 브랜치 = `claude/inspiring-bell-73ixlm`(PR #46~#52 머지). 아래 '세부 기록'은 날짜별로 이 절 밑에 이어진다.
+
+**지금 숫자 (2026-10-20)**
+- DB **385MB**(무료 500MB). 전월세 단지 요약은 DB 에 최근 17개월(2025-06~)만, 그 전은 Releases `rentsum_<시군구>.csv.gz`. 매매는 최근 25개월만 DB(그 전 `deals_hist_*`, `deals_YYYYMM`)
+- K-apt 연결 9,507곳(지번·도로명·이름·이름 유사도). 세대수 0 인 K-apt 17곳
+- 수도권 전월세 이력: 서울·인천·**경기** 2020-01~ 모두. 경기 D3·D5·F1 반영
+- H5: 서울 정비구역 496곳 단계(재건축 145곳 단지 연결), 건축물대장(2005년 이전 1.16만 곳 수집 중), VWorld 대지면적 11,036필지(사용자 PC), 부속 지번 수집 중
+- R9 검색량 6,152곳(약 35% '검색어로 안 잡힘' → 부르는 이름 규칙으로 다시 조회 중)
+- 🔧 백테스트 `docs/insights/backtests.md`: B1·E6·B4 유지, **B2 는 근거 없음 → 비교표 점수에서 뺌(참고)**, 분기 스냅숏으로 계속 검증(`jobs/b2_check.py`)
+- 시안 버전 31+ https://claude.ai/artifact/RtjwRo7U1bq1UTYZNZsTqg (예시 단지 9곳, 은마 추가)
+
+**자동 실행 (기본 브랜치 워크플로)**
+- daily 06:00: 매매·전월세 수집 → 전월세 보관·**요약 17개월 넘은 달 rentsum 으로 옮김** → 매매 보관 → metrics → **지표 표 VACUUM FULL**
+- rone 목·금: R-ONE·macro(미분양·**근로소득**)·grade·**locality(E8)**·market·**b2_check**·buyer·balloon·region_stats·gap
+- presale 월: 분양정보·F1 입주 반응(**보관 파일 읽음, HC_ARCHIVE=gh**) / kapt 매일 / **bldg 매일 04:07(건축물대장 + 부속 지번)** / **redev 수 06:27(서울 정비사업)** / **searchtrend 매달 3일(R9)**
+
+**곧 확인할 것**
+1. 2026-10-20 06:00 daily 첫 실행: rentroll(달마다 읽기)·VACUUM 단계·경기 D3(`complex_metrics.reverse_risk` 경기 행). DB 크기
+2. bldg: 건축물대장 남은 곳·부속 지번(`complex_atch_done`) — 다 모이면 `complex_land_lot` 중 `land_parcel` 에 없는 PNU 로 `tools/pc/vworld_targets_atch.csv` 를 만들어 사용자에게(PC 에서 `python vworld_land.py vworld_targets_atch.csv`), 결과 CSV 를 land_parcel 에 적재 → 목동 5·7·9·11·13 처럼 여러 필지 단지 용적률 확인
+3. 월요일 presale: F1 이 보관 파일로 정상 계산되는지(241건 안팎)
+4. R9 `--retry-zero` 결과(0 인 단지가 얼마나 줄었나)
+
+**다음 할 일**
+1. 화면 흐름 재구성 시안 (사용자와 흐름부터 합의: 시장 확인 → 예산 → 후보 찾기 → 단지 확인 → 임장 → 갈아타기 계획, 📖 M8 홈은 핵심 신호 소수)
+2. 임장 체크리스트(사용자 책 메모 파일 필요), 호가 기록(사용자가 뒤로 미룸)
+3. C1 신고 지연 보정(first_seen 1~2개월 더), 단지 단위 B1 백테스트, D8 재개발 노후도·I3 재개발 시나리오(우선순위 낮음)
+
+**이 세션에서 쓴 요령**
+- 관리 API 로 SQL: `POST /v1/projects/$REF/database/query`(SUPABASE_ACCESS_TOKEN). 무거운 SQL(metrics 전체)은 시간 초과 → Actions(psql)
+- Releases 파일은 인증 없이 curl 로 받힌다. 올리기는 Actions(GH_TOKEN)만 가능
+- 기본 브랜치에 없는 새 워크플로를 브랜치에서 처음 돌리려면 임시 `push:` 조건(branches·paths)을 붙였다가 머지 전에 지운다. 있는 워크플로는 `workflow_dispatch` 에 ref=브랜치
+- data.seoul.go.kr·api.vworld.kr 는 이 클라우드 환경에서 막힘(서울은 Actions 에서 됨, VWorld 는 Actions 도 안 됨 → 사용자 PC)
+- 네이버 데이터랩·뉴스는 **NAVER API HUB**(헤더 X-NCP-APIGW-API-KEY-ID/KEY). 옛 openapi.naver.com 으로 시험하면 401 이라 키가 틀린 것처럼 보인다
+- pytest 대신 간이 실행기로 테스트(로컬 Postgres: `pg_ctlcluster 16 main start`, `HC_TEST_PG_URL=postgresql://hc:hc@localhost/hctest`), 177개 통과
+
+## 이전 상태 (2026-10-18, brave-lamport 세션 마감)
 
 **이번 세션에서 끝난 것** (PR #43 머지, 기본 브랜치 dad5b04): 해제·늦은 신고 재확인(매매·전월세), A1 1층 제외(사용자 (나)안 확정), 전세 실제 중앙값(당월·전월 rents, D3 2년 전 rent_j24), 자료 충분도 표시, 대출 세 가지 구분(제도 상한·은행 확인 한도·필요 대출). 0038·0039·0040 실제 DB 적용, deal_anchor 재생성, metrics·market 재계산 완료. 자세한 내용은 0절 아래 '해제·늦은 신고 재확인…', '자료 충분도·대출 구분…', 'A1 층 처리' 항목.
 
