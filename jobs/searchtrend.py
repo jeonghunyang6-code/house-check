@@ -41,27 +41,46 @@ WHERE k.households >= {MIN_HH}
 ORDER BY k.households DESC""")
     todo = [(c["apt_seq"], k) for c in cx if (k := keywords(c["apt_name"], c["umd_name"], (c["kapt_name"] or "",)))]
     start, end = window(today)
-    done, rc = 0, 0
+    done, rc, skipped, streak = 0, 0, 0, 0
+
+    def save(pairs, out):
+        vals = [f"({lit(s)}, {lit('|'.join(k))}, {MONTHS}, {out.get(s, {}).get('n', 0)}, {lit(out.get(s, {}).get('avg'))}, "
+                f"{lit(out.get(s, {}).get('idx'))}, {lit(today)})" for s, k in pairs]
+        db.query("INSERT INTO complex_search (apt_seq, keyword, months, n_months, avg_ratio, idx, fetched_at) VALUES " + ", ".join(vals)
+                 + " ON CONFLICT (apt_seq) DO UPDATE SET keyword = EXCLUDED.keyword, months = EXCLUDED.months, n_months = EXCLUDED.n_months, "
+                 "avg_ratio = EXCLUDED.avg_ratio, idx = EXCLUDED.idx, fetched_at = EXCLUDED.fetched_at;")
+
     for i in range(0, min(len(todo), limit * PER_CALL), PER_CALL):
         chunk = todo[i:i + PER_CALL]
         try:
-            out = index(call(body(start, end, list(chunk))), MONTHS)
+            save(chunk, index(call(body(start, end, list(chunk))), MONTHS))
+            done += len(chunk)
+            streak = 0
         except QuotaExceeded as e:
             print(f"  호출 한도로 중단: {e}", file=sys.stderr)
             rc = 2
             break
         except ApiError as e:
-            print(f"  실패로 중단: {e}", file=sys.stderr)   # 401(키 오류)·403 이면 더 부르지 않는다
-            rc = 1
-            break
-        vals = [f"({lit(s)}, {lit('|'.join(k))}, {MONTHS}, {out.get(s, {}).get('n', 0)}, {lit(out.get(s, {}).get('avg'))}, "
-                f"{lit(out.get(s, {}).get('idx'))}, {lit(today)})" for s, k in chunk]
-        db.query("INSERT INTO complex_search (apt_seq, keyword, months, n_months, avg_ratio, idx, fetched_at) VALUES " + ", ".join(vals)
-                 + " ON CONFLICT (apt_seq) DO UPDATE SET keyword = EXCLUDED.keyword, months = EXCLUDED.months, n_months = EXCLUDED.n_months, "
-                 "avg_ratio = EXCLUDED.avg_ratio, idx = EXCLUDED.idx, fetched_at = EXCLUDED.fetched_at;")
-        done += len(chunk)
+            if "HTTP 401" in str(e) or "HTTP 403" in str(e):   # 키·권한 오류면 더 부르지 않는다
+                print(f"  실패로 중단: {e}", file=sys.stderr)
+                rc = 1
+                break
+            # 2026-10-19 묶음 요청이 'HTTP 400 검색 트렌드 API 호출 오류'로 실패했는데 하나씩은 됐다 → 단지별로 다시, 안 되는 단지는 건너뜀
+            for one in chunk:
+                try:
+                    save([one], index(call(body(start, end, [one])), MONTHS))
+                    done += 1
+                    streak = 0
+                except ApiError as e1:
+                    skipped += 1
+                    streak += 1
+                    print(f"  {one[0]} {one[1][0]}: 건너뜀 {str(e1)[:80]}", file=sys.stderr)
+            if streak >= 12:
+                print("  연속 실패 12번, 중단", file=sys.stderr)
+                rc = 1
+                break
         time.sleep(0.2)
-    print(f"  대상 {len(todo)}곳(이름이 짧아 뺀 곳 {len(cx) - len(todo)}) 중 이번 {done}곳, 기간 {start}~{end}")
+    print(f"  대상 {len(todo)}곳(이름이 짧아 뺀 곳 {len(cx) - len(todo)}) 중 이번 {done}곳, 건너뜀 {skipped}, 기간 {start}~{end}")
     return rc
 
 
