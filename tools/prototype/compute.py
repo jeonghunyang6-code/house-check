@@ -251,11 +251,13 @@ json.dump({'monthly': monthly, 'cx': cx, 'today': today,
                        for e in sorted({r['e'] for r in d.get('balloon', [])})},
            'auction': {a: [[r['period_month'].replace('-', ''), float(r['sale_ratio']) * 100] for r in d.get('auction', []) if r['area_code'] == a]
                        for a in ('서울', '경기', '인천', '전국')},
-           # ⑦ 후보 단지: [단지, 시군구, 동, 면적군, 기준 시세(만원), 신뢰도, 국면, 급지, 재건축 기대, 동 안 격차, 신축 대단지, 세대수, 준공, 월 회전율 %, 하락기 거래 시군구 안 분위(C3), 추정가(A5) 여부, 착공·확정 철도 역 700m 안(H4)]
+           # ⑦ 후보 단지: [단지, 시군구, 동, 면적군, 기준 시세(만원), 신뢰도, 국면, 급지, 재건축 기대, 동 안 격차, 신축 대단지, 세대수, 준공, 월 회전율 %, 하락기 거래 시군구 안 분위(C3), 추정가(A5) 여부, 착공·확정 철도 역 700m 안(H4), 용적률, 세대당 대지㎡, 정비 단계, 단계 번호, 일반분양 백분위(H5)]
            'cand': [[r['apt_name'], r['region_code'], r['umd_name'], r['area_group'], r['ref_10k'], r['confidence'], r['phase'], r['grade'],
                      bool(r['flag_rebuild']), bool(r['flag_gap']), r['new_big_name'] == r['apt_name'] if r['new_big_name'] else False,
                      r['households'], r['build_year'], r['turnover_pct'] and float(r['turnover_pct']),
-                     r.get('down_rank') and float(r['down_rank']), bool(r.get('est')), r['apt_seq'] in CANDP] for r in d.get('cand', [])],
+                     r.get('down_rank') and float(r['down_rank']), bool(r.get('est')), r['apt_seq'] in CANDP,
+                     r.get('vl_rat') and float(r['vl_rat']), r.get('land_per_hh') and float(r['land_per_hh']), r.get('stage'), r.get('stage_no'),
+                     r.get('gen_pct') and float(r['gen_pct'])] for r in d.get('cand', [])],
            'price_bands': d.get('price_bands', []),
            'geo': json.load(open(ROOT / 'data/geo/sudogwon_sgg_20260701.json')),
            'region_names': REGIONS, 'asof': TODAY.isoformat()}, open(OUT / 'data.json', 'w'), ensure_ascii=False)
