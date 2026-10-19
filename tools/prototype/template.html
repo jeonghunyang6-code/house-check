@@ -1248,6 +1248,7 @@ function drawCx(c) {
     const pre = z.stage_no != null && z.stage_no < 3;
     notes.push(`정비사업(H5): <b>${z.zone_nm}</b> ${z.biz_type}${z.public_private === '공공' ? '(공공)' : ''} — 지금 <b>${z.stage}</b>${dt ? ` (${dt})` : ''}`
       + `${z.existing_hh ? `, 기존 ${Number(z.existing_hh).toLocaleString()}세대` : ''}${z.built_hh ? ` → 계획 ${Number(z.built_hh).toLocaleString()}세대` : ''}. `
+      + (z.gen_sale_est != null ? `일반분양 근사 <b>${Number(z.gen_sale_est).toLocaleString()}세대</b>(계획 분양 ${Number(z.sale_hh).toLocaleString()} − 기존, 기존의 ${(+z.gen_ratio).toFixed(2)}배 → 서울 재건축 구역 중 ${+z.gen_pct >= 50 ? `상위 ${Math.max(1, Math.round(100 - z.gen_pct))}%` : `하위 ${Math.max(1, Math.round(+z.gen_pct))}%`}). 📖 일반분양이 많을수록 사업성이 좋다(p.374~397), 조합원 몫은 기존 세대 수로 근사. ` : '')
       + (pre ? '<b>조합설립인가 전</b>: 📖 중·하급지는 조합설립인가 뒤에 들어가라(상급지는 단계와 무관), 재건축은 20~25년 걸린다(p.374~397). ' : '📖 재건축 기간 20~25년, 가장 큰 위험은 시간(p.368~397). ')
       + '서울시 도시정비사업 통계(분기 갱신).');
   });

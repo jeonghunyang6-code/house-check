@@ -1,4 +1,4 @@
-from collector.redev import link, parse_addr, zone_row
+from collector.redev import general_sale, link, parse_addr, zone_row
 
 
 def test_parse_addr():
@@ -35,3 +35,15 @@ def test_zone_row_and_link():
           {"apt_seq": "H", "apt_name": "한강맨숀", "region_code": "11170", "umd_name": "이촌동", "jibun": "300-23"},
           {"apt_seq": "E", "apt_name": "이촌동그린빌", "region_code": "11170", "umd_name": "이촌동", "jibun": "12"}]
     assert link([w, y], ix) == [("W", "9", "jibun")]
+
+
+def test_general_sale():
+    # 2026-10-19 실제 값: 대치쌍용2차 기존 364 → 분양 1,165 (일반분양 근사 801, 2.2배), 신반포16차 396 → 400
+    zs = [{"code": "a", "biz_type": "공동주택재건축", "existing_hh": 364, "sale_hh": 1165},
+          {"code": "b", "biz_type": "공동주택재건축", "existing_hh": 396, "sale_hh": 400},
+          {"code": "c", "biz_type": "아파트지구재건축", "existing_hh": 213, "sale_hh": 185},
+          {"code": "d", "biz_type": "공동주택재건축", "existing_hh": 0, "sale_hh": 500},
+          {"code": "e", "biz_type": "주택정비형 재개발", "existing_hh": 100, "sale_hh": 900}]
+    g = general_sale(zs)
+    assert set(g) == {"a", "b", "c"}
+    assert g["a"] == (801, 2.2, 100.0) and g["b"][0] == 4 and g["c"] == (-28, -0.13, 33.3)

@@ -13,7 +13,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from collector.db import Db, DbError, connect, lit, select
-from collector.redev import FIELDS, link, zone_row
+from collector.redev import FIELDS, general_sale, link, zone_row
 from collector.regions import REGIONS
 
 KST = ZoneInfo("Asia/Seoul")
@@ -34,15 +34,20 @@ def load(db: Db, today) -> int:
 
 
 def run_link(db: Db) -> int:
-    zones = select(db, "SELECT code, region_code, zone_nm, biz_type, umd_name, bun, ji FROM redev_zone")
+    zones = select(db, "SELECT code, region_code, zone_nm, biz_type, umd_name, bun, ji, existing_hh, sale_hh FROM redev_zone")
     cx = select(db, "SELECT apt_seq, apt_name, region_code, umd_name, jibun FROM complexes WHERE region_code LIKE '11%'")
     pairs = link(zones, cx)
-    stmts = ["BEGIN;", "DELETE FROM complex_redev;"]
+    gen = general_sale(zones)
+    stmts = ["BEGIN;", "DELETE FROM complex_redev;", "UPDATE redev_zone SET gen_sale_est = NULL, gen_ratio = NULL, gen_pct = NULL;"]
+    if gen:
+        stmts.append("UPDATE redev_zone z SET gen_sale_est = v.g, gen_ratio = v.r, gen_pct = v.p FROM (VALUES "
+                     + ", ".join(f"({lit(c)}, {g}, {r}, {p})" for c, (g, r, p) in gen.items()) + ") AS v(c, g, r, p) WHERE z.code = v.c;")
     if pairs:
         stmts.append("INSERT INTO complex_redev (apt_seq, code, how) VALUES " + ", ".join(f"({lit(a)}, {lit(c)}, {lit(h)})" for a, c, h in pairs)
                      + " ON CONFLICT DO NOTHING;")
     db.query("\n".join([*stmts, "COMMIT;"]))
     n_reb = sum(1 for z in zones if z["biz_type"] in ("공동주택재건축", "아파트지구재건축"))
+    print(f"  일반분양 근사 {len(gen)}곳 (÷기존 세대 중앙값 {sorted(r for _, r, _ in gen.values())[len(gen) // 2] if gen else '-'})")
     print(f"  재건축 구역 {n_reb}곳 중 {len({c for _, c, _ in pairs})}곳이 단지 {len({a for a, _, _ in pairs})}곳과 연결 "
           f"({dict(Counter(h for _, _, h in pairs))})")
     return 0

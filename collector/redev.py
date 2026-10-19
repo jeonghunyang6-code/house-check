@@ -116,3 +116,12 @@ def link(zones: list[dict], complexes: list[dict]) -> list[tuple[str, str, str]]
             hit, how = named(cands), "name"
         out += [(c["apt_seq"], z["code"], how) for c in hit]
     return out
+
+
+def general_sale(zones: list[dict]) -> dict[str, tuple[int, float, float]]:
+    """재건축 구역 일반분양 근사 {code: (세대, ÷기존 세대, 서울 재건축 구역 중 백분위)}. 기존·계획 분양 세대가 다 있는 곳만.
+    📖 재건축 사업성은 일반분양이 많을수록 좋다 p.374~397 — 작가 기준 숫자는 없어 순위만"""
+    rows = {z["code"]: (z["sale_hh"] - z["existing_hh"], (z["sale_hh"] - z["existing_hh"]) / z["existing_hh"])
+            for z in zones if z["biz_type"] in REBUILD and (z.get("existing_hh") or 0) > 0 and (z.get("sale_hh") or 0) > 0}
+    rs = sorted(r for _, r in rows.values())
+    return {c: (g, round(r, 2), round(sum(1 for x in rs if x <= r) * 100 / len(rs), 1)) for c, (g, r) in rows.items()}
