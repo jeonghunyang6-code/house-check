@@ -1,4 +1,4 @@
-from collector.bldg import params, recap_row, title_row
+from collector.bldg import atch_pnus, params, recap_row, title_row
 
 
 def test_params():
@@ -24,3 +24,13 @@ def test_recap_and_title_rows():
 def test_absurd_vl_dropped():
     r = recap_row([{"platArea": 10, "vlRat": 123456.7, "vlRatEstmTotArea": 500000, "totArea": 1, "hhldCnt": 5}])
     assert r["vl_rat"] is None and r["vl_rat_calc"] is None and r["plat_area"] == 10
+
+
+def test_atch_pnus():
+    # 2026-10-19 실제 응답 모양(목동신시가지7): 동마다 같은 부속 지번이 되풀이
+    it = [{"atchSigunguCd": "11470", "atchBjdongCd": "10200", "atchPlatGbCd": "0", "atchBun": "0925", "atchJi": "0003"},
+          {"atchSigunguCd": "11470", "atchBjdongCd": "10200", "atchPlatGbCd": "0", "atchBun": "0926", "atchJi": "0000"},
+          {"atchSigunguCd": "11470", "atchBjdongCd": "10200", "atchPlatGbCd": "0", "atchBun": "0925", "atchJi": "0003"},
+          {"atchSigunguCd": "11470", "atchBjdongCd": "10200", "atchPlatGbCd": "1", "atchBun": "12", "atchJi": "0"},
+          {"atchSigunguCd": " ", "atchBjdongCd": "10200", "atchPlatGbCd": "0", "atchBun": "1", "atchJi": "0"}]
+    assert atch_pnus(it) == {"1147010200109250003", "1147010200109260000", "1147010200200120000"}

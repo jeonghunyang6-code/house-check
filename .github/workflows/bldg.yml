@@ -34,4 +34,8 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           HC_DB_BACKEND: psql
           PYTHONUNBUFFERED: "1"
-        run: python -m jobs.bldg --limit "${{ inputs.limit || '4000' }}"
+        run: |
+          rc=0
+          python -m jobs.bldg --limit "${{ inputs.limit || '4000' }}" || rc=$?
+          [ "$rc" -eq 2 ] || python -m jobs.bldg --atch --limit 3000 || rc=$?   # 부속 지번(여러 필지 단지, 0061)
+          exit $rc

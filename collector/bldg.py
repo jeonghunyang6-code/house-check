@@ -13,6 +13,7 @@ from collector.kapt import _get_json
 
 RECAP_URL = "https://apis.data.go.kr/1613000/BldRgstHubService/getBrRecapTitleInfo"
 TITLE_URL = "https://apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo"
+ATCH_URL = "https://apis.data.go.kr/1613000/BldRgstHubService/getBrAtchJibunInfo"
 
 
 def params(bjd_code: str, jibun: str) -> dict | None:
@@ -75,3 +76,29 @@ def fetch(bjd_code: str, jibun: str) -> dict:
     if r is None:
         r = title_row(_items(_get_json(TITLE_URL, {**p, "numOfRows": 100, "pageNo": 1, "_type": "json"})))
     return r or {"src": "none"}
+
+
+def atch_pnus(items: list[dict]) -> set[str]:
+    """부속 지번(동마다 같은 지번이 되풀이된다) → PNU 집합. 2026-10-19 목동신시가지7(목동 925): 164행 → 925-3·926·926-2·927.
+    여러 필지에 걸친 단지는 대표 필지만으로는 대지면적이 작게 잡혀 용적률이 높게 나온다 → 이 필지들의 VWorld 면적을 더한다"""
+    out = set()
+    for x in items:
+        sg, bj, gb, bun, ji = (str(x.get(k) or "").strip() for k in ("atchSigunguCd", "atchBjdongCd", "atchPlatGbCd", "atchBun", "atchJi"))
+        if len(sg) == 5 and len(bj) == 5 and bun.isdigit() and ji.isdigit() and gb in ("0", "1"):
+            out.add(f"{sg}{bj}{'2' if gb == '1' else '1'}{int(bun):04d}{int(ji):04d}")
+    return out
+
+
+def fetch_atch(bjd_code: str, jibun: str) -> set[str] | None:
+    """부속 지번 PNU 들 (없으면 빈 집합, 지번을 못 읽으면 None)."""
+    p = params(bjd_code, jibun)
+    if p is None:
+        return None
+    out, page = set(), 1
+    while True:
+        j = _get_json(ATCH_URL, {**p, "numOfRows": 100, "pageNo": page, "_type": "json"})
+        items = _items(j)
+        out |= atch_pnus(items)
+        if page * 100 >= int(j["response"]["body"].get("totalCount") or 0) or not items:
+            return out
+        page += 1
