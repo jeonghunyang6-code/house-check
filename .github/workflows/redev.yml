@@ -1,0 +1,37 @@
+# H5 서울 정비사업 단계 (jobs/redev.py → redev_zone·complex_redev). 서울 열린데이터광장(분기 갱신)을 매주 덮어쓴다.
+# 이 클라우드 세션에서는 data.seoul.go.kr 이 막혀 있어 러너에서 받는다. 필요한 시크릿: SEOUL_API_KEY, DATABASE_URL
+name: redev
+
+on:
+  schedule:
+    - cron: "27 21 * * 2"   # 매주 수요일 06:27 KST
+  workflow_dispatch:
+  push:                     # 첫 실행 확인용(브랜치 머지 전). 머지할 때 지운다
+    branches: [claude/busy-meitner-ojizbi]
+    paths: [.github/workflows/redev.yml, jobs/redev.py, collector/redev.py]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: redev
+  cancel-in-progress: false
+
+jobs:
+  redev:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: psql 확인
+        run: command -v psql || (sudo apt-get update -q && sudo apt-get install -y -q postgresql-client)
+      - name: 서울 정비사업
+        env:
+          SEOUL_API_KEY: ${{ secrets.SEOUL_API_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          HC_DB_BACKEND: psql
+          PYTHONUNBUFFERED: "1"
+        run: python -m jobs.redev

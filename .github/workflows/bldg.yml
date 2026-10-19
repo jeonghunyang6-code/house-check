@@ -1,0 +1,37 @@
+# H5 건축물대장 (jobs/bldg.py → complex_bldg). 2005년 이전 준공 단지 약 1.2만 곳을 하루 한도만큼씩 받는다. 다 받으면 새 단지만.
+name: bldg
+
+on:
+  schedule:
+    - cron: "7 19 * * *"   # 매일 04:07 KST
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "한 번에 받을 단지 수"
+        default: "4000"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bldg
+  cancel-in-progress: false
+
+jobs:
+  bldg:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: psql 확인
+        run: command -v psql || (sudo apt-get update -q && sudo apt-get install -y -q postgresql-client)
+      - name: 건축물대장
+        env:
+          DATA_GO_KR_SERVICE_KEY: ${{ secrets.DATA_GO_KR_SERVICE_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          HC_DB_BACKEND: psql
+          PYTHONUNBUFFERED: "1"
+        run: python -m jobs.bldg --limit "${{ inputs.limit || '4000' }}"
