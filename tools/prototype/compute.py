@@ -20,6 +20,13 @@ GAP = set()  # 2026-10-12 backfill 로 공백 해소
 mon = {r['m']: r for r in d['monthly']}
 monthly = [{'m': m, 'n': (mon[m]['n'] if m in mon else None), 'p84': (round(mon[m]['p84']) if m in mon and mon[m]['p84'] else None),
             'gap': m in GAP, 'partial': m in ('202609', '202610')} for m in ALL]
+from collector.volume import SHOW_SHARE
+for _m in monthly:   # C1: 신고가 덜 들어온 달의 보정 추정 (보인 비율 SHOW_SHARE 이상만 화면에 숫자)
+    nc = next((r for r in d.get('nowcast', []) if r['m'] == _m['m']), None)
+    if nc and _m['partial']:
+        _m['share'] = round(float(nc['share']) * 100)
+        if float(nc['share']) >= SHOW_SHARE:
+            _m.update(est=nc['est'], lo=nc['lo'], hi=nc['hi'])
 
 def band(price):  # D1 정상 범위 (책 p.152), 사이 가격대는 선형 보간
     pts = [(0, (60, 90)), (50000, (60, 90)), (80000, (50, 60)), (150000, (50, 60)), (200000, (30, 50)), (10**9, (30, 50))]

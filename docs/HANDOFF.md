@@ -16,7 +16,7 @@
 - 수도권 전월세 이력: 서울·인천·**경기** 2020-01~ 모두. 경기 D3·D5·F1 반영
 - H5: 서울 정비구역 496곳 단계(재건축 145곳 단지 연결), 건축물대장(2005년 이전 1.16만 곳 수집 중), VWorld 대지면적 11,036필지(사용자 PC), 부속 지번 수집 중
 - R9 검색량 6,152곳(약 35% '검색어로 안 잡힘' → 부르는 이름 규칙으로 다시 조회 중)
-- 🔧 백테스트 `docs/insights/backtests.md`: B1·E6·B4 유지, **B2 는 근거 없음 → 비교표 점수에서 뺌(참고)**, 분기 스냅숏으로 계속 검증(`jobs/b2_check.py`)
+- 🔧 백테스트 `docs/insights/backtests.md`: B1(지역)·E6·B4 유지, 단지 B1·B6 는 참고(2026-10-20), **B2 는 근거 없음 → 비교표 점수에서 뺌(참고)**, 분기 스냅숏으로 계속 검증(`jobs/b2_check.py`)
 - 시안 버전 31+ https://claude.ai/artifact/RtjwRo7U1bq1UTYZNZsTqg (예시 단지 9곳, 은마 추가)
 
 **자동 실행 (기본 브랜치 워크플로)**
@@ -29,11 +29,17 @@
 2. bldg: 건축물대장 남은 곳·부속 지번(`complex_atch_done`) — 다 모이면 `complex_land_lot` 중 `land_parcel` 에 없는 PNU 로 `tools/pc/vworld_targets_atch.csv` 를 만들어 사용자에게(PC 에서 `python vworld_land.py vworld_targets_atch.csv`), 결과 CSV 를 land_parcel 에 적재 → 목동 5·7·9·11·13 처럼 여러 필지 단지 용적률 확인
 3. 월요일 presale: F1 이 보관 파일로 정상 계산되는지(241건 안팎)
 4. R9 `--retry-zero` 결과(0 인 단지가 얼마나 줄었나)
+5. C1 `volume_nowcast`: daily 가 매일 서울·인천·경기·수도권 당월·전월 추정을 쌓는다. 2027-01 부터 2026-09 분 `actual` 이 채워지면 추정 오차를 보고 🔧 화면 표시 기준(보인 비율 80%)을 다시 정한다
 
 **다음 할 일**
 1. 화면 흐름 재구성 시안 (사용자와 흐름부터 합의: 시장 확인 → 예산 → 후보 찾기 → 단지 확인 → 임장 → 갈아타기 계획, 📖 M8 홈은 핵심 신호 소수)
 2. 임장 체크리스트(사용자 책 메모 파일 필요), 호가 기록(사용자가 뒤로 미룸)
-3. C1 신고 지연 보정(first_seen 1~2개월 더), 단지 단위 B1 백테스트, D8 재개발 노후도·I3 재개발 시나리오(우선순위 낮음)
+3. D8 재개발 노후도·I3 재개발 시나리오(우선순위 낮음)
+4. 화면 흐름 재구성 때 정할 것: 단지 B1 은 백테스트에서 같은 구 대비 예측력이 없어(docs/insights/backtests.md) ⑦ 국면 필터·D4 '매매 하락' 원인을 지역 국면(R-ONE)으로 바꿀지
+
+**2026-10-20 추가 (busy-meitner)**
+- **C1 신고 지연 보정**(collector/volume.py, jobs/volume.py, 0063 `volume_nowcast`, daily.yml '신고 지연 보정 거래량' 단계): first_seen 한 주(2026-10-12~18) 지연 분포로 '보인 비율'을 구해 추정. 며칠 뒤 건수 맞히기: 전월 ±2%, 당월 −7~−38% → 🔧 보인 비율 80% 이상인 달만 화면 숫자. 2026-10-20 서울 9월 보임 3,135 → 추정 3,253, 10월은 58% 만 보여 숫자 안 보임. 시안 ① 거래량 막대에 점선 테두리·설명
+- **단지 B1·B6 백테스트**(tools/analysis/backtest_b1_complex.py, b2_monthly.pkl 캐시 사용): 단지 라벨은 시장 방향만 따라가고 같은 구 단지 대비로는 못 가림, 하락장 라벨은 예측력 없음, B6 상대강도는 지속성 없음 → 시안 ④ 설명에 참고 문구
 
 **이 세션에서 쓴 요령**
 - 관리 API 로 SQL: `POST /v1/projects/$REF/database/query`(SUPABASE_ACCESS_TOKEN). 무거운 SQL(metrics 전체)은 시간 초과 → Actions(psql)

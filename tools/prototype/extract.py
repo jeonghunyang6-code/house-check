@@ -17,6 +17,9 @@ out['monthly'] = select(db, """
  SELECT contract_month m, count(*) FILTER (WHERE NOT is_cancelled) n,
   percentile_cont(0.5) WITHIN GROUP (ORDER BY price_10k) FILTER (WHERE NOT is_cancelled AND deal_type='중개' AND area_group IN (84,85)) p84
  FROM deals WHERE region_code LIKE '11%' GROUP BY 1 ORDER BY 1""")
+# A2. C1 신고 지연 보정 (volume_nowcast, jobs/volume.py) — 서울 최신
+out['nowcast'] = select(db, """SELECT contract_month m, observed, share, est, lo, hi, est_full FROM volume_nowcast
+ WHERE region_code = '11' AND asof = (SELECT max(asof) FROM volume_nowcast)""")
 # B. 오늘 처음 등록된 거래 + 전고점 (직거래·해제 제외, 4.3)
 #    전고점은 서버가 계산한 deals.prev_high_10k (DB 거래 + 보관 구간 최고가, sql/metrics.sql 1) 를 그대로 쓴다
 PREV = "d.prev_high_10k"
