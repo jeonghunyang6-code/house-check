@@ -7,6 +7,11 @@
     #                        일일 범위의 달은 DB 의 rents 로 rent_monthly 를 다시 계산한다.
     python -m jobs.rent_archive daily --archive gh
     python -m jobs.rent_archive j24 --archive gh     # D3 2년 전 전세 중앙값(rent_j24)만 다시 계산
+    python -m jobs.rent_archive roll --archive gh    # rent_monthly 에서 17개월 지난 달을 rentsum 파일로 옮기고 지운다(daily 에도 포함)
+    python -m jobs.rent_archive sumhist --regions gyeonggi --months 202001-202505 --archive gh   # 원본 파일 → rentsum 파일 다시 만들기
+
+요약 저장 구조(2026-10-19, 0053): rent_monthly(단지 × 면적군 × 달)는 최근 KEEP_MONTHS 달만 DB 에, 그 전은 시군구별
+rentsum_<시군구>.csv.gz. 지역 합계(rent_region_month)는 전체 기간 DB. backfill 은 오래된 달 요약을 rentsum 파일로 바로 쓴다.
     #   이어서 해제 재확인: 2~11개월 전 한 달(jobs.daily.recheck_month)을 API 로 다시 받아 보관 파일과 맞춘다.
     #   전월세에는 해제 표시가 없어서, 늦게 들어온 신고는 새로 넣고(first_seen=오늘) 빠진 신고는 disappeared 로 둔다.
     #   마지막으로 D3 역전세용 24개월 전 ±1개월 전세 실제 중앙값(rent_j24)을 보관 파일 원본으로 다시 계산한다.
@@ -40,19 +45,72 @@ SUMMARY_COLUMNS = (
     "n_jeonse_new", "jeonse_new_median_10k", "n_jeonse_renew", "n_wolse", "wolse_deposit_median_10k",
     "wolse_rent_median_10k", "n_renewal_right_used", "n_type_blank",
 )
+REGION_COLUMNS = ("region_code", "contract_month", "n_jeonse", "n_jeonse_new", "n_jeonse_renew", "n_wolse")
 CHUNK = 500
+KEEP_MONTHS = 17   # rent_monthly 에 남기는 달 수(이번 달 포함). D4 전세 1년 변화가 16개월 전 달까지 본다(sql/metrics.sql 9)
 
 
-def summary_sql(month: str, regions: list[str], rows: list[dict]) -> list[str]:
-    """해당 (시군구들, 달)의 rent_monthly 를 rows 의 요약으로 바꾸는 문장들 (트랜잭션 안에서 쓴다)."""
-    stmts = [
-        f"DELETE FROM rent_monthly WHERE contract_month = {lit(month)} "
-        f"AND region_code IN ({', '.join(lit(r) for r in regions)});"
-    ]
-    vals = ["(" + ", ".join(lit(s[c]) for c in SUMMARY_COLUMNS) + ")" for s in summarize(rows)]
+def sum_cutoff(today: date) -> str:
+    """이 달부터 rent_monthly 에 둔다. 그 전 달은 rentsum 파일."""
+    y, m = today.year, today.month - (KEEP_MONTHS - 1)
+    while m < 1:
+        y, m = y - 1, m + 12
+    return f"{y}{m:02d}"
+
+
+def sum_name(region: str) -> str:
+    return f"rentsum_{region}.csv.gz"
+
+
+def region_rows(sums: list[dict]) -> list[dict]:
+    """단지 요약 → 시군구 × 달 합계 (rent_region_month)."""
+    g: dict[tuple[str, str], dict] = {}
+    for s in sums:
+        r = g.setdefault((s["region_code"], s["contract_month"]), dict.fromkeys(REGION_COLUMNS[2:], 0))
+        for c in REGION_COLUMNS[2:]:
+            r[c] += int(s[c])
+    return [{"region_code": rc, "contract_month": m, **v} for (rc, m), v in sorted(g.items())]
+
+
+def summary_sql(month: str, regions: list[str], sums: list[dict], keep: bool = True) -> list[str]:
+    """해당 (시군구들, 달)의 요약을 바꾸는 문장들 (트랜잭션 안에서 쓴다). sums = summarize(원본 행).
+    지역 합계는 늘 쓰고, 단지 요약(rent_monthly)은 keep(최근 KEEP_MONTHS 달)일 때만."""
+    rl = ", ".join(lit(r) for r in regions)
+    stmts = [f"DELETE FROM rent_region_month WHERE contract_month = {lit(month)} AND region_code IN ({rl});"]
+    rr = ["(" + ", ".join(lit(r[c]) for c in REGION_COLUMNS) + ")" for r in region_rows(sums)]
+    if rr:
+        stmts.append(f"INSERT INTO rent_region_month ({', '.join(REGION_COLUMNS)}) VALUES " + ", ".join(rr) + ";")
+    if not keep:
+        return stmts
+    stmts.append(f"DELETE FROM rent_monthly WHERE contract_month = {lit(month)} AND region_code IN ({rl});")
+    vals = ["(" + ", ".join(lit(s[c]) for c in SUMMARY_COLUMNS) + ")" for s in sums]
     for i in range(0, len(vals), CHUNK):
         stmts.append(f"INSERT INTO rent_monthly ({', '.join(SUMMARY_COLUMNS)}) VALUES\n" + ",\n".join(vals[i:i + CHUNK]) + ";")
     return stmts
+
+
+def write_sums(store: Store, by_region: dict[str, list[dict]]) -> int:
+    """시군구별 rentsum 파일에 요약 행을 넣는다. 넣는 행이 있는 달은 그 시군구 파일에서 통째로 바꾼다."""
+    n = 0
+    for rc, new in sorted(by_region.items()):
+        months = {str(r["contract_month"]) for r in new}
+        old = store.get(sum_name(rc))
+        kept = [r for r in (decode(old) if old else []) if r["contract_month"] not in months]
+        rows = kept + [{c: "" if r[c] is None else str(r[c]) for c in SUMMARY_COLUMNS} for r in new]
+        rows.sort(key=lambda r: (r["contract_month"], r["apt_seq"], int(r["area_group"])))
+        store.put(sum_name(rc), encode(rows, SUMMARY_COLUMNS))
+        n += len(new)
+    return n
+
+
+def iter_sums(store: Store, regions: list[str], since: str = "000000"):
+    """rentsum 파일들 → 요약 행(값은 문자열)을 하나씩. 파일이 없는 시군구는 건너뛴다(파일 하나씩만 메모리에)."""
+    for rc in regions:
+        data = store.get(sum_name(rc))
+        if data:
+            for r in decode(data):
+                if r["contract_month"] >= since:
+                    yield r
 
 
 def archive_sql(month: str, counts: dict[str, int], source: str, today: date) -> str:
@@ -76,12 +134,28 @@ def write_file(store: Store, month: str, rows: list[dict], regions: set[str]) ->
 
 
 def flush(db: Db, store: Store, month: str, rows: list[dict], counts: dict[str, int], source: str, today: date,
-          extra_sql: list[str] = ()) -> int:
+          extra_sql: list[str] = (), sink: dict[str, list[dict]] | None = None) -> int:
+    """원본 파일 → DB(요약·보관 기록). 오래된 달(sum_cutoff 전)의 단지 요약은 DB 에 넣지 않고 sink(시군구별)에 모은다."""
     regions = sorted(counts)
     total = write_file(store, month, rows, set(regions))
-    db.query("\n".join(["BEGIN;", *summary_sql(month, regions, rows), archive_sql(month, counts, source, today),
+    keep = month >= sum_cutoff(today)
+    sums = summarize(rows)
+    db.query("\n".join(["BEGIN;", *summary_sql(month, regions, sums, keep), archive_sql(month, counts, source, today),
                         *extra_sql, "COMMIT;"]))
+    if not keep:
+        if sink is None:
+            write_sums(store, _by_region(sums))
+        else:
+            for k, v in _by_region(sums).items():
+                sink.setdefault(k, []).extend(v)
     return total
+
+
+def _by_region(rows: list[dict]) -> dict[str, list[dict]]:
+    out: dict[str, list[dict]] = {}
+    for r in rows:
+        out.setdefault(r["region_code"], []).append(r)
+    return out
 
 
 def backfill(db: Db, store: Store, regions: list[str], months: list[str], today: date, fetch=fetch_rents) -> int:
@@ -93,6 +167,16 @@ def backfill(db: Db, store: Store, regions: list[str], months: list[str], today:
         for r in select(db, "SELECT region_code, contract_month FROM archive_cells WHERE kind = 'rent' "
                             f"AND contract_month IN ({', '.join(lit(m) for m in months)})")
     }
+    sink: dict[str, list[dict]] = {}   # 오래된 달 단지 요약 → 끝에 rentsum 파일로 한 번에
+    try:
+        return _backfill(db, store, regions, months, today, fetch, done, sink)
+    finally:
+        if sink:
+            n = write_sums(store, sink)
+            print(f"  전월세 요약 보관 파일: {len(sink)}개 시군구 {n:,}행")
+
+
+def _backfill(db: Db, store: Store, regions: list[str], months: list[str], today: date, fetch, done: set, sink: dict) -> int:
     failures = 0
     for month in months:
         todo = [r for r in regions if (r, month) not in done]
@@ -116,11 +200,15 @@ def backfill(db: Db, store: Store, regions: list[str], months: list[str], today:
             counts[code] = len(got)
         if counts:
             try:
-                total = flush(db, store, month, rows, counts, "api_backfill", today)
+                total = flush(db, store, month, rows, counts, "api_backfill", today, sink=sink)
                 print(f"  전월세 {month}: {len(counts)}개 시군구 {len(rows)}건 보관 (파일 전체 {total}건)")
             except Exception as e:  # 파일·DB 단계 실패는 다음 실행에서 다시 받는다
                 failures += 1
                 print(f"  전월세 {month}: 보관 실패 {type(e).__name__}: {e}", file=sys.stderr)
+        if len({r["contract_month"] for rs in sink.values() for r in rs}) >= 12:   # 중간에 끊겨도 남도록 12개월마다 파일로
+            n = write_sums(store, sink)
+            print(f"  전월세 요약 보관 파일: {len(sink)}개 시군구 {n:,}행")
+            sink.clear()
         if stop:
             return 2
     return 1 if failures else 0
@@ -159,7 +247,7 @@ def daily(db: Db, store: Store, today: date) -> int:
             rows = _db_rows(db, month)
             regions = sorted({r["region_code"] for r in rows})
             if regions:
-                db.query("\n".join(["BEGIN;", *summary_sql(month, regions, rows), "COMMIT;"]))
+                db.query("\n".join(["BEGIN;", *summary_sql(month, regions, summarize(rows)), "COMMIT;"]))
             print(f"  전월세 {month}: 요약 갱신 {len(rows)}건")
         except DbError as e:
             failures += 1
@@ -223,6 +311,43 @@ def recheck(db: Db, store: Store, today: date, fetch=fetch_rents) -> int:
     return 1 if failures else 0
 
 
+def roll_sums(db: Db, store: Store, today: date) -> int:
+    """rent_monthly 에서 sum_cutoff 전 달을 rentsum 파일로 옮기고 DB 에서 지운다. 파일을 다시 받아 행 수를 맞춘 뒤에만 지운다."""
+    cut = sum_cutoff(today)
+    old = select(db, f"SELECT {', '.join(SUMMARY_COLUMNS)} FROM rent_monthly WHERE contract_month < {lit(cut)}")
+    if not old:
+        return 0
+    by = _by_region(old)
+    write_sums(store, by)
+    for rc, rs in by.items():
+        months, data = {r["contract_month"] for r in rs}, store.get(sum_name(rc))
+        back = sum(1 for r in decode(data) if r["contract_month"] in months) if data else -1
+        if back != len(rs):
+            print(f"  전월세 요약 {rc}: 파일 {back}행 ≠ DB {len(rs)}행, 지우지 않음", file=sys.stderr)
+            return 1
+    db.query(f"DELETE FROM rent_monthly WHERE contract_month < {lit(cut)};")
+    if len(old) > 50_000:   # 처음 옮길 때처럼 많이 지웠으면 빈 공간을 돌려준다(DELETE 만으로는 DB 크기가 안 준다)
+        db.query("VACUUM FULL rent_monthly;")
+    print(f"  전월세 요약 {min(r['contract_month'] for r in old)}~{max(r['contract_month'] for r in old)}: "
+          f"{len(by)}개 시군구 {len(old):,}행 → rentsum 파일, DB 에서 삭제 ({cut}~ 만 남김)")
+    return 0
+
+
+def sumhist(store: Store, regions: list[str], months: list[str]) -> int:
+    """원본 월별 파일 → rentsum 파일 (그 시군구·달을 다시 만든다). DB 는 쓰지 않는다."""
+    want, sink, miss = set(regions), {}, []
+    for m in months:
+        data = store.get(asset_name("rent", m))
+        if data is None:
+            miss.append(m)
+            continue
+        for k, v in _by_region(summarize([r for r in decode(data) if r["region_code"] in want])).items():
+            sink.setdefault(k, []).extend(v)
+    n = write_sums(store, sink)
+    print(f"  rentsum: {len(sink)}개 시군구 {n:,}행 ({months[0]}~{months[-1]})" + (f", 원본 없음 {miss}" if miss else ""))
+    return 0
+
+
 def j24_months(today: date) -> list[str]:
     """D3: 24개월 전 ±1개월 (sql/metrics.sql j24 와 같은 달들)."""
     out = []
@@ -272,7 +397,7 @@ def refresh_j24(db: Db, store: Store, today: date) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("mode", choices=["backfill", "daily", "j24"])
+    ap.add_argument("mode", choices=["backfill", "daily", "j24", "roll", "sumhist"])
     ap.add_argument("--regions", default="seoul")
     ap.add_argument("--months", help="backfill 용. 예: 202001-202508")
     ap.add_argument("--archive", help="gh | gh:<tag> | dir:<경로>. 기본 HC_ARCHIVE 또는 dir:data/archive")
@@ -289,11 +414,18 @@ def main(argv: list[str] | None = None) -> int:
         rc = backfill(db, store, select_regions(a.regions), parse_months(a.months), today)
     elif a.mode == "j24":
         rc = refresh_j24(db, store, today)
+    elif a.mode == "roll":
+        rc = roll_sums(db, store, today)
+    elif a.mode == "sumhist":
+        if not a.months:
+            ap.error("sumhist 에는 --months 가 필요하다")
+        rc = sumhist(store, select_regions(a.regions), parse_months(a.months))
     else:
         rc = daily(db, store, today)
         if not a.no_recheck:
             rc = max(rc, recheck(db, store, today))
         rc = max(rc, refresh_j24(db, store, today))
+        rc = max(rc, roll_sums(db, store, today))
     print(f"[rent_archive] {a.mode} done in {time.monotonic() - t0:.0f}s rc={rc}")
     return rc
 

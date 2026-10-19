@@ -54,6 +54,14 @@ for _rc in sorted({s.split('-')[0] for s in SEQS}):
 out['cx_deals'].sort(key=lambda r: r['cd'])
 out['cx_rent'] = select(db, f"""SELECT apt_seq, contract_month m, area_group, n_jeonse, jeonse_median_10k, n_jeonse_new, jeonse_new_median_10k, n_jeonse_renew
  FROM rent_monthly WHERE apt_seq IN ({sl}) AND area_group IN (84,85) ORDER BY contract_month""")
+# DB 에는 최근 17개월만(0053). 그 전은 시군구별 rentsum 파일
+from jobs.rent_archive import iter_sums
+_rfirst = min((r['m'] for r in out['cx_rent']), default='999999')
+for r in iter_sums(_store, sorted({s.split('-')[0] for s in SEQS})):
+    if r['apt_seq'] in SEQS and int(r['area_group']) in (84, 85) and r['contract_month'] < _rfirst:
+        out['cx_rent'].append(dict(apt_seq=r['apt_seq'], m=r['contract_month'], area_group=int(r['area_group']),
+                                   **{k: (int(r[k]) if r[k] != '' else None) for k in ('n_jeonse', 'jeonse_median_10k', 'n_jeonse_new', 'jeonse_new_median_10k', 'n_jeonse_renew')}))
+out['cx_rent'].sort(key=lambda r: r['m'])
 out['cx_phase'] = select(db, f"""SELECT apt_seq, area_group, phase, pattern, chg_12m, up_months, down_months, last3, region_chg_12m, rel_strength,
  jeonse_10k, jeonse_n, jeonse_src, jeonse_24m_10k, jeonse_24m_n, jeonse_24m_approx, reverse_risk, reserve_10k, real_ref_10k, base2020_10k, real_chg_2020,
  households, turnover_pct, turnover_state, e3_seqs, e3_target_10k, e3_chg_12m, rel_strength_e3, e2_ratio, e2_n, e2_basis, e4_cap_10k, e4_cap_n, e4_compress, e4_sizes,

@@ -15,7 +15,7 @@ on:
         description: "예: 202001-202508"
         required: true
       kinds:
-        description: "trade | rent | trade,rent"
+        description: "trade | rent | trade,rent | rentroll(전세 요약 17개월 지난 달 → rentsum 파일, DB 삭제) | rentsum(원본 → rentsum 파일 다시 만들기)"
         default: "trade"
       page_size:
         description: "한 번에 받을 건수 (100 또는 1000)"
@@ -61,5 +61,11 @@ jobs:
           fi
           if [[ ",$KINDS," == *",rent,"* ]] && [ "$rc" -ne 2 ]; then
             python -m jobs.rent_archive backfill --regions "$REGIONS" --months "$MONTHS" || rc=$?
+          fi
+          if [[ ",$KINDS," == *",rentroll,"* ]]; then
+            python -m jobs.rent_archive roll || rc=$?
+          fi
+          if [[ ",$KINDS," == *",rentsum,"* ]]; then
+            python -m jobs.rent_archive sumhist --regions "$REGIONS" --months "$MONTHS" || rc=$?
           fi
           exit $rc
