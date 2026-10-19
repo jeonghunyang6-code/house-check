@@ -34,7 +34,7 @@ def load(db: Db, today) -> int:
 
 
 def run_link(db: Db) -> int:
-    zones = select(db, "SELECT code, region_code, zone_nm, biz_type, umd_name, bun FROM redev_zone")
+    zones = select(db, "SELECT code, region_code, zone_nm, biz_type, umd_name, bun, ji FROM redev_zone")
     cx = select(db, "SELECT apt_seq, apt_name, region_code, umd_name, jibun FROM complexes WHERE region_code LIKE '11%'")
     pairs = link(zones, cx)
     stmts = ["BEGIN;", "DELETE FROM complex_redev;"]

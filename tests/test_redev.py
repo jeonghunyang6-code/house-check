@@ -8,6 +8,7 @@ def test_parse_addr():
     assert parse_addr("효창동 5-307") == ("효창동", 5, 307)
     assert parse_addr("이문동170-65") == ("이문동", 170, 65)
     assert parse_addr("성수동1가 656") == ("성수동1가", 656, 0)
+    assert parse_addr("압구정동414") == ("압구정동", 414, 0)        # '압구'를 구 이름으로 떼지 않는다
     assert parse_addr("") is None and parse_addr("-") is None
 
 
@@ -26,3 +27,11 @@ def test_zone_row_and_link():
           {"apt_seq": "C", "apt_name": "태릉우성", "region_code": "11350", "umd_name": "공릉동", "jibun": "254"},
           {"apt_seq": "D", "apt_name": "상계주공1", "region_code": "11350", "umd_name": "상계동", "jibun": "1"}]
     assert link([z, z2, z3], cx) == [("A", "2813", "jibun"), ("C", "2896", "name")]   # 재개발 구역은 단지와 잇지 않는다
+    # 이촌동 300-xx 처럼 본번이 같은 단지가 여럿: 지번 전체가 같은 곳만, 이름이 동 이름뿐이면 잇지 않는다
+    regions["11170"] = "서울 용산구"
+    w = zone_row({"CODE": "9", "DISTRICT": "용산구", "ZONE_NM": "왕궁아파트", "JIBUN_ADDR": "이촌동 300-1", "BIZ_TYPE": "공동주택재건축", "BIZ_STAGE": "조합설립"}, regions)
+    y = zone_row({"CODE": "8", "DISTRICT": "용산구", "ZONE_NM": "이촌동(1,2,3)", "JIBUN_ADDR": "이촌동 999", "BIZ_TYPE": "공동주택재건축", "BIZ_STAGE": "추진위"}, regions)
+    ix = [{"apt_seq": "W", "apt_name": "왕궁", "region_code": "11170", "umd_name": "이촌동", "jibun": "300-1"},
+          {"apt_seq": "H", "apt_name": "한강맨숀", "region_code": "11170", "umd_name": "이촌동", "jibun": "300-23"},
+          {"apt_seq": "E", "apt_name": "이촌동그린빌", "region_code": "11170", "umd_name": "이촌동", "jibun": "12"}]
+    assert link([w, y], ix) == [("W", "9", "jibun")]

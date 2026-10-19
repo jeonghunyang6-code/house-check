@@ -14,9 +14,12 @@ import re
 import urllib.request
 
 from collector.kapt import norm_name
+from collector.regions import REGIONS
+
+SEOUL_GU = tuple(sorted((n.split()[1] for c, n in REGIONS.items() if c.startswith("11")), key=len, reverse=True))
 
 URL = "http://openapi.seoul.go.kr:8088/{key}/json/TbSeoulRedevStatus/{a}/{b}/"
-STAGE_ORDER = ("구역지정", "추진위", "조합설립", "사업시행", "관리처분", "착공", "준공")
+STAGE_ORDER = ("구역지정", "추진위", "조합설립", "건축심의", "사업시행", "관리처분", "착공", "준공")   # 2026-10-19 실제 값 7개(준공 없음)
 REBUILD = ("공동주택재건축", "아파트지구재건축")
 FIELDS = {   # API 열 → 우리 열
     "CODE": "code", "DISTRICT": "district", "ZONE_NM": "zone_nm", "JIBUN_ADDR": "jibun_addr", "ROAD_ADDR": "road_addr",
@@ -51,7 +54,10 @@ def parse_addr(s: str | None) -> tuple[str, int, int] | None:
     """'양천구목동903' → ('목동', 903, 0), '쌍문2동 81번지' → ('쌍문동', 81, 0), '효창동 5-307' → ('효창동', 5, 307). 산 지번은 None."""
     s = re.sub(r"\s+", "", s or "")
     s = re.sub(r"^(서울특별시|서울시|서울)", "", s)
-    s = re.sub(r"^[가-힣]{1,4}구(?=[가-힣])", "", s)
+    for gu in SEOUL_GU:                                   # 구 이름은 목록으로만 뗀다('압구정동'의 '압구'를 떼지 않게)
+        if s.startswith(gu):
+            s = s[len(gu):]
+            break
     s = re.sub(r"([가-힣])\d+동", r"\1동", s)            # 행정동 번호 → 법정동
     m = re.match(r"([가-힣]+(?:동|가|로)(?:\d+가)?)(\d+)(?:-(\d+))?", s)
     if not m:
@@ -72,9 +78,25 @@ def zone_row(r: dict, regions: dict[str, str]) -> dict:
     return out
 
 
+def _key(name: str, umd: str) -> str:
+    """이름 비교용: 괄호·'아파트' 빼고, 앞의 동 이름('역삼동', '역삼')을 뗀다."""
+    n = norm_name(name)
+    for p in (umd, umd[:-1] if umd.endswith("동") else umd):
+        if p and n.startswith(p):
+            return n[len(p):]
+    return n
+
+
+def _jibun(s: str | None) -> tuple[int, int] | None:
+    main, _, sub = (s or "").partition("-")
+    return (int(main), int(sub or 0)) if main.isdigit() and (not sub or sub.isdigit()) else None
+
+
 def link(zones: list[dict], complexes: list[dict]) -> list[tuple[str, str, str]]:
     """재건축 구역 → 실거래 단지 [(apt_seq, code, how)]. complexes: apt_seq, apt_name, region_code, umd_name, jibun.
-    지번 본번이 같은 단지(how='jibun'), 없으면 같은 동에서 이름이 서로 포함되는 단지(how='name')."""
+    ① 지번(본번·부번)이 같은 단지 — 여럿이면 이름이 겹치는 단지만(겹치는 게 없으면 다)
+    ② 없으면 같은 동에서 이름이 겹치는 단지(동 이름을 뗀 뒤 🔧 3글자 이상 포함). 본번만 같은 단지는 이름도 겹칠 때만
+    (이촌동 300번지처럼 한 본번에 단지가 여럿인 곳이 있어 본번만으로는 잇지 않는다)"""
     by: dict[tuple[str, str], list[dict]] = {}
     for c in complexes:
         by.setdefault((c["region_code"], c["umd_name"]), []).append(c)
@@ -83,11 +105,14 @@ def link(zones: list[dict], complexes: list[dict]) -> list[tuple[str, str, str]]
         if z["biz_type"] not in REBUILD or not z["umd_name"]:
             continue
         cands = by.get((z["region_code"], z["umd_name"]), [])
-        hit = [c for c in cands if (c["jibun"] or "").split("-")[0].isdigit() and int(c["jibun"].split("-")[0]) == z["bun"]]
-        how = "jibun"
-        if not hit:
-            zn = norm_name(z["zone_nm"])
-            hit = [c for c in cands if len(norm_name(c["apt_name"])) >= 2 and (norm_name(c["apt_name"]) in zn or zn in norm_name(c["apt_name"]))]
-            how = "name"
+        zk = _key(z["zone_nm"] or "", z["umd_name"])
+
+        def named(cs):
+            return [c for c in cs if (lambda k: len(min(k, zk, key=len)) >= 3 and (k in zk or zk in k))(_key(c["apt_name"], z["umd_name"]))]
+        exact = [c for c in cands if _jibun(c["jibun"]) == (z["bun"], z["ji"] or 0)]
+        if exact:
+            hit, how = named(exact) or exact, "jibun"
+        else:
+            hit, how = named(cands), "name"
         out += [(c["apt_seq"], z["code"], how) for c in hit]
     return out
