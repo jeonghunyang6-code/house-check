@@ -14,10 +14,7 @@ jobs:
         run: |
           set +e
           I=S62GFEEN7JMLMA0PH6CF19108891
-          for q in "portal/data/service/selectServicePage.do?infId=$I&infSeq=1" "portal/data/service/selectServicePage.do?infId=$I&infSeq=3" "portal/data/service/selectServicePage.do?page=1&infId=$I&infSeq=3" ; do
-            echo "=== $q"; curl -s -m 60 -A 'house-check (personal research)' -L "https://data.gg.go.kr/$q" -o p.html; wc -c p.html
-            head -c 600 p.html; echo
-            grep -o 'openapi.gg.go.kr/[A-Za-z0-9_]*' p.html | sort -u
-            grep -o 'https://openapi[^"<> ]*' p.html | sort -u | head
-          done
-          echo "=== openapi root"; curl -s -m 30 https://openapi.gg.go.kr/ | head -c 800; echo
+          curl -s -m 60 -A 'house-check (personal research)' "https://data.gg.go.kr/portal/data/service/selectServicePage.do?infId=$I&infSeq=1" -o p.html
+          echo "== .do 경로"; grep -o '/portal/[A-Za-z0-9/_]*\.do' p.html | sort | uniq -c | sort -rn | head -40
+          echo "== download·sheet·file 문맥"; grep -o -i '.\{0,120\}\(download\|sheet\|fileSeq\|srvCd\|openapi\).\{0,160\}' p.html | grep -v '^\s*$' | head -40
+          echo "== 표 머리"; grep -o '<th[^>]*>[^<]\{1,40\}</th>' p.html | head -60
