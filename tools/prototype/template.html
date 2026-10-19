@@ -1242,6 +1242,25 @@ function drawCx(c) {
     if (g.flag_gap) extra.push(`동 안 가격 폭 ${eok(g.q1_10k)}~${eok(g.q3_10k)}`);
     notes.push(`급지(E1): ${g.umd_name} 84㎡ 환산 실거래 대표가 ${eok(g.value_10k)} → ${g.grade}급지(${rng}, 단지 ${g.n_complex}곳, ${g.asof} 계산)${extra.length ? '. ' + extra.join(' · ') : ''}. 경계 15억·25억은 주담대 상한 경계, 나머지는 🔧.`);
   }
+  (c.redev || []).forEach(z => {
+    const dt = [['구역지정', z.zone_ymd], ['추진위', z.committee_ymd], ['조합설립', z.assoc_ymd], ['사업시행', z.impl_ymd], ['관리처분', z.mgmt_ymd], ['착공', z.construction_ymd]]
+      .filter(x => x[1]).sort((a, b) => a[1] < b[1] ? -1 : 1).map(x => `${x[0]} ${x[1].slice(0, 7).replace('-', '.')}`).join(' → ');
+    const pre = z.stage_no != null && z.stage_no < 3;
+    notes.push(`정비사업(H5): <b>${z.zone_nm}</b> ${z.biz_type}${z.public_private === '공공' ? '(공공)' : ''} — 지금 <b>${z.stage}</b>${dt ? ` (${dt})` : ''}`
+      + `${z.existing_hh ? `, 기존 ${Number(z.existing_hh).toLocaleString()}세대` : ''}${z.built_hh ? ` → 계획 ${Number(z.built_hh).toLocaleString()}세대` : ''}. `
+      + (z.gen_sale_est != null ? `일반분양 근사 <b>${Number(z.gen_sale_est).toLocaleString()}세대</b>(계획 분양 ${Number(z.sale_hh).toLocaleString()} − 기존, 기존의 ${(+z.gen_ratio).toFixed(2)}배 → 서울 재건축 구역 중 ${+z.gen_pct >= 50 ? `상위 ${Math.max(1, Math.round(100 - z.gen_pct))}%` : `하위 ${Math.max(1, Math.round(+z.gen_pct))}%`}). 📖 일반분양이 많을수록 사업성이 좋다(p.374~397), 조합원 몫은 기존 세대 수로 근사. ` : '')
+      + (pre ? '<b>조합설립인가 전</b>: 📖 중·하급지는 조합설립인가 뒤에 들어가라(상급지는 단계와 무관), 재건축은 20~25년 걸린다(p.374~397). ' : '📖 재건축 기간 20~25년, 가장 큰 위험은 시간(p.368~397). ')
+      + '서울시 도시정비사업 통계(분기 갱신).');
+  });
+  if (c.bldg && c.bldg.src !== 'none') {
+    const b = c.bldg, vr = b.vl_rat != null ? +b.vl_rat : (b.vl_rat_calc != null ? +b.vl_rat_calc : null);
+    notes.push(`건축물대장(H5): ${vr != null ? `용적률 <b>${vr.toFixed(0)}%</b>` : '용적률 대장에 없음'}${b.land_per_hh != null ? ` · 세대당 대지 ${(+b.land_per_hh).toFixed(1)}㎡(${(b.land_per_hh / 3.3058).toFixed(1)}평)` : ''}`
+      + `${b.hhld ? ` · 대장 세대수 ${Number(b.hhld).toLocaleString()}` : ''}. 📖 재건축 사업성은 용적률이 낮고 대지지분이 클수록 좋다(p.374~397). 오래된 단지는 대장에 대지면적이 비어 있는 경우가 많다.`);
+  }
+  if (c.search) notes.push(`인지도(R9): 네이버 검색량(검색어 ${c.search.keyword.split('|').map(k => `'${k}'`).join('·')} 합) 최근 12개월 = 헬리오시티의 <b>${(+c.search.idx).toFixed(2)}배</b>`
+    + (+c.search.idx < 0.01 ? ' → <b>검색어로 거의 안 잡힘</b>(사람들이 다른 이름으로 부를 수 있어 인지도가 낮다고 단정하지 않음)'
+       : ` → 받은 단지 중 ${+c.search.pct >= 50 ? `상위 ${Math.max(1, Math.round(100 - c.search.pct))}%` : `하위 ${Math.max(1, Math.round(+c.search.pct))}%`}`)
+    + `${c.search.n_months < 6 ? ' (검색이 너무 적어 값이 없는 달이 많음)' : ''}. 📖 인지도는 곧 수요, 남들이 모르는 싼 아파트엔 이유가 있다(p.401, p.409). 단지 이름을 다르게 부르면(줄임말) 검색량이 작게 잡힌다. 🔧 기준선 없음.`);
   if (c.loc && (c.loc.up_m != null || c.loc.top_m != null)) {
     const km = (m) => `${(m / 1000).toFixed(1)}km`;
     notes.push(`상급지까지 거리(E8): ` + [c.loc.up_m != null ? `가장 가까운 위 급지 <b>${c.loc.up_dong}</b>(${c.loc.up_grade}급지) ${km(c.loc.up_m)}` : '',

@@ -77,6 +77,15 @@ out['cx_loc'] = select(db, f"""WITH a AS (SELECT region_code, umd_name, max(acad
 SELECT c.apt_seq, c.umd_name, r.ac, r.rk, r.n, d.grade, d.up_dong, d.up_grade, d.up_m, d.top_dong, d.top_m
  FROM complexes c LEFT JOIN r ON r.region_code = c.region_code AND r.umd_name = c.umd_name LEFT JOIN complex_e8 d ON d.apt_seq = c.apt_seq
  WHERE c.apt_seq IN ({sl})""")
+# H5 정비사업: 서울 재건축 구역 단계(redev_zone·complex_redev, jobs/redev.py) + 건축물대장(complex_bldg, jobs/bldg.py)
+out['cx_redev'] = select(db, f"""SELECT r.apt_seq, z.zone_nm, z.biz_type, z.stage, z.stage_no, z.existing_hh, z.built_hh, z.zone_ymd::text, z.committee_ymd::text,
+  z.assoc_ymd::text, z.impl_ymd::text, z.mgmt_ymd::text, z.construction_ymd::text, z.public_private, z.sale_hh, z.gen_sale_est, z.gen_ratio, z.gen_pct
+ FROM complex_redev r JOIN redev_zone z USING (code) WHERE r.apt_seq IN ({sl})""")
+out['cx_bldg'] = select(db, f"SELECT apt_seq, src, plat_area, vl_rat, vl_rat_calc, hhld, land_per_hh FROM complex_bldg WHERE apt_seq IN ({sl})")
+# R9 인지도(검색량, complex_search, jobs/searchtrend.py): 지수와 받은 단지 중 백분위
+out['cx_search'] = select(db, f"""SELECT apt_seq, keyword, n_months, idx, round((100 * percent_rank() OVER (ORDER BY idx))::numeric, 1) AS pct, fetched_at::text
+ FROM complex_search WHERE idx IS NOT NULL""")
+out['cx_search'] = [r for r in out['cx_search'] if r['apt_seq'] in SEQS]
 # H6 주민 소득 (region_income, jobs/macro.py): 수도권 시군구 1인당 근로소득, 5년 전과 최신
 out['income'] = select(db, """SELECT year, sido, name, region_codes, avg_pay_10k FROM region_income
  WHERE year IN ((SELECT max(year) FROM region_income), (SELECT (max(year)::int - 5)::text FROM region_income)) ORDER BY year, avg_pay_10k DESC""")

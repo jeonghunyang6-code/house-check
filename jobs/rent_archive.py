@@ -314,9 +314,12 @@ def recheck(db: Db, store: Store, today: date, fetch=fetch_rents) -> int:
 def roll_sums(db: Db, store: Store, today: date) -> int:
     """rent_monthly 에서 sum_cutoff 전 달을 rentsum 파일로 옮기고 DB 에서 지운다. 파일을 다시 받아 행 수를 맞춘 뒤에만 지운다."""
     cut = sum_cutoff(today)
-    old = select(db, f"SELECT {', '.join(SUMMARY_COLUMNS)} FROM rent_monthly WHERE contract_month < {lit(cut)}")
-    if not old:
+    months = [r["m"] for r in select(db, f"SELECT DISTINCT contract_month AS m FROM rent_monthly WHERE contract_month < {lit(cut)} ORDER BY 1")]
+    if not months:
         return 0
+    old = []   # 달마다 읽는다(2026-10-19 처음 옮길 때 68만 행을 한 번에 읽다 psql 5분 제한에 걸렸다)
+    for m in months:
+        old += select(db, f"SELECT {', '.join(SUMMARY_COLUMNS)} FROM rent_monthly WHERE contract_month = {lit(m)}")
     by = _by_region(old)
     write_sums(store, by)
     for rc, rs in by.items():
@@ -425,7 +428,11 @@ def main(argv: list[str] | None = None) -> int:
         if not a.no_recheck:
             rc = max(rc, recheck(db, store, today))
         rc = max(rc, refresh_j24(db, store, today))
-        rc = max(rc, roll_sums(db, store, today))
+        try:   # 요약 옮기기가 실패해도 매일 수집의 다른 결과는 그대로 두고 다음 날 다시 한다
+            rc = max(rc, roll_sums(db, store, today))
+        except Exception as e:
+            print(f"  전월세 요약 옮기기 실패 {type(e).__name__}: {e}", file=sys.stderr)
+            rc = max(rc, 1)
     print(f"[rent_archive] {a.mode} done in {time.monotonic() - t0:.0f}s rc={rc}")
     return rc
 

@@ -81,6 +81,21 @@
 - **경기 전월세 backfill**: 2026-10-18 첫 시도(run 39143544324)는 공공데이터포털 연결 실패로 202001 에서 멈췄었다. 2026-10-19 13:20 UTC 이 브랜치 코드로 다시 실행(run 39259362147, regions=gyeonggi, months=202001-202608) — 202506 이후만 rent_monthly(약 +20MB 추정), 그 전은 rentsum 파일
 - **남은 단계**: 머지 뒤 `backfill.yml` kinds=rentroll(또는 다음 daily)로 서울·인천 rent_monthly 2020-01~2025-05 를 rentsum 파일로 옮기고 지운다(약 −100MB 추정). **머지 전에 하면 안 됨**: 기본 브랜치의 옛 presale(F1 SQL)·market 이 rent_monthly 과거분을 읽는다(presale 매주 월요일)
 
+**PR #49 머지 뒤 (2026-10-19 busy-meitner 4차)** — 사용자: 건축HUB 활용 신청, `SEOUL_API_KEY` GitHub secret 저장, PR 합치고 진행
+- PR jeonghunyang6-code/house-check#49 머지(2023206). 브랜치를 기본 브랜치에서 다시 시작. 머지 직후 `backfill.yml` kinds=rentroll 을 기본 브랜치로 예약(경기 백필 run 39259362147 이 끝난 뒤 같은 줄에서 돈다)
+- **H5 서울 정비사업 단계**: `redev_zone`·`complex_redev`(0055), `collector/redev.py`·`jobs/redev.py`·`redev.yml`(매주 수 06:27 KST). 서비스명 TbSeoulRedevStatus 는 임시 점검 워크플로로 러너에서 찾음(OA-23112 서울플랜+ `upisRebuild` 는 구역 고시 기록이라 단계가 없음). 첫 실행 2026-10-19 496곳. 지번 주소 표기가 제각각('양천구목동903', '쌍문2동 81번지', '압구정동414') → `parse_addr`(구 이름은 목록으로만 뗌). 재건축 145/166 구역 연결
+- **H5 건축물대장**: `complex_bldg`(0054), `collector/bldg.py`·`jobs/bldg.py`·`bldg.yml`(매일 04:07 KST, 4,000곳씩). 오래된 단지는 총괄표제부 대지면적·용적률이 0 인 경우가 많다
+- 시안 ④: 정비사업 단계(날짜순)·조합설립 전 경고(📖 p.374~397), 건축물대장 용적률·세대당 대지. 예시 8곳은 정비사업 구역이 아니라 안 보임(은마로 따로 확인함). 버전 27
+- redev.yml·bldg.yml 의 첫 실행용 임시 `push:` 조건은 머지 전에 지움
+- **경기 전월세 백필 완료**(run 39259362147, 성공): 47개 시군구 × 2020-01~2026-08 = 3,760칸. rent_monthly 경기 2025-06~ 14.5만 행, 그 전은 rentsum 파일. DB 461 → 481MB
+- **rentroll 첫 실행 실패**(run 39261749559): `roll_sums` 가 서울·인천 옛 요약 약 68만 행을 한 번에 select 하다 psql 300초 제한. 머지된 daily 도 같은 단계에서 실패할 뻔 → 달마다 읽게 고치고, daily 에서는 실패해도 다른 단계를 막지 않게 try/except. 머지 뒤 rentroll 다시 실행
+- **대지면적 보충 막힘(2026-10-19)**: `VWORLD_API_KEY` 는 GitHub secret 에 있음(길이 36 확인). 그러나 api.vworld.kr 토지특성이 이 세션·Actions 러너 모두 'Connection died' — 해외 IP 차단으로 보임, 우회 안 함. 공공데이터포털의 옛 NSDI 토지특성·토지이용·개별공시지가(1611000/nsdi/...)는 'NO_OPENAPI_SERVICE_ERROR'(폐기, VWorld 로 이전). 남은 길: 사용자 PC(국내 IP)에서 VWorld 로 받아 올리기
+
+**D9 일반분양·R9 검색량 (2026-10-19 busy-meitner 4차)**
+- D9: `redev_zone.gen_sale_est·gen_ratio·gen_pct`(0056) = 계획 분양 세대 − 기존 세대(조합원 몫 근사). 서울 재건축 145곳, ÷기존 세대 중앙값 0.36(10~90% 0.1~0.84). 대치쌍용2차 2.2배 최고. 시안 ④ 정비사업 메모에 포함. 🔧 판정 없이 순위
+- R9: `collector/searchtrend.py`·`jobs/searchtrend.py`·`searchtrend.yml`(매달 3일)·`complex_search`(0057). 데이터랩 검색어 트렌드도 2026년부터 **NAVER API HUB**(POST `naverapihub.apigw.ntruss.com/search-trend/v1/search`, 헤더 X-NCP-APIGW-API-KEY-ID·KEY, 월 50,000회). 지금 NAVER 키(API HUB 키, 뉴스 검색은 200 정상)로 부르면 401 "요청한 API는 이 Application에서 활성화되어 있지 않습니다" → **사용자가 API HUB 콘솔에서 그 앱에 '검색어 트렌드'를 켜야 함**. 사용자가 앱(house-check)에 '검색어트렌드' 추가 → 2026-10-19 응답 확인(results[].title·data[].period·ratio, 옛 데이터랩과 같음). **검색어가 값을 좌우**: 은마 '대치은마' 0.02배 vs '은마아파트' 1.56배 → 한 묶음에 이름·이름+아파트·동+이름·K-apt 이름(최대 6개)을 합산. 공식 이름과 부르는 이름이 다르면(목동신시가지7 ↔ 목동7단지) 0 → 시안은 0.01배 미만을 '검색어로 거의 안 잡힘'으로 표시. 첫 수집은 이 세션에서 실행. (처음에 옛 개발자센터 주소로 시험해 '키가 틀렸다'고 잘못 판단했었다)
+- VWorld 대지면적: 사용자 PC 에서 `tools/pc/vworld_land.py` 실행 중(첫 응답 정상 확인 — 항목 이름 lndpclAr 등 문서와 같음). 결과 CSV 를 받으면 적재·용적률 재계산 코드를 만든다
+
 **정비사업 H5 자료 확인 (2026-10-19)**
 - 건축물대장(용적률·대지면적·세대수): `apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo` → 403 SERVICE_KEY_IS_NOT_REGISTERED_ERROR. **사용자가 공공데이터포털에서 '국토교통부_건축HUB_건축물대장정보 서비스' 활용 신청 필요**(같은 키)
 - 서울 정비사업 단계: 서울 열린데이터광장(data.seoul.go.kr OA-23112 등, 오픈 API·CSV)이 이 클라우드 환경 네트워크 정책에 막힘(프록시 403, openapi.seoul.go.kr 이름 해석 안 됨). 환경 설정 '허용 도메인'에 추가하거나 Actions 에서 받는다. 서울 오픈 API 는 별도 인증키(열린데이터광장 회원 발급)가 필요 → GitHub secret 으로
