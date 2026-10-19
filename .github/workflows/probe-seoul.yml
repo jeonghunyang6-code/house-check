@@ -1,0 +1,34 @@
+# 임시: 서울 열린데이터광장 정비사업 데이터셋의 오픈 API 서비스명·항목 확인 (클라우드 세션에서 data.seoul.go.kr 이 막혀 러너에서 본다). 확인 뒤 지운다.
+name: probe-seoul
+on:
+  push:
+    branches: [claude/busy-meitner-ojizbi]
+    paths: [.github/workflows/probe-seoul.yml]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: 데이터셋 페이지에서 API 서비스명 찾기
+        run: |
+          for oa in OA-23112 OA-2253 OA-22856; do
+            for t in S A F; do
+              u="https://data.seoul.go.kr/dataList/$oa/$t/1/datasetView.do"
+              h=$(curl -sS -m 30 -L "$u" || true)
+              echo "== $oa/$t $(echo "$h" | grep -o '<title>[^<]*' | head -1)"
+              echo "$h" | grep -oE "openapi\.seoul\.go\.kr:8088/[^\"' <]*" | sort -u | head -5
+              echo "$h" | grep -oE "(dataset_title|tit_dataset|class=\"tit\")[^<]{0,80}<?[^<]{0,120}" | head -3
+              echo "$h" | grep -oE "\"(srvcNm|serviceNm|infId|infNm)\"[^,]{0,80}" | head -5
+            done
+          done
+      - name: 후보 서비스 호출
+        env:
+          K: ${{ secrets.SEOUL_API_KEY }}
+        run: |
+          [ -n "$K" ] && echo "키 있음" || echo "키 없음"
+          for svc in CleanupBussinessInfo upisRebuild ListRedevelopmentReconstructionService RedevelopmentInfo cleanupBsnsInfo; do
+            r=$(curl -sS -m 30 "http://openapi.seoul.go.kr:8088/$K/json/$svc/1/2/" || true)
+            echo "== $svc: $(echo "$r" | head -c 600)"
+          done
