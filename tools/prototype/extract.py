@@ -86,6 +86,8 @@ out['cx_bldg'] = select(db, f"SELECT apt_seq, land_area, land_src, use_zone, pri
 out['cx_search'] = select(db, f"""SELECT apt_seq, keyword, n_months, idx, round((100 * percent_rank() OVER (ORDER BY idx))::numeric, 1) AS pct, fetched_at::text
  FROM complex_search WHERE idx IS NOT NULL""")
 out['cx_search'] = [r for r in out['cx_search'] if r['apt_seq'] in SEQS]
+# B2 회복 패턴 검증 결과 (b2_validation, jobs/b2_check.py): 백테스트 + 분기 스냅숏 자동 평가
+out['b2_validation'] = select(db, "SELECT asof::text, horizon_m, pattern, n, mean_excess, beat_pct, source FROM b2_validation ORDER BY asof, horizon_m, pattern")
 # H6 주민 소득 (region_income, jobs/macro.py): 수도권 시군구 1인당 근로소득, 5년 전과 최신
 out['income'] = select(db, """SELECT year, sido, name, region_codes, avg_pay_10k FROM region_income
  WHERE year IN ((SELECT max(year) FROM region_income), (SELECT (max(year)::int - 5)::text FROM region_income)) ORDER BY year, avg_pay_10k DESC""")

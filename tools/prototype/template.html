@@ -1281,25 +1281,40 @@ function drawCx(c) {
 }
 drawCx(cxs[initial]);
 
+/* B2 검증 결과 한 줄 (b2_validation: 백테스트 + 분기 스냅숏 자동 평가). 패턴별 '같은 구 중앙값보다 더 오른 비율' — 50% 근처면 가르지 못한 것 */
+function b2Summary() {
+  const v = D.b2_validation || [];
+  const by = {};
+  v.forEach(r => { (by[`${r.asof}|${r.horizon_m}|${r.source}`] = by[`${r.asof}|${r.horizon_m}|${r.source}`] || {})[r.pattern] = r; });
+  const parts = Object.entries(by).map(([k, g]) => {
+    const [asof, h, src] = k.split('|');
+    return `${asof.slice(0, 7).replace('-', '.')} 판정 → ${h}개월 뒤${src === 'backtest' ? '(백테스트)' : ''}: ` + ['신고가 돌파', '순조로운 회복', '회복 지연']
+      .filter(p => g[p]).map(p => `${p} ${Math.round(+g[p].beat_pct)}%`).join(' · ');
+  });
+  return parts.length ? parts.join(' / ') + ' (각 패턴 중 같은 구 중앙값보다 더 오른 단지 비율, 50% 근처면 가르지 못한 것).' : '아직 결과 없음.';
+}
+
 /* ④ 후보 비교표 */
 (function () {
+  // B2 전고점 회복은 2026-10-19 백테스트에서 이후 상승률을 가르지 못해 점수에서 뺐다(참고 칸, 사용자 결정). 분기마다 자동 검증(jobs/b2_check.py)
   const crit = (c) => [
     c.pattern == null ? null : c.pattern !== '회복 지연',
     c.ratio == null ? null : (c.ratio >= c.band[0] && c.ratio <= c.band[1] && c.ratio <= 80),
     c.m && c.m.turnover_state ? c.m.turnover_state !== '적음' : null,
     c.liq && c.liq.down_rank != null ? +c.liq.down_rank >= 50 : null,
   ];
-  const rows = cxs.map(c => ({ c, k: crit(c) })).map(r => ({ ...r, ok: r.k.filter(v => v === true).length, known: r.k.filter(v => v !== null).length }))
+  const SCORED = [false, true, true, true];
+  const rows = cxs.map(c => ({ c, k: crit(c) })).map(r => ({ ...r, ok: r.k.filter((v, i) => SCORED[i] && v === true).length, known: r.k.filter((v, i) => SCORED[i] && v !== null).length }))
     .sort((a, b) => b.ok - a.ok || b.known - a.known || (b.c.C || 0) - (a.c.C || 0));
   const mark = (v) => v === true ? '<span class="pill good">충족</span>' : v === false ? '<span class="pill warn">미충족</span>' : '<span class="pill none">보류</span>';
   $('#cmp').innerHTML = `<thead><tr><th>단지</th><th class="r">기준 시세</th><th>전고점 회복</th><th>전세가율</th><th>거래 활발</th><th>하락기 거래</th><th class="r">충족</th></tr></thead><tbody>` +
     rows.map(({ c, k, ok, known }) => `<tr><td class="nm"><b>${c.name}</b><br><span class="muted">${c.region.replace('서울 ', '')}</span></td>
-      <td class="r">${eok(c.C)}</td><td>${mark(k[0])}<br><span class="muted">${c.rec == null ? '' : recLabel(c)}</span></td>
+      <td class="r">${eok(c.C)}</td><td><span class="pill none">참고</span><br><span class="muted">${c.pattern || ''}${c.rec == null ? '' : ' · ' + recLabel(c)}</span></td>
       <td>${mark(k[1])}<br><span class="muted">${c.ratio == null ? '' : pct(c.ratio)}</span></td><td>${mark(k[2])}<br><span class="muted">${c.m && c.m.turnover_pct != null ? '월 ' + (+c.m.turnover_pct).toFixed(2) + '%' : ''}</span></td>
       <td>${mark(k[3])}<br><span class="muted">${c.liq && c.liq.down_rank != null ? '구 안 ' + Math.round(+c.liq.down_rank) + '분위' : ''}</span></td>
       <td class="r"><span class="score">${ok}</span><span class="muted">/${known}</span></td></tr>`).join('') + '</tbody>';
   $('#cmpNotes').innerHTML = [
-    '전고점 회복: 신고가 돌파 또는 회복률 60% 이상(B2). 전세가율: 가격대별 정상 범위 안이고 80% 이하(D1).',
+    '전고점 회복(B2, 📖 회복 지연은 사면 안 된다 p.280~282)은 <b>점수에서 뺀 참고 칸</b>입니다. 과거 판정이 그 뒤 상승률(같은 구 대비)을 갈랐는지 계속 확인합니다: ' + b2Summary() + ' 전세가율: 가격대별 정상 범위 안이고 80% 이하(D1).',
     '거래 활발: 월 거래 회전율(C2) 0.5% 이상 (📖 0.5~0.8% = 꽤 괜찮은 거래량 p.137).',
     '하락기 거래: 2022~23 하락 구간 월 회전율(C3)이 같은 구 단지 중 가운데 이상(🔧 50분위). 📖 하락장에 거래가 많았던 단지 = 환금성 좋음 p.138~142.',
     '갈아타기 격차(E6)는 ⑧, 상대강도(B6)·바로 위 급지(E3)는 ④ 단지 상세에 있습니다.',
