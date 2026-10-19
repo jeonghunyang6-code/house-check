@@ -91,7 +91,7 @@
 
 **D9 일반분양·R9 검색량 (2026-10-19 busy-meitner 4차)**
 - D9: `redev_zone.gen_sale_est·gen_ratio·gen_pct`(0056) = 계획 분양 세대 − 기존 세대(조합원 몫 근사). 서울 재건축 145곳, ÷기존 세대 중앙값 0.36(10~90% 0.1~0.84). 대치쌍용2차 2.2배 최고. 시안 ④ 정비사업 메모에 포함. 🔧 판정 없이 순위
-- R9: `collector/searchtrend.py`·`jobs/searchtrend.py`·`searchtrend.yml`(매달 3일)·`complex_search`(0057). 데이터랩 검색어 트렌드도 2026년부터 **NAVER API HUB**(POST `naverapihub.apigw.ntruss.com/search-trend/v1/search`, 헤더 X-NCP-APIGW-API-KEY-ID·KEY, 월 50,000회). 지금 NAVER 키(API HUB 키, 뉴스 검색은 200 정상)로 부르면 401 "요청한 API는 이 Application에서 활성화되어 있지 않습니다" → **사용자가 API HUB 콘솔에서 그 앱에 '검색어 트렌드'를 켜야 함**. 켜면 searchtrend.yml 수동 실행. (처음에 옛 개발자센터 주소로 시험해 '키가 틀렸다'고 잘못 판단했었다)
+- R9: `collector/searchtrend.py`·`jobs/searchtrend.py`·`searchtrend.yml`(매달 3일)·`complex_search`(0057). 데이터랩 검색어 트렌드도 2026년부터 **NAVER API HUB**(POST `naverapihub.apigw.ntruss.com/search-trend/v1/search`, 헤더 X-NCP-APIGW-API-KEY-ID·KEY, 월 50,000회). 지금 NAVER 키(API HUB 키, 뉴스 검색은 200 정상)로 부르면 401 "요청한 API는 이 Application에서 활성화되어 있지 않습니다" → **사용자가 API HUB 콘솔에서 그 앱에 '검색어 트렌드'를 켜야 함**. 사용자가 앱(house-check)에 '검색어트렌드' 추가 → 2026-10-19 응답 확인(results[].title·data[].period·ratio, 옛 데이터랩과 같음). **검색어가 값을 좌우**: 은마 '대치은마' 0.02배 vs '은마아파트' 1.56배 → 한 묶음에 이름·이름+아파트·동+이름·K-apt 이름(최대 6개)을 합산. 공식 이름과 부르는 이름이 다르면(목동신시가지7 ↔ 목동7단지) 0 → 시안은 0.01배 미만을 '검색어로 거의 안 잡힘'으로 표시. 첫 수집은 이 세션에서 실행. (처음에 옛 개발자센터 주소로 시험해 '키가 틀렸다'고 잘못 판단했었다)
 - VWorld 대지면적: 사용자 PC 에서 `tools/pc/vworld_land.py` 실행 중(첫 응답 정상 확인 — 항목 이름 lndpclAr 등 문서와 같음). 결과 CSV 를 받으면 적재·용적률 재계산 코드를 만든다
 
 **정비사업 H5 자료 확인 (2026-10-19)**

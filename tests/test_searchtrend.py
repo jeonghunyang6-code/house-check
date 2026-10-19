@@ -1,13 +1,14 @@
-from collector.searchtrend import ANCHOR, body, index, keyword
+from collector.searchtrend import ANCHOR, body, index, keywords
 
 
-def test_keyword():
-    assert keyword("은마", "대치동") == "대치은마"            # 두 글자는 동 이름을 붙인다
-    assert keyword("헬리오시티", "가락동") == "헬리오시티"
-    assert keyword("우성2차", "개포동") == "개포우성2차"
-    assert keyword("현대(2-4차)", "오금동") == "오금현대"
-    assert keyword("래미안", "성수동1가") == "성수래미안"
-    assert keyword("e", "x동") is None
+def test_keywords():
+    assert keywords("은마", "대치동") == ["은마", "은마아파트", "대치은마"]
+    assert keywords("헬리오시티", "가락동") == ["헬리오시티", "헬리오시티아파트", "가락헬리오시티"]
+    assert keywords("우성2차", "개포동") == ["개포우성2차", "개포우성2차아파트"]       # 흔한 이름은 동 이름 붙인 것만
+    assert keywords("현대(2-4차)", "오금동") == ["오금현대", "오금현대아파트"]
+    assert keywords("대치우성", "대치동") == ["대치우성", "대치우성아파트"]
+    assert keywords("e", "x동") is None and keywords("현대", None) is None
+    assert keywords("남산타운", "신당동", ("신당남산타운(분양)",)) == ["남산타운", "남산타운아파트", "신당남산타운", "신당남산타운아파트"]
 
 
 def test_body_and_index():

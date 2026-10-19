@@ -1257,7 +1257,9 @@ function drawCx(c) {
     notes.push(`건축물대장(H5): ${vr != null ? `용적률 <b>${vr.toFixed(0)}%</b>` : '용적률 대장에 없음'}${b.land_per_hh != null ? ` · 세대당 대지 ${(+b.land_per_hh).toFixed(1)}㎡(${(b.land_per_hh / 3.3058).toFixed(1)}평)` : ''}`
       + `${b.hhld ? ` · 대장 세대수 ${Number(b.hhld).toLocaleString()}` : ''}. 📖 재건축 사업성은 용적률이 낮고 대지지분이 클수록 좋다(p.374~397). 오래된 단지는 대장에 대지면적이 비어 있는 경우가 많다.`);
   }
-  if (c.search) notes.push(`인지도(R9): 네이버 검색량 '${c.search.keyword}' 최근 12개월 = 헬리오시티의 <b>${(+c.search.idx).toFixed(2)}배</b> → 받은 단지 중 ${+c.search.pct >= 50 ? `상위 ${Math.max(1, Math.round(100 - c.search.pct))}%` : `하위 ${Math.max(1, Math.round(+c.search.pct))}%`}`
+  if (c.search) notes.push(`인지도(R9): 네이버 검색량(검색어 ${c.search.keyword.split('|').map(k => `'${k}'`).join('·')} 합) 최근 12개월 = 헬리오시티의 <b>${(+c.search.idx).toFixed(2)}배</b>`
+    + (+c.search.idx < 0.01 ? ' → <b>검색어로 거의 안 잡힘</b>(사람들이 다른 이름으로 부를 수 있어 인지도가 낮다고 단정하지 않음)'
+       : ` → 받은 단지 중 ${+c.search.pct >= 50 ? `상위 ${Math.max(1, Math.round(100 - c.search.pct))}%` : `하위 ${Math.max(1, Math.round(+c.search.pct))}%`}`)
     + `${c.search.n_months < 6 ? ' (검색이 너무 적어 값이 없는 달이 많음)' : ''}. 📖 인지도는 곧 수요, 남들이 모르는 싼 아파트엔 이유가 있다(p.401, p.409). 단지 이름을 다르게 부르면(줄임말) 검색량이 작게 잡힌다. 🔧 기준선 없음.`);
   if (c.loc && (c.loc.up_m != null || c.loc.top_m != null)) {
     const km = (m) => `${(m / 1000).toFixed(1)}km`;

@@ -13,7 +13,7 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from collector.db import Db, DbError, connect, lit, select
-from collector.searchtrend import PER_CALL, body, call, index, keyword
+from collector.searchtrend import PER_CALL, body, call, index, keywords
 from collector.sources.molit import ApiError, QuotaExceeded
 
 KST = ZoneInfo("Asia/Seoul")
@@ -34,17 +34,17 @@ def window(today: date) -> tuple[str, str]:
 
 
 def run(db: Db, limit: int, today: date, call=call) -> int:
-    cx = select(db, f"""SELECT c.apt_seq, c.apt_name, c.umd_name FROM complexes c JOIN kapt_complexes k ON k.kapt_code = c.kapt_code
+    cx = select(db, f"""SELECT c.apt_seq, c.apt_name, c.umd_name, k.kapt_name FROM complexes c JOIN kapt_complexes k ON k.kapt_code = c.kapt_code
 WHERE k.households >= {MIN_HH} AND EXISTS (SELECT 1 FROM deals d WHERE d.apt_seq = c.apt_seq AND d.contract_date > {lit(today)}::date - 365)
   AND NOT EXISTS (SELECT 1 FROM complex_search s WHERE s.apt_seq = c.apt_seq AND date_trunc('month', s.fetched_at) = date_trunc('month', {lit(today)}::date))
 ORDER BY k.households DESC""")
-    todo = [(c["apt_seq"], k) for c in cx if (k := keyword(c["apt_name"], c["umd_name"]))]
+    todo = [(c["apt_seq"], k) for c in cx if (k := keywords(c["apt_name"], c["umd_name"], (c["kapt_name"] or "",)))]
     start, end = window(today)
     done, rc = 0, 0
     for i in range(0, min(len(todo), limit * PER_CALL), PER_CALL):
         chunk = todo[i:i + PER_CALL]
         try:
-            out = index(call(body(start, end, [(s, [k]) for s, k in chunk])), MONTHS)
+            out = index(call(body(start, end, list(chunk))), MONTHS)
         except QuotaExceeded as e:
             print(f"  호출 한도로 중단: {e}", file=sys.stderr)
             rc = 2
@@ -53,7 +53,7 @@ ORDER BY k.households DESC""")
             print(f"  실패로 중단: {e}", file=sys.stderr)   # 401(키 오류)·403 이면 더 부르지 않는다
             rc = 1
             break
-        vals = [f"({lit(s)}, {lit(k)}, {MONTHS}, {out.get(s, {}).get('n', 0)}, {lit(out.get(s, {}).get('avg'))}, "
+        vals = [f"({lit(s)}, {lit('|'.join(k))}, {MONTHS}, {out.get(s, {}).get('n', 0)}, {lit(out.get(s, {}).get('avg'))}, "
                 f"{lit(out.get(s, {}).get('idx'))}, {lit(today)})" for s, k in chunk]
         db.query("INSERT INTO complex_search (apt_seq, keyword, months, n_months, avg_ratio, idx, fetched_at) VALUES " + ", ".join(vals)
                  + " ON CONFLICT (apt_seq) DO UPDATE SET keyword = EXCLUDED.keyword, months = EXCLUDED.months, n_months = EXCLUDED.n_months, "
