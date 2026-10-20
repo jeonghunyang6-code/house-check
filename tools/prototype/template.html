@@ -300,7 +300,7 @@ footer.foot { color: var(--ink-3); font-size: 12px; max-width: 90ch; display: gr
         </form>
         <div class="chips" role="group" aria-label="지역" id="f_region"></div>
         <div class="chips" role="group" aria-label="면적" id="f_area"></div>
-        <div class="chips" role="group" aria-label="국면" id="f_phase"></div>
+        <div class="chips" role="group" aria-label="지역 국면" id="f_phase"></div>
         <div class="chips" role="group" aria-label="단지 규모" id="f_size"></div>
         <div class="chips" role="group" aria-label="재건축" id="f_rebuild"></div>
         <div class="list" id="candList"></div>
@@ -905,14 +905,14 @@ const Calc = {
 /* ⑦ 후보 단지 찾기: 예산(⑥) 안의 단지를 급지 순으로. 같은 급지 안에서는 신축 대단지 먼저, 그다음 기준 시세 높은 순.
    '노후 단지 많음'(30년+ 거래 비중)은 정비사업 진행이 아니라서 정렬에 쓰지 않는다 */
 (function () {
-  const rows = (D.cand || []).map(r => ({ name: r[0], rc: r[1], umd: r[2], ag: r[3], ref: r[4], conf: r[5], phase: r[6], grade: r[7], rebuild: r[8], gap: r[9], newbig: r[10], hh: r[11], by: r[12], tv: r[13], dr: r[14], est: r[15], pj: r[16], vl: r[17], lph: r[18], stage: r[19], sno: r[20], gp: r[21] }));
-  const state = { region: '전체', area: '84형', phase: '전체', size: '300세대 이상', rebuild: '전체' };
+  const rows = (D.cand || []).map(r => ({ name: r[0], rc: r[1], umd: r[2], ag: r[3], ref: r[4], conf: r[5], phase: r[6], grade: r[7], rebuild: r[8], gap: r[9], newbig: r[10], hh: r[11], by: r[12], tv: r[13], dr: r[14], est: r[15], pj: r[16], vl: r[17], lph: r[18], stage: r[19], sno: r[20], gp: r[21], zsrc: r[22] }));
+  const state = { region: '전체', area: '84형', phase: '지역 국면 전체', size: '300세대 이상', rebuild: '전체' };
   // H5 재건축 (📖 중·하급지는 조합설립인가 뒤, 상급지는 단계와 무관 p.374~397). 정비구역 단계는 서울만(서울시 도시정비사업 통계)
-  const REB = { '전체': () => true, '재건축 후보(2005년 이전)': (r) => r.by && r.by <= 2005, '정비구역(서울)': (r) => !!r.stage,
+  const REB = { '전체': () => true, '재건축 후보(2005년 이전)': (r) => r.by && r.by <= 2005, '정비구역(서울·경기)': (r) => !!r.stage,
                 '조합설립 이후': (r) => r.sno != null && r.sno >= 3 };
   const AREA = { '전체': () => true, '59형': (a) => a >= 55 && a < 66, '84형': (a) => a >= 80 && a < 90, '중대형': (a) => a >= 90, '소형': (a) => a < 55 };
   const REG = { '전체': () => true, '서울': (c) => c.startsWith('11'), '경기': (c) => c.startsWith('41'), '인천': (c) => c.startsWith('28') };
-  const PHASES = ['전체', '상승장', '보합장', '하락장'];
+  const PHASES = ['지역 국면 전체', '상승장', '보합장', '하락장'];   // 지역 B1(R-ONE) — 단지 B1 은 백테스트에서 예측력 없음
   const chips = (id, list, key) => {
     $(id).innerHTML = list.map(v => `<button type="button" class="chip" data-v="${v}" aria-pressed="${v === state[key]}">${v}</button>`).join('');
     $(id).addEventListener('click', (e) => { const b = e.target.closest('.chip'); if (!b) return; state[key] = b.dataset.v; [...$(id).children].forEach(x => x.setAttribute('aria-pressed', x === b)); draw(); });
@@ -929,7 +929,7 @@ const Calc = {
   function draw() {
     const budget = parseFloat(String($('#f_budget').value).replace(/,/g, '')) || 0;
     const list = rows.filter(r => r.ref <= budget && r.ref >= budget * 0.8 && REG[state.region](r.rc) && AREA[state.area](r.ag)
-      && (state.phase === '전체' || r.phase === state.phase) && SIZE[state.size](r.hh || 0) && REB[state.rebuild](r))
+      && (state.phase === '지역 국면 전체' || r.phase === state.phase) && SIZE[state.size](r.hh || 0) && REB[state.rebuild](r))
       .sort(state.rebuild === '전체' ? (a, b) => (a.grade || 9) - (b.grade || 9) || (b.newbig - a.newbig) || b.ref - a.ref
         : (a, b) => (b.sno || 0) - (a.sno || 0) || (a.grade || 9) - (b.grade || 9) || (a.vl ?? 999) - (b.vl ?? 999));   // 재건축: 단계 많이 간 곳 → 급지 → 용적률 낮은 순
     $('#candCount').textContent = budget ? `${list.length.toLocaleString()}곳` : '';
@@ -938,7 +938,7 @@ const Calc = {
         const flags = [r.est ? '<span class="pill warn">추정가(A5)</span>' : '', r.pj ? '<span class="pill acc">철도 착공·확정 역 700m</span>' : '', r.ref >= 300000 * r.ag / 84 ? '<span class="pill none">초고가</span>' : '', r.newbig ? '<span class="pill acc">신축 대단지</span>' : '', r.rebuild ? '<span class="pill none">노후 단지 많음</span>' : '', r.gap ? '<span class="pill warn">동 안 격차</span>' : '',
           r.stage ? `<span class="pill ${r.sno >= 3 ? 'acc' : 'warn'}">정비 ${r.stage}${r.sno < 3 ? '(조합설립 전)' : ''}</span>` : '',
           r.vl != null ? `<span class="pill none">용적률 ${Math.round(r.vl)}%</span>` : '', r.lph != null ? `<span class="pill none">세대당 대지 ${r.lph.toFixed(0)}㎡</span>` : '',
-          r.gp != null ? `<span class="pill none">일반분양 서울 ${r.gp >= 50 ? '상위 ' + Math.max(1, Math.round(100 - r.gp)) : '하위 ' + Math.max(1, Math.round(r.gp))}%</span>` : ''].join(' ');
+          r.gp != null ? `<span class="pill none">일반분양 ${r.zsrc === 'gg' ? '경기' : '서울'} ${r.gp >= 50 ? '상위 ' + Math.max(1, Math.round(100 - r.gp)) : '하위 ' + Math.max(1, Math.round(r.gp))}%</span>` : ''].join(' ');
         return `<div class="row"><span class="name">${r.name}</span><span class="price">${eok(r.ref)}</span>
           <span class="meta">${(D.region_names[r.rc] || '').replace(/^(서울|경기|인천) /, '')} ${r.umd} · ${r.ag}㎡ · ${r.by ? (2026 - r.by) + '년차' : ''}${r.hh ? ' · ' + Number(r.hh).toLocaleString() + '세대' : ''}${r.tv != null ? ' · 월 회전 ' + r.tv.toFixed(2) + '%' : ''}${r.dr != null ? ` · 하락기 거래 구 ${r.dr >= 50 ? '상위 ' + Math.max(1, Math.round(100 - r.dr)) : '하위 ' + Math.max(1, Math.round(r.dr))}%` : ''} · 제도 상한 ${capTxt(loanCap(r.ref, REG_NOW.has(r.rc)))}억${Loan.nearEdge(r.ref) ? '(경계 확인)' : ''}</span>
           <span class="st">${r.grade ? `<span class="pill none">${r.grade}급지</span>` : ''} ${r.phase ? `<span class="pill ${PH[r.phase] || 'none'}">${r.phase}</span>` : ''}</span>
@@ -1133,7 +1133,7 @@ function patState(c) { return c.pattern == null ? ['none', '판정 보류'] : c.
 function drawCx(c) {
   $('#cxName').textContent = c.name;
   const PH = { '상승장': 'acc', '하락장': 'bad', '보합장': 'none', '일시 반등': 'acc', '일시 조정': 'warn', '추세 불명확': 'none' };
-  $('#cxRegion').innerHTML = `${c.region} ${c.phase ? `<span class="pill ${PH[c.phase.phase] || 'none'}">${c.phase.phase}</span>` : '<span class="pill none">국면 판정 보류</span>'}`;
+  $('#cxRegion').innerHTML = `${c.region} ${c.rph ? `<span class="pill ${PH[c.rph.phase] || 'none'}">${c.rph.sido_level ? c.rph.region_name + ' ' : ''}${c.rph.phase}</span>` : '<span class="pill none">지역 국면 없음</span>'}`;
   const [rc, rl] = ratioState(c), [pc, pl] = patState(c);
   $('#cxKpis').innerHTML = `
     <div class="kpi"><span class="k">기준 시세</span><span class="v">${eok(c.C)}</span><span class="d">${c.C ? `최근 ${c.cs.days}일 중개 ${c.cn}건 · 범위 ${eok(c.cs.lo)}~${eok(c.cs.hi)} · 마지막 거래 ${c.cs.last.slice(5).replace('-', '/')}${c.cs.f1 ? ` · 1층 ${c.cs.f1}건 제외` : ''} · 자료 충분도 ${c.conf}` : '최근 180일 거래(1층 제외) 3건 미만'}</span></div>
@@ -1170,9 +1170,10 @@ function drawCx(c) {
   const notes = [];
   if (!c.C) notes.push('최근 180일 거래가 3건 미만이라 기준 시세를 정하지 않았습니다.');
   notes.push(`전세는 ${c.jsrc === '신규' ? '신규 계약' : '전체 계약(갱신 포함)'} ${c.japprox ? '월별 중앙값을 건수로 가중 평균한 근사값' : '중앙값'}(2026년 9~10월, ${c.jn}건)으로 전세가율을 계산했습니다.${c.jsrc === '전체' ? ' 이 기간 신규 계약이 없어 갱신 계약 보증금이 섞였습니다. 갱신청구권을 쓴 갱신은 인상 5% 상한이 있어 시세보다 낮게 나올 수 있습니다.' : ''}`);
+  if (c.rph) notes.push(`지역 국면(B1, 위 표시): ${c.rph.region_name} R-ONE 매매지수 12개월 ${(+c.rph.chg_12m > 0 ? '+' : '') + (+c.rph.chg_12m).toFixed(1)}% → ${c.rph.phase}(${c.rph.asof.slice(2).replace(/-/g, '.')} 주 기준${c.rph.sido_level ? ', 시군구 지수가 없거나 짧아 시도 값' : ''}). 지역 라벨은 백테스트에서 근거가 확인됐습니다(상승장 뒤 6개월 오름 82% vs 평소 71%).`);
   notes.push(c.phase
-    ? `국면(B1): 지난달까지 12개월 기준 시세 ${(+c.phase.chg_12m > 0 ? '+' : '') + (+c.phase.chg_12m).toFixed(1)}%, 오른 달 ${c.phase.up_months}개·내린 달 ${c.phase.down_months}개, 최근 3개월 ${c.phase.last3}. 12개월 ±3%·8개월 이상 같은 방향이면 상승장/하락장(🔧, 📖 추세 최소 1년 p.136). 단지 국면은 참고만: 백테스트(2020~26 단지 6,511곳)에서 단지 라벨은 같은 구 단지보다 더 오를지·덜 오를지를 가르지 못했습니다(구 중앙값보다 더 오른 비율 47~55%). 방향은 ① 지역 국면(R-ONE)을 봅니다.`
-    : '국면(B1)은 최근 13개월 중 3개월 창에 거래가 없는 달이 있어 판정하지 않았습니다.');
+    ? `단지 국면(B1, 참고): 지난달까지 12개월 기준 시세 ${(+c.phase.chg_12m > 0 ? '+' : '') + (+c.phase.chg_12m).toFixed(1)}%, 오른 달 ${c.phase.up_months}개·내린 달 ${c.phase.down_months}개, 최근 3개월 ${c.phase.last3}. 12개월 ±3%·8개월 이상 같은 방향이면 상승장/하락장(🔧, 📖 추세 최소 1년 p.136). 단지 국면은 참고만: 백테스트(2020~26 단지 6,511곳)에서 단지 라벨은 같은 구 단지보다 더 오를지·덜 오를지를 가르지 못했습니다(구 중앙값보다 더 오른 비율 47~55%). 방향은 위 지역 국면을 봅니다.`
+    : '단지 국면(B1)은 최근 13개월 중 3개월 창에 거래가 없는 달이 있어 판정하지 않았습니다.');
   if (c.m && c.m.real_chg_2020 != null) notes.push(`실질 가격(A6): 2020년 1분기 ${eok(c.m.base2020_10k)} → 지금 ${eok(c.C)}. 물가를 빼면 ${(+c.m.real_chg_2020 > 0 ? '+' : '') + (+c.m.real_chg_2020).toFixed(1)}% (${+c.m.real_chg_2020 >= 0 ? '물가보다 더 오름' : '물가만큼도 못 오름'}, 📖 실물자산은 최소 물가만큼은 오른다 p.108~110). 지금 기준 시세를 2020년 돈으로 바꾸면 ${eok(c.m.real_ref_10k)}.`);
   if (c.m && c.m.reverse_risk != null) notes.push(`역전세(D3): 2년 전 전세 ${eok(c.m.jeonse_24m_10k)}(${c.m.jeonse_24m_n}건${c.m.jeonse_24m_approx === false ? ', 원본 중앙값' : ', 월별 중앙값의 건수 가중 평균(근사)'}) → 지금 ${eok(c.J)}. ${c.m.reverse_risk ? '<b>지금 전세가 더 낮아 역전세 위험</b>' : '지금 전세가 더 높아 역전세 위험 없음'}. 대비금(전세가의 10%) ${eok(c.m.reserve_10k)} (📖 p.153).`);
   notes.push(c.phase && c.phase.rel_strength != null
@@ -1199,6 +1200,7 @@ function drawCx(c) {
   }
   if (c.m && c.m.d4_jeonse_chg != null) notes.push(`전세 1년 변화(D4): ${(+c.m.d4_jeonse_chg > 0 ? '+' : '') + (+c.m.d4_jeonse_chg).toFixed(1)}% (최근 3개월 vs 1년 전, 건수 ${c.m.d4_n}, 월별 중앙값 근사). `
     + (c.m.d4_cause ? `<b>전세가 내림 → 원인: ${c.m.d4_cause}</b>. ` + (c.m.d4_cause === '둘 다 아님' ? '입주장도 매매 하락도 아니라 단지 사정(층·동 구성, 월세 전환, 표본)일 수 있음. ' : '') : '')
+    + (c.m.d4_cause ? '매매 하락 = 지역 국면(R-ONE)이 하락장·일시 조정이거나 12개월 변화가 마이너스. ' : '')
     + '📖 전세가 하락 원인은 주변 신규 입주와 매매가 하락 두 가지, 20~30% 하락은 쉽지 않다(p.153~154). 🔧 -3% 이하일 때 원인 표시.');
   if (c.C && c.C >= 300000) notes.push('초고가 시장(L6): 84㎡ 기준 시세 30억 이상. 📖 반포·압구정·한남 같은 초고가는 일반 시장과 따로 본다(p.122) — 가격대별 흐름(①)에서도 따로 봅니다.');
   const pst = c.proj_st || [];
@@ -1266,9 +1268,10 @@ function drawCx(c) {
     const pre = z.stage_no != null && z.stage_no < 3;
     notes.push(`정비사업(H5): <b>${z.zone_nm}</b> ${z.biz_type}${z.public_private === '공공' ? '(공공)' : ''} — 지금 <b>${z.stage}</b>${dt ? ` (${dt})` : ''}`
       + `${z.existing_hh ? `, 기존 ${Number(z.existing_hh).toLocaleString()}세대` : ''}${z.built_hh ? ` → 계획 ${Number(z.built_hh).toLocaleString()}세대` : ''}. `
-      + (z.gen_sale_est != null ? `일반분양 근사 <b>${Number(z.gen_sale_est).toLocaleString()}세대</b>(계획 분양 ${Number(z.sale_hh).toLocaleString()} − 기존, 기존의 ${(+z.gen_ratio).toFixed(2)}배 → 서울 재건축 구역 중 ${+z.gen_pct >= 50 ? `상위 ${Math.max(1, Math.round(100 - z.gen_pct))}%` : `하위 ${Math.max(1, Math.round(+z.gen_pct))}%`}). 📖 일반분양이 많을수록 사업성이 좋다(p.374~397), 조합원 몫은 기존 세대 수로 근사. ` : '')
+      + (z.gen_sale_est != null ? `일반분양 ${z.gen_hh != null ? '' : '근사 '}<b>${Number(z.gen_sale_est).toLocaleString()}세대</b>(${z.gen_hh != null ? `조합원 분양 ${Number(z.member_hh || 0).toLocaleString()}세대 별도` : `계획 분양 ${Number(z.sale_hh).toLocaleString()} − 기존`}, 기존의 ${(+z.gen_ratio).toFixed(2)}배 → ${z.src === 'gg' ? '경기' : '서울'} 재건축 구역 중 ${+z.gen_pct >= 50 ? `상위 ${Math.max(1, Math.round(100 - z.gen_pct))}%` : `하위 ${Math.max(1, Math.round(+z.gen_pct))}%`}). 📖 일반분양이 많을수록 사업성이 좋다(p.374~397)${z.gen_hh != null ? '' : ', 조합원 몫은 기존 세대 수로 근사'}. ` : '')
+      + (z.vl_old != null ? `용적률 기존 ${(+z.vl_old).toFixed(0)}%${z.vl_new != null ? ` → 계획 ${(+z.vl_new).toFixed(0)}%` : ''}. ` : '')
       + (pre ? '<b>조합설립인가 전</b>: 📖 중·하급지는 조합설립인가 뒤에 들어가라(상급지는 단계와 무관), 재건축은 20~25년 걸린다(p.374~397). ' : '📖 재건축 기간 20~25년, 가장 큰 위험은 시간(p.368~397). ')
-      + '서울시 도시정비사업 통계(분기 갱신).');
+      + (z.src === 'gg' ? '경기도 일반 정비사업 추진현황(경기데이터드림, 사용자가 받은 파일).' : '서울시 도시정비사업 통계(분기 갱신).'));
   });
   if (c.bldg && c.bldg.land_area != null) {
     const b = c.bldg;

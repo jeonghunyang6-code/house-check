@@ -20,7 +20,7 @@ def _db():
               "0009_rone_weekly.sql", "0011_market.sql", "0012_macro.sql", "0013_macro_annual.sql", "0014_complex_phase.sql", "0015_quadrant_strength.sql",
               "0016_reverse_real.sql", "0008_complexes.sql", "0019_deal_anchor.sql", "0020_turnover_e3.sql",
               "0022_complex_geo.sql", "0023_adm_dong.sql", "0030_lifezone.sql", "0031_e2.sql", "0032_e4_e5_e7.sql", "0034_presale.sql", "0035_presale_total.sql", "0037_ipju_plan.sql",
-              "0039_rent_j24.sql", "0040_ref_spread.sql", "0047_d4_a5.sql", "0051_c6_band.sql"):
+              "0039_rent_j24.sql", "0040_ref_spread.sql", "0047_d4_a5.sql", "0051_c6_band.sql", "0064_complex_region_phase.sql"):
         db.query((ROOT / "db" / "migrations" / m).read_text(encoding="utf-8"))
     return db
 
@@ -306,3 +306,10 @@ def test_metrics_d4_a5():
     assert abs(r[59]["a5_est_10k"] - round(150000 / 84 * (m59 / m84) * 59)) <= 1
     assert float(r[84]["d4_jeonse_chg"]) == round((50000 / 60000 - 1) * 100, 2) and r[84]["d4_n"] == "4 / 4"
     assert r[84]["d4_cause"] == "둘 다 아님"
+    # 지역(R-ONE 강남구) 국면이 하락장이면 '매매 하락' — 단지 실거래 국면이 아니라 지역 국면을 본다(0064)
+    db.query("INSERT INTO complexes (apt_seq, apt_name, region_code, umd_name, updated_at) VALUES ('P', 'x', '11680', '대치동', now());")
+    db.query("INSERT INTO rone_regions VALUES (50009, '서울>강남지역>동남권>강남구', '강남구', '11680');")
+    db.query("INSERT INTO region_phase (stat, cls_id, asof, chg_12m, phase) VALUES ('sale', 50009, '2026-10-05', -4.1, '하락장');")
+    db.query(render(TODAY, 120))
+    assert select(db, "SELECT d4_cause FROM complex_metrics WHERE apt_seq = 'P' AND area_group = 84")[0]["d4_cause"] == "매매 하락"
+    assert select(db, "SELECT region_name, phase, sido_level FROM complex_region_phase")[0] == {"region_name": "강남구", "phase": "하락장", "sido_level": False}

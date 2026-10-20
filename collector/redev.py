@@ -20,7 +20,8 @@ SEOUL_GU = tuple(sorted((n.split()[1] for c, n in REGIONS.items() if c.startswit
 
 URL = "http://openapi.seoul.go.kr:8088/{key}/json/TbSeoulRedevStatus/{a}/{b}/"
 STAGE_ORDER = ("구역지정", "추진위", "조합설립", "건축심의", "사업시행", "관리처분", "착공", "준공")   # 2026-10-19 실제 값 7개(준공 없음)
-REBUILD = ("공동주택재건축", "아파트지구재건축")
+REBUILD = ("공동주택재건축", "아파트지구재건축", "재건축")   # 마지막은 경기(collector/redev_gg.py) 표기
+DONE = 8   # 준공(경기 자료의 준공·청산). 끝난 구역은 단지에 잇지 않는다(새 단지에 '정비 준공'이 붙지 않게)
 FIELDS = {   # API 열 → 우리 열
     "CODE": "code", "DISTRICT": "district", "ZONE_NM": "zone_nm", "JIBUN_ADDR": "jibun_addr", "ROAD_ADDR": "road_addr",
     "BIZ_METHOD_PUBLIC_PRIVATE": "public_private", "BIZ_METHOD_GENERAL_PROMOTED": "general_promoted", "BIZ_TYPE": "biz_type",
@@ -96,15 +97,20 @@ def link(zones: list[dict], complexes: list[dict]) -> list[tuple[str, str, str]]
     """재건축 구역 → 실거래 단지 [(apt_seq, code, how)]. complexes: apt_seq, apt_name, region_code, umd_name, jibun.
     ① 지번(본번·부번)이 같은 단지 — 여럿이면 이름이 겹치는 단지만(겹치는 게 없으면 다)
     ② 없으면 같은 동에서 이름이 겹치는 단지(동 이름을 뗀 뒤 🔧 3글자 이상 포함). 본번만 같은 단지는 이름도 겹칠 때만
-    (이촌동 300번지처럼 한 본번에 단지가 여럿인 곳이 있어 본번만으로는 잇지 않는다)"""
+    (이촌동 300번지처럼 한 본번에 단지가 여럿인 곳이 있어 본번만으로는 잇지 않는다)
+    사업이 시작된 해(추진위·조합설립·사업시행 등 가장 이른 날짜. 구역 지정은 여의도 아파트지구 1976 처럼 단지보다 앞설 수 있어 뺀다) 이후에 지은 단지는 그 구역이 새로 지은 단지라 잇지 않는다
+    (2026-10-20 경기 '인정프린스아파트' 착공 구역이 같은 지번의 2025년 새 단지에 이어졌다)"""
     by: dict[tuple[str, str], list[dict]] = {}
     for c in complexes:
         by.setdefault((c["region_code"], c["umd_name"]), []).append(c)
     out = []
     for z in zones:
-        if z["biz_type"] not in REBUILD or not z["umd_name"]:
+        if z["biz_type"] not in REBUILD or not z["umd_name"] or z.get("stage_no") == DONE:
             continue
-        cands = by.get((z["region_code"], z["umd_name"]), [])
+        ys = [str(z[k])[:4] for k in ("committee_ymd", "assoc_ymd", "impl_ymd", "mgmt_ymd", "construction_ymd") if z.get(k)]
+        start = int(min(ys)) if ys else None
+        cands = [c for c in by.get((z["region_code"], z["umd_name"]), [])
+                 if not (start and c.get("build_year") and int(c["build_year"]) >= start)]
         zk = _key(z["zone_nm"] or "", z["umd_name"])
 
         def named(cs):
@@ -119,9 +125,24 @@ def link(zones: list[dict], complexes: list[dict]) -> list[tuple[str, str, str]]
 
 
 def general_sale(zones: list[dict]) -> dict[str, tuple[int, float, float]]:
-    """재건축 구역 일반분양 근사 {code: (세대, ÷기존 세대, 서울 재건축 구역 중 백분위)}. 기존·계획 분양 세대가 다 있는 곳만.
+    """재건축 구역 일반분양 {code: (세대, ÷기존 세대, 같은 시도 재건축 구역 중 백분위)}. 기존 세대가 있고 일반분양을 알 수 있는 곳만.
+    경기는 원자료의 일반분양 세대(gen_hh), 서울은 계획 분양 세대 − 기존 세대 근사. 끝난(준공) 구역은 순위에서 뺀다.
     📖 재건축 사업성은 일반분양이 많을수록 좋다 p.374~397 — 작가 기준 숫자는 없어 순위만"""
-    rows = {z["code"]: (z["sale_hh"] - z["existing_hh"], (z["sale_hh"] - z["existing_hh"]) / z["existing_hh"])
-            for z in zones if z["biz_type"] in REBUILD and (z.get("existing_hh") or 0) > 0 and (z.get("sale_hh") or 0) > 0}
-    rs = sorted(r for _, r in rows.values())
-    return {c: (g, round(r, 2), round(sum(1 for x in rs if x <= r) * 100 / len(rs), 1)) for c, (g, r) in rows.items()}
+    rows = {}
+    for z in zones:
+        ex = z.get("existing_hh") or 0
+        if z["biz_type"] not in REBUILD or ex <= 0 or z.get("stage_no") == DONE:
+            continue
+        if z.get("gen_hh") is not None:
+            g = z["gen_hh"]
+        elif (z.get("sale_hh") or 0) > 0:
+            g = z["sale_hh"] - ex
+        else:
+            continue
+        rows[z["code"]] = ((z.get("region_code") or "")[:2], g, g / ex)
+    out = {}
+    for sido in {v[0] for v in rows.values()}:
+        rs = sorted(r for s_, _, r in rows.values() if s_ == sido)
+        out.update({c: (g, round(r, 2), round(sum(1 for x in rs if x <= r) * 100 / len(rs), 1))
+                    for c, (s_, g, r) in rows.items() if s_ == sido})
+    return out
