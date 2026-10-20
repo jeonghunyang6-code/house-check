@@ -11,7 +11,16 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 d = json.loads((HERE / "out/data.json").read_text(encoding="utf-8"))
 e6 = d.pop("e6", None) or {}
-d["v2_e6"] = {"q": e6.get("q", []), "s": {r[4]: r[3] for r in e6.get("cx", []) if len(r) > 4}}   # 단지 일련번호 → 84㎡ 분기 중앙가 20분기
+qs = e6.get("q", [])
+# 단지 → 분기 중앙가 20분기(1층 제외 중개). 84 는 E6 와 같고, 59 도 같은 방법. 4분기 이상 값이 있는 단지만
+def _aligned(raw):
+    out = {}
+    for a, v in (raw or {}).items():
+        arr = [round(v[q]) if q in v else None for q in qs]
+        if sum(x is not None for x in arr) >= 4:
+            out[a] = arr
+    return out
+d["v2_e6"] = {"q": qs, "s": _aligned(d.pop("v2_q84", None)), "s59": _aligned(d.pop("v2_q59", None))}
 html = (HERE / "template_v2.html").read_text(encoding="utf-8").replace("/*DATA*/null", json.dumps(d, ensure_ascii=False, separators=(",", ":")))
 (HERE / "out/house-check-v2.html").write_text(html, encoding="utf-8")
 print(HERE / "out/house-check-v2.html")

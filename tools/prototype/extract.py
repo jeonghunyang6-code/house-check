@@ -176,11 +176,16 @@ import glob, gzip, csv as _csv
 from statistics import median as _med
 _q = lambda ym: f"{ym[:4]}Q{(int(ym[4:6]) - 1) // 3 + 1}"
 _v: dict = {}
+_v59: dict = {}   # 시안 v2: 59㎡(면적군 59·60)도 같은 방법으로
 for f in sorted(glob.glob(os.path.join((os.environ.get('HC_ARCHIVE') or '').removeprefix('dir:') or str(ROOT / 'data/archive'), 'deals_hist_*.csv.gz'))):
     for r in _csv.DictReader(gzip.open(f, 'rt', encoding='utf-8')):
-        if r['is_cancelled'] in ('1', 'True', 'true') or r['deal_type'] != '중개' or r.get('floor') == '1' or not r['area_m2'] or math.floor(float(r['area_m2'])) not in (84, 85):
+        if r['is_cancelled'] in ('1', 'True', 'true') or r['deal_type'] != '중개' or r.get('floor') == '1' or not r['area_m2']:
             continue
-        _v.setdefault((r['apt_seq'], _q(r['contract_month'])), []).append(int(r['price_10k']))
+        _ag = math.floor(float(r['area_m2']))
+        if _ag in (84, 85):
+            _v.setdefault((r['apt_seq'], _q(r['contract_month'])), []).append(int(r['price_10k']))
+        elif _ag in (59, 60):
+            _v59.setdefault((r['apt_seq'], _q(r['contract_month'])), []).append(int(r['price_10k']))
 e6 = {}
 for (a, q), v in _v.items():
     e6.setdefault(a, {})[q] = _med(v)
@@ -189,6 +194,15 @@ for r in select(db, """SELECT apt_seq, substr(contract_month,1,4)||'Q'||((substr
   WHERE NOT is_cancelled AND deal_type = '중개' AND floor IS DISTINCT FROM 1 AND area_group IN (84, 85) GROUP BY 1, 2"""):
     e6.setdefault(r['apt_seq'], {})[r['q']] = float(r['p'])
 out['e6'] = e6
+_e59 = {}
+for (a, q), v in _v59.items():
+    _e59.setdefault(a, {})[q] = _med(v)
+for r in select(db, """SELECT apt_seq, substr(contract_month,1,4)||'Q'||((substr(contract_month,5,2)::int-1)/3+1) q,
+  percentile_cont(0.5) WITHIN GROUP (ORDER BY price_10k) p FROM deals
+  WHERE NOT is_cancelled AND deal_type = '중개' AND floor IS DISTINCT FROM 1 AND area_group IN (59, 60) GROUP BY 1, 2"""):
+    _e59.setdefault(r['apt_seq'], {})[r['q']] = float(r['p'])
+out['v2_q84'] = e6
+out['v2_q59'] = _e59
 out['e6_names'] = select(db, "SELECT apt_seq, apt_name, region_code, umd_name FROM complexes")
 # E6 서버 계산 갈아타기 목표 후보 (e6_targets, jobs/gap.py)
 out['e6_targets'] = select(db, "SELECT apt_seq, rank, target_seq, ratio_now, gap_pct, dist_m FROM e6_targets ORDER BY apt_seq, rank")

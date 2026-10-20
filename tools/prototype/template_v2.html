@@ -246,6 +246,11 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
     <div class="top wrap"><h1>얼마짜리를, 어디서</h1><span class="steps"><b>1 예산</b> → 2 후보</span></div>
     <div class="tab wrap">
       <div class="card">
+        <h2>단지 검색 <small>조건 없이 이름·동으로</small></h2>
+        <input id="qName" type="search" placeholder="예: 골든센트로, 고덕, 위례" autocomplete="off" style="font:inherit;font-size:16px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);width:100%;box-sizing:border-box">
+        <div class="list" id="qList"></div>
+      </div>
+      <div class="card">
         <h2>내 예산 <span class="pill ex">예시 값</span></h2>
         <form class="form" id="budgetForm" autocomplete="off">
           <label for="b_seed">종잣돈 (만원)<input id="b_seed" inputmode="numeric" value="40000"></label>
@@ -318,7 +323,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
   <section class="tab-page" id="daily" aria-label="상세" hidden>
     <div class="top wrap"><h1>관심 단지 매일 보기</h1><div class="seg areaSeg" role="group" aria-label="평형"><button type="button" data-v="84" aria-pressed="true">84㎡</button><button type="button" data-v="59" aria-pressed="false">59㎡</button></div></div>
     <div class="tab wrap">
-      <div class="chips" id="dSel" aria-label="단지 고르기"></div>
+      <label class="muted" for="dSel" style="display:grid;gap:4px">단지<select id="dSel" class="icon-btn" style="width:100%;text-align:left;font-size:15px"></select></label>
       <div class="card" id="dHead"></div>
       <div class="card"><h2>최근 실거래 <small>최근 90일</small></h2><svg class="chart" id="dChart" viewBox="0 0 340 130" role="img" aria-label="최근 90일 실거래"></svg><div id="dDeals"></div></div>
       <div class="card">
@@ -460,6 +465,11 @@ function bandFor(p) {   // D1 가격대별 전세가율 정상 범위(compute.py
 }
 function cxName(seq) { return (CXS[seq] && CXS[seq].name) || (INFO[seq] && INFO[seq][0]) || (main(seq) || {}).name || (typeof E6NM !== 'undefined' && E6NM[seq]) || seq; }
 function cxRef(seq) { return useFull(seq) ? CXS[seq].C : (main(seq) || {}).ref; }
+const E6 = D.v2_e6 || { q: [], s: {}, s59: {} };
+const qser = (seq) => (AREA === '84' ? E6.s : E6.s59 || {})[seq] || null;   // 고른 평형의 분기 중앙가 20분기
+function q1y(seq) {   // 최근 분기 vs 4분기 전 (둘 다 값이 있을 때)
+  const a = qser(seq); if (!a) return null; let i = a.length - 1; while (i >= 0 && a[i] == null) i--; if (i < 4 || a[i - 4] == null) return null; return (a[i] / a[i - 4] - 1) * 100;
+}
 const DEALS = {}; (D.v2_deals || []).forEach(r => (DEALS[r[0]] = DEALS[r[0]] || []).push(r));
 const TODAY_NEW = new Set((D.today || []).map(t => t.apt_seq));
 
@@ -724,7 +734,10 @@ const budget = { price: 0 };
 })();
 
 const cst = { region: '전체', area: '84형', phase: '지역 국면 전체', hh: '세대수 전체', age: '연식 전체', work: '직장 무관', min: '45분 이내', st: '역 거리 무관', sort: '급지순', shown: 20 };
-const REGF = { '전체': () => true, '서울': (rc) => rc.startsWith('11'), '경기': (rc) => rc.startsWith('41'), '인천': (rc) => rc.startsWith('28') };
+// 동남권: 서울 강남·서초·송파·강동 / 경기 성남(분당·수정·중원)·수원 영통(광교)·용인 수지·기흥·화성 동탄·하남
+const SE_SEOUL = ['11680', '11650', '11710', '11740'], SE_GG = ['41131', '41133', '41135', '41117', '41465', '41463', '41597', '41450'];
+const REGF = { '전체': () => true, '서울': (rc) => rc.startsWith('11'), '경기': (rc) => rc.startsWith('41'), '인천': (rc) => rc.startsWith('28'),
+  '서울 동남권': (rc) => SE_SEOUL.includes(rc), '경기 동남권': (rc) => SE_GG.includes(rc) };
 const AREAF = { '59형': (a) => a >= 59 && a <= 60, '84형': (a) => a >= 84 && a <= 85, '전체 면적': () => true };
 // 세대수: 2026-10 84형 후보 4,735곳 중앙 605세대, 상위 25% 949세대 → 300~500·500~1,000·1,000+ (1,000 = 대단지)
 const HHF = { '세대수 전체': () => true, '300~500세대': (h) => h >= 300 && h < 500, '500~1,000세대': (h) => h >= 500 && h < 1000, '1,000세대+': (h) => h >= 1000 };
@@ -766,6 +779,19 @@ chips('#fHh', Object.keys(HHF), cst.hh, reset('hh')); chips('#fAge', Object.keys
 chips('#fWork', Object.keys(WORK), cst.work, reset('work')); chips('#fMin', Object.keys(MINF), cst.min, reset('min'));
 chips('#fSt', Object.keys(STF), cst.st, reset('st')); chips('#fSort', Object.keys(SORTF), cst.sort, reset('sort'));
 $('#cMore').addEventListener('click', () => { cst.shown += 20; drawCand(); });
+/* 단지 검색: 이름·동 (띄어쓰기 무시, 2글자 이상) */
+const SEARCH = Object.entries(INFO).map(([seq, i]) => [seq, (i[0] + ' ' + (i[2] || '') + ' ' + rn(i[1])).replace(/\s+/g, '')]);
+let qHits = [];
+function drawSearch() {
+  const q = $('#qName').value.replace(/\s+/g, '');
+  qHits = q.length < 2 ? [] : SEARCH.filter(([, t]) => t.includes(q)).map(([seq]) => seq).sort((a, b) => (cxRef(b) || 0) - (cxRef(a) || 0)).slice(0, 15);
+  $('#qList').innerHTML = q.length < 2 ? '' : qHits.map(seq => { const i = INFO[seq] || [], r = main(seq);
+    return `<div class="irow"><button type="button" class="open" data-s="${seq}"><span class="nm">${cxName(seq)}</span><span class="sub">${rn(i[1])} ${i[2] || ''}${i[15] ? ' · ' + i[15] + '년' : ''}${i[16] ? ' · ' + Number(i[16]).toLocaleString() + '세대' : ''}${r ? ' · ' + r.ag + '㎡' : ''}</span></button>
+      <span class="side"><span class="pr">${eok(cxRef(seq))}</span><button type="button" class="heart" data-s="${seq}" aria-pressed="${watch.has(seq)}" aria-label="관심 단지">${watch.has(seq) ? '♥' : '♡'}</button></span></div>`; }).join('') || '<p class="muted" style="padding:8px 0">찾는 단지가 없습니다. 기준 시세가 있는(최근 거래가 있는) 단지만 나옵니다.</p>';
+}
+$('#qName').addEventListener('input', drawSearch);
+$('#qList').addEventListener('click', (e) => { const h = e.target.closest('.heart'); if (h) { toggleWatch(h.dataset.s); return; } const o = e.target.closest('.open'); if (o) openCx(o.dataset.s); });
+watchChanged.push(drawSearch);
 watchChanged.push(drawCand, myDeals);
 
 /* ───── 개발 호재 · 주변 정비사업 (상세 화면·상세 탭 공용) ───── */
@@ -888,12 +914,15 @@ function drawWatch() {
   $('#wCount').textContent = `${seqs.length}곳`;
   const spark = (c) => { const v = (c.ref || []).slice(-24).map(r => r.v).filter(Boolean); if (v.length < 2) return ''; const lo = Math.min(...v), hi = Math.max(...v), W = 64, H = 20;
     return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" aria-hidden="true"><path d="${v.map((a, i) => (i ? 'L' : 'M') + (i * W / (v.length - 1)).toFixed(1) + ',' + (H - 2 - (H - 4) * (a - lo) / ((hi - lo) || 1)).toFixed(1)).join('')}" fill="none" stroke="var(--c1)" stroke-width="1.5"/></svg>`; };
+  const qspark = (seq) => { const a = (qser(seq) || []).slice(-8), v = a.filter(x => x != null); if (v.length < 2) return ''; const lo = Math.min(...v), hi = Math.max(...v), W = 64, H = 20;
+    const pts = a.map((x, i) => x == null ? null : [i * W / (a.length - 1), H - 2 - (H - 4) * (x - lo) / ((hi - lo) || 1)]).filter(Boolean);
+    return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" aria-hidden="true"><path d="${pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join('')}" fill="none" stroke="var(--c1)" stroke-width="1.5"/></svg>`; };
   $('#wList').innerHTML = seqs.map(seq => {
-    const c = useFull(seq) ? CXS[seq] : null, r = main(seq), ch = c && c.phase ? +c.phase.chg_12m : null, ag = r ? r.ag : +AREA, n90 = (DEALS[seq] || []).filter(x => x[2] === ag).length;
+    const c = useFull(seq) ? CXS[seq] : null, r = main(seq), ch = c && c.phase ? +c.phase.chg_12m : q1y(seq), ag = r ? r.ag : +AREA, n90 = (DEALS[seq] || []).filter(x => x[2] === ag).length;
     return `<div class="irow"><button type="button" class="open" data-s="${seq}"><span class="nm">${cxName(seq)}</span>
       <span class="sub">${c ? c.region.replace(/^서울 /, '') : rn(r.rc) + ' ' + r.umd}${ch != null ? ` · 1년 <span class="${ch >= 0 ? 'up' : 'dn'}">${sgn(ch)}</span>` : ''} · ${ag}㎡ 90일 거래 ${n90}건</span>
       <span class="tags">${agTag(seq)}${phPill(c && c.rph ? c.rph.phase : r && r.phase)}${TODAY_NEW.has(seq) ? '<span class="pill acc">새 거래</span>' : ''}${c && (c.redev || []).length ? `<span class="pill acc">정비 ${c.redev[0].stage}</span>` : r && r.stage ? `<span class="pill acc">정비 ${r.stage}</span>` : ''}</span></button>
-      <span class="side"><span class="pr">${eok(cxRef(seq))}</span>${c ? spark(c) : ''}<button type="button" class="heart" data-s="${seq}" aria-pressed="true" aria-label="관심 해제">♥</button></span></div>`;
+      <span class="side"><span class="pr">${eok(cxRef(seq))}</span>${c ? spark(c) : qspark(seq)}<button type="button" class="heart" data-s="${seq}" aria-pressed="true" aria-label="관심 해제">♥</button></span></div>`;
   }).join('') || '<p class="muted">찾기 탭 후보 목록에서 ♡를 누르면 여기에 모입니다.</p>';
   const rows = seqs.map(seq => { const k = (useFull(seq) ? cxChecks(CXS[seq]) : liteChecks(main(seq))).slice(0, 3); return { seq, k, ok: k.filter(x => x[1] === 'good').length }; })
     .sort((a, b) => b.ok - a.ok || (cxRef(b.seq) || 0) - (cxRef(a.seq) || 0));
@@ -923,7 +952,7 @@ let dSeq = null;
 function drawDaily() {
   const seqs = [...watch].filter(s => CXS[s] || main(s));
   if (!seqs.includes(dSeq)) dSeq = seqs[0] || null;
-  $('#dSel').innerHTML = seqs.map(s => `<button type="button" data-v="${s}" aria-pressed="${s === dSeq}">${cxName(s)}</button>`).join('');
+  $('#dSel').innerHTML = seqs.map(s => `<option value="${s}">${cxName(s)} · ${eok(cxRef(s))}</option>`).join(''); $('#dSel').value = dSeq || '';
   if (!dSeq) { $('#dHead').innerHTML = '<p class="muted">관심 단지가 없습니다. 찾기 탭에서 ♡를 눌러 담아 주세요.</p>'; return; }
   const seq = dSeq, c = useFull(seq) ? CXS[seq] : null, r = main(seq), inf = INFO[seq] || [], ref = cxRef(seq);
   const deals = DEALS[seq] || [];
@@ -982,7 +1011,7 @@ function drawMap(seq) {
   $('#dMapLg').innerHTML = [['var(--accent)', '이 단지·관심 단지'], ['var(--c1)', '역'], ['var(--bad)', '큰 병원'], ['var(--warn)', '대형마트'], ['var(--c3)', '중학교']].map(([c, n]) => `<span><i style="background:${c};height:8px;width:8px;border-radius:2px"></i>${n}</span>`).join('')
     + '<span style="flex-basis:100%">시안: 지도 그림 없이 위치만 표시. 실제 서비스는 카카오맵 위에 같은 정보를 올립니다.</span>';
 }
-$('#dSel').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; dSeq = b.dataset.v; drawDaily(); });
+$('#dSel').addEventListener('change', () => { dSeq = $('#dSel').value; drawDaily(); });
 watchChanged.push(drawDaily);
 
 /* ───── ⑤ 계획 ───── */
@@ -1002,10 +1031,9 @@ watchChanged.push(drawDaily);
 })();
 
 const E6T = {}, E6NM = {}; (D.v2_e6t || []).forEach(r => { (E6T[r[0]] = E6T[r[0]] || []).push(r); E6NM[r[1]] = r[5]; });
-const E6 = D.v2_e6 || { q: [], s: {} };
 let myTarget = store.get('v2-tg', null);
 function gapStats(a, b) {
-  const sa = E6.s[a], sb = E6.s[b]; if (!sa || !sb) return null;
+  const sa = qser(a), sb = qser(b); if (!sa || !sb) return null;
   const g = E6.q.map((q, i) => sa[i] != null && sb[i] != null ? [i, sb[i] - sa[i]] : null).filter(Boolean); if (g.length < 6) return null;
   const vals = g.map(x => x[1]).slice().sort((x, y) => x - y), cur = g[g.length - 1][1];
   return { g, cur, p20: vals[Math.floor((vals.length - 1) * 0.2)], pct: Math.round(vals.filter(v => v <= cur).length / vals.length * 100), n: g.length };
@@ -1014,17 +1042,17 @@ function gapChart(st) {
   const W = 330, H = 170, L = 44, R = 10, T = 14, B = 26, g = st.g, vals = g.map(x => x[1]);
   const mn = Math.min(...vals), lo = mn > 0 ? Math.floor(mn * 0.8 / 10000) * 10000 : Math.floor(mn / 10000) * 10000, hi = Math.max(...vals) * 1.15, nq = E6.q.length;
   const x = (i) => L + (W - L - R) * i / (nq - 1), y = (v) => T + (H - T - B) * (1 - (v - lo) / ((hi - lo) || 1));
-  const ticks = [lo, (lo + hi) / 2, hi];
-  let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="두 단지 84㎡ 가격 차이 분기 추이">`;
+  const ticks = [lo, Math.round((lo + hi) / 2 / 5000) * 5000, Math.floor(hi / 10000) * 10000];
+  let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="두 단지 가격 차이 분기 추이">`;
   s += `<rect x="${L}" y="${y(st.p20)}" width="${W - L - R}" height="${Math.max(0, y(lo) - y(st.p20))}" fill="var(--good-bg)"/>`;
   ticks.forEach(t => { s += `<line x1="${L}" x2="${W - R}" y1="${y(t)}" y2="${y(t)}" stroke="var(--line)"/><text x="${L - 5}" y="${y(t) + 3}" text-anchor="end">${eok(t)}</text>`; });
-  [0, 5, 10, 15, nq - 1].forEach(i => { s += `<text x="${x(i)}" y="${H - 8}" text-anchor="middle">${E6.q[i].slice(2).replace('Q', '년 ')}분기</text>`; });
+  [0, 5, 10, 15, nq - 1].forEach((i, k) => { s += `<text x="${x(i)}" y="${H - 8}" text-anchor="${k === 0 ? 'start' : k === 4 ? 'end' : 'middle'}">${E6.q[i].slice(2).replace('Q', '년 ')}분기</text>`; });
   s += `<line x1="${L}" x2="${W - R}" y1="${y(st.p20)}" y2="${y(st.p20)}" stroke="var(--good)" stroke-dasharray="4 3"/><text x="${L + 4}" y="${y(st.p20) + 12}" style="fill:var(--good);font-weight:600;paint-order:stroke;stroke:var(--good-bg);stroke-width:3px">하위 20% = ${eok(st.p20)} 이하</text>`;
   s += `<path d="${g.map((p, i) => (i ? 'L' : 'M') + x(p[0]).toFixed(1) + ',' + y(p[1]).toFixed(1)).join('')}" fill="none" stroke="var(--c1)" stroke-width="2.2"/>`;
   g.forEach(p => { s += `<circle cx="${x(p[0])}" cy="${y(p[1])}" r="2" fill="var(--c1)"/>`; });
   const last = g[g.length - 1];
   s += `<circle cx="${x(last[0])}" cy="${y(last[1])}" r="5" fill="var(--c1)"/><text x="${x(last[0]) - 8}" y="${y(last[1]) - 9}" text-anchor="end" style="fill:var(--ink);font-weight:700;font-size:11px;paint-order:stroke;stroke:var(--surface);stroke-width:4px">지금 ${eok(last[1])} · 하위 ${st.pct}%</text>`;
-  return s + '</svg><p class="muted" style="font-size:12px">세로 = 두 단지 84㎡ 분기 중앙가 차이(목표 − 내 집), 가로 = 분기. 초록 칸까지 내려오면 격차가 좁혀진 때.</p>';
+  return s + `</svg><p class="muted" style="font-size:12px">세로 = 두 단지 ${AREA}㎡ 분기 중앙가 차이(목표 − 내 집), 가로 = 분기. 초록 칸까지 내려오면 격차가 좁혀진 때.</p>`;
 }
 function drawMove() {
   const mySel = $('#mySel'), tgSel = $('#tgSel'), seqs = [...watch].filter(s => cxRef(s)), cur = store.get('v2-my2', null);
@@ -1038,12 +1066,12 @@ function drawMove() {
   if (!my || !myTarget) { $('#moveMain').innerHTML = '<p class="muted">관심 단지를 두 곳 이상 담아 주세요.</p>'; $('#moveAuto').innerHTML = ''; drawFund(); return; }
   const C = cxRef(my), T = cxRef(myTarget) || (auto.find(t => t[1] === myTarget) ? C * auto.find(t => t[1] === myTarget)[2] : null), ratio = T && C ? T / C : null;
   const im = INFO[my] || [], it = INFO[myTarget] || [], dist = im[3] && it[3] ? distM(im[3], im[4], it[3], it[4]) : null;
-  const st = AREA === '84' ? gapStats(my, myTarget) : null;
+  const st = gapStats(my, myTarget);
   const rm = (main(my) || {}), rt = (main(myTarget) || {}), yr = (seq) => { const rc = (INFO[seq] || [])[1]; const v = rc && D.weekly.v[rc]; return v && v.yt != null ? v.yt : null; };
   const cmp = [['지역', rn(im[1]), rn(it[1])], ['지역 국면', rm.phase || '–', rt.phase || '–'], ['지역 1년 매매', sgn(yr(my), 1), sgn(yr(myTarget), 1)], ['급지', rm.grade ? rm.grade + '급지' : '–', rt.grade ? rt.grade + '급지' : '–'],
     ['역까지', im[6] != null ? im[6] + 'm' : '–', it[6] != null ? it[6] + 'm' : '–']].concat(WORK[cst.work] != null ? [[`${cst.work}까지`, (workMin(my) ?? '–') + '분', (workMin(myTarget) ?? '–') + '분']] : []);
   $('#moveMain').innerHTML = `<div class="row"><span class="pill ${ratio >= 1.5 ? 'good' : 'warn'}">${ratio ? ratio.toFixed(2) + '배' : '–'} ${ratio >= 1.5 ? '(1.5배 이상)' : '(1.5배 미만)'}</span>${st ? `<span class="pill ${st.pct <= 20 ? 'good' : 'none'}">격차 하위 ${st.pct}%</span>` : ''}${dist ? `<span class="pill none">${(dist / 1000).toFixed(1)}km</span>` : ''}</div>
-    <p style="font-size:14px">${st ? `지금 차이 <b>${eok(st.cur)}</b>는 지난 ${st.n}분기 중 <b>하위 ${st.pct}%</b> 위치입니다. ${st.pct <= 20 ? '<b>좁혀진 때</b>라 갈아타기 좋은 구간입니다.' : `${eok(st.p20)} 이하(하위 20%)로 좁혀지면 갈아타기 좋은 때입니다. 지금보다 ${eok(st.cur - st.p20)} 더 좁혀져야 합니다.`}` : AREA === '84' ? '두 단지 84㎡ 분기 거래가 부족해 격차 추이를 계산하지 못했습니다.' : '격차 추이는 84㎡ 분기 거래로만 계산합니다(84㎡로 바꾸면 보임).'}</p>
+    <p style="font-size:14px">${st ? `지금 차이 <b>${eok(st.cur)}</b>은 지난 ${st.n}분기 중 <b>하위 ${st.pct}%</b> 위치입니다. ${st.pct <= 20 ? '<b>좁혀진 때</b>라 갈아타기 좋은 구간입니다.' : `${eok(st.p20)} 이하(하위 20%)로 좁혀지면 갈아타기 좋은 때입니다. 지금보다 ${eok(st.cur - st.p20)} 더 좁혀져야 합니다.`}` : `두 단지의 ${AREA}㎡ 분기 거래가 겹치는 분기가 6개 미만이라 격차 추이를 그리지 못했습니다. 다른 평형으로 바꿔 보세요.`}</p>
     ${st ? gapChart(st) : ''}
     <table class="cmp"><thead><tr><th></th><th>${cxName(my).slice(0, 8)}</th><th>${cxName(myTarget).slice(0, 8)}</th></tr></thead><tbody>${cmp.map(r => `<tr><td class="muted">${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join('')}</tbody></table>`;
   $('#moveAuto').innerHTML = auto.length ? auto.map(([, ts, r, pos, d]) => `<div class="deal" style="grid-template-columns:1fr auto auto"><span>${cxName(ts)} <span class="muted">${(d / 1000).toFixed(1)}km</span></span><span class="num">${r.toFixed(2)}배</span><span class="pill ${pos <= 20 ? 'good' : 'none'}">하위 ${Math.round(pos)}%</span></div>`).join('') : '<p class="muted">조건에 맞는 자동 추천이 없습니다.</p>';
