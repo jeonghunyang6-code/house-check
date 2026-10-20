@@ -81,6 +81,10 @@ def main() -> int:
         print("VWORLD_API_KEY 환경 변수가 없습니다. 명령 프롬프트에서 먼저: set VWORLD_API_KEY=발급받은키")
         return 1
     domain = os.environ.get("VWORLD_DOMAIN", "").strip()   # 키를 만들 때 적은 서비스 URL 이 필요하다는 오류가 나면 설정
+    if not TARGETS.exists():
+        print(f"대상 파일이 없습니다: {TARGETS.name} (vworld_land.py 와 같은 폴더에 두세요)")
+        return 1
+    print(f"대상 파일: {TARGETS.name}  (스크립트 2026-10-20 판)")
     pnus = sorted({r["pnu"] for r in csv.DictReader(TARGETS.open(encoding="utf-8"))})
     done = set()
     if OUT.exists():
