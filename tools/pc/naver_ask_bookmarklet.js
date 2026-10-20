@@ -2,26 +2,49 @@
    쓰는 법: 네이버 부동산(new.land.naver.com)에서 단지를 열고 왼쪽 매물 목록을 끝까지 내려 다 불러온 뒤 북마크를 누른다.
    → 화면에 보이는 매물(거래 방식·가격·면적·층·향·동·확인일)을 읽어 클립보드에 복사 → house-check 상세 탭 '붙여넣기'.
    하는 일: 이미 화면에 뜬 글자만 읽는다. 네이버 서버를 따로 부르지 않고, 다른 페이지를 돌지 않는다(자동 수집·위장 없음).
-   화면 글자 모양(예: '매매 15억', '아파트·116B/84㎡, 22/26층, 남동향', '확인매물 26.10.19.')은 2026-10-21 사용자 화면 캡처 기준.
-   네이버 화면이 바뀌면 읽는 규칙을 고쳐야 한다. 북마크 주소로 쓰는 한 줄은 tools/pc/README.md */
+   읽는 순서: ① 매물 칸(.item 안 .price_line·.spec·.item_title) ② 안 되면 화면 글자 줄 단위.
+   2026-10-21 첫 사용에서 0건: 실제 화면은 '매매'·'15억'이 붙어 읽히고(매매15억) 면적이 'm²' 로 적힘 → 둘 다 허용.
+   그래도 0건이면 확인용 글자(목록 앞부분)를 대신 복사한다 → 채팅에 붙여넣어 규칙을 고친다.
+   북마크 주소로 쓰는 한 줄은 tools/pc/README.md (만드는 법도 거기) */
 (() => {
-  const L = document.body.innerText.split('\n').map(s => s.trim()).filter(Boolean);
+  const T = (el) => (el ? el.textContent : '').replace(/\s+/g, ' ').trim();
   const no = (location.pathname.match(/complexes\/(\d+)/) || [])[1] || null;
-  const items = [];
-  for (let i = 0; i < L.length; i++) {
-    const p = L[i].match(/^(매매|전세|월세)\s+([0-9억,\s/]+)$/);
+  const PRICE = /^(매매|전세|월세)\s*([0-9][0-9억,\s/]*)$/;
+  const SPEC = /(㎡|m²|m2)/;
+  let items = [];
+  const cards = [...document.querySelectorAll('.item')].filter(el => el.querySelector('.price_line'));
+  for (const el of cards) {
+    const ty = T(el.querySelector('.price_line .type')), pr = T(el.querySelector('.price_line .price'));
+    const p = (ty + ' ' + pr).match(PRICE);
     if (!p) continue;
-    let spec = '', conf = '', dong = '';
-    for (let k = Math.max(0, i - 3); k < Math.min(L.length, i + 8); k++) {
-      if (k > i && !spec && /㎡/.test(L[k]) && /층/.test(L[k])) spec = L[k];
-      if (k > i && !conf) { const c = L[k].match(/확인매물\s*(\d{2}\.\d{2}\.\d{2})/); if (c) conf = c[1]; }
-      if (k < i) { const d = L[k].match(/(\d+)동$/); if (d) dong = d[1]; }
-      if (k > i && /^(매매|전세|월세)\s/.test(L[k])) break;
-    }
-    items.push({ type: p[1], price: p[2].trim(), spec, conf, dong });
+    const spec = [...el.querySelectorAll('.info_area .spec, .spec')].map(T).find(s => SPEC.test(s) && /층/.test(s)) || '';
+    const c = T(el).match(/확인매물\s*(\d{2}\.\d{2}\.\d{2})/), d = T(el.querySelector('.item_title')).match(/(\d+)동/);
+    items.push({ type: p[1], price: p[2].trim(), spec, conf: c ? c[1] : '', dong: d ? d[1] : '' });
   }
-  const data = { src: 'naver', no, at: new Date().toISOString().slice(0, 10), n: items.length, items };
-  const s = JSON.stringify(data);
-  const done = () => alert(`호가 ${items.length}건을 복사했습니다. house-check 상세 탭 '붙여넣기'에 넣어 주세요.` + (items.length ? '' : '\n(0건이면 왼쪽 매물 목록이 열려 있는지 확인)'));
+  const L = document.body.innerText.split('\n').map(s => s.trim()).filter(Boolean);
+  if (!items.length) {
+    for (let i = 0; i < L.length; i++) {
+      const p = L[i].match(PRICE);
+      if (!p) continue;
+      let spec = '', conf = '', dong = '';
+      for (let k = Math.max(0, i - 3); k < Math.min(L.length, i + 8); k++) {
+        if (k > i && PRICE.test(L[k])) break;
+        if (k < i) { const d = L[k].match(/(\d+)동$/); if (d) dong = d[1]; }
+        if (k > i && !spec && SPEC.test(L[k]) && /층/.test(L[k])) spec = L[k];
+        if (k > i && !conf) { const c = L[k].match(/확인매물\s*(\d{2}\.\d{2}\.\d{2})/); if (c) conf = c[1]; }
+      }
+      items.push({ type: p[1], price: p[2].trim(), spec, conf, dong });
+    }
+  }
+  let s, msg;
+  if (items.length) {
+    s = JSON.stringify({ src: 'naver', no, at: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10), n: items.length, items });
+    msg = `호가 ${items.length}건을 복사했습니다. house-check 상세 탭 '붙여넣기'에 넣어 주세요.`;
+  } else {
+    const i0 = Math.max(0, L.findIndex(x => /확인매물/.test(x)) - 12), first = cards[0] || document.querySelector('.item');
+    s = '[house-check 확인용]\n' + location.pathname + '\n' + L.slice(i0, i0 + 40).join('\n') + '\n---\n' + (first ? first.outerHTML.replace(/<img[^>]*>/g, '').slice(0, 2500) : '(item 없음)');
+    msg = '매물을 읽지 못해 확인용 글자를 대신 복사했습니다. Claude 채팅에 붙여넣어 주세요.';
+  }
+  const done = () => alert(msg);
   if (navigator.clipboard) navigator.clipboard.writeText(s).then(done, () => prompt('복사해서 붙여넣으세요', s)); else prompt('복사해서 붙여넣으세요', s);
 })();

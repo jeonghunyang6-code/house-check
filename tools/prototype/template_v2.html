@@ -989,15 +989,15 @@ function drawDaily() {
 /* 호가: 네이버 부동산 '호가 저장' 버튼(tools/pc/naver_ask_bookmarklet.js) 붙여넣기 + 직접 기록. 단지 → 날짜 → 매물 목록 */
 const NMAP = Object.assign({ '105286': '41450-298' }, store.get('v2-nmap', {}));   // 네이버 단지 번호 → 우리 단지 (105286 = 사용자가 준 미사강변 골든센트로 주소)
 function manOf(t) { const x = String(t).split('/')[0].replace(/[,\s]/g, ''); const m = x.match(/^(?:(\d+)억)?(\d+)?$/); return m && (m[1] || m[2]) ? (+(m[1] || 0)) * 10000 + (+(m[2] || 0)) : null; }
-function specOf(t) { const m = (t || '').match(/(\d+)[A-Z]*\/(\d+(?:\.\d+)?)㎡,\s*([0-9저중고]+)\/(\d+)층(?:,\s*(\S+향))?/); return m ? { ex: +m[2], fl: m[3], tot: +m[4], dir: m[5] || '' } : {}; }
+function specOf(t) { const m = (t || '').match(/(\d+)[A-Z]*\/(\d+(?:\.\d+)?)(?:㎡|m²|m2),\s*([0-9저중고]+)\/(\d+)층(?:,\s*(\S+향))?/); return m ? { ex: +m[2], fl: m[3], tot: +m[4], dir: m[5] || '' } : {}; }
 function parseLines(text) {   // 북마크와 같은 규칙. 화면 글자를 통째로 붙여넣어도 읽는다
   const L = text.split('\n').map(x => x.trim()).filter(Boolean), items = [];
   for (let i = 0; i < L.length; i++) {
-    const p = L[i].match(/^(매매|전세|월세)\s+([0-9억,\s/]+)$/); if (!p) continue; let spec = '', conf = '', dong = '';
+    const p = L[i].match(/^(매매|전세|월세)\s*([0-9][0-9억,\s/]*)$/); if (!p) continue; let spec = '', conf = '', dong = '';
     for (let k = Math.max(0, i - 3); k < Math.min(L.length, i + 8); k++) {
-      if (k > i && /^(매매|전세|월세)\s/.test(L[k])) break;
+      if (k > i && /^(매매|전세|월세)\s*[0-9]/.test(L[k])) break;
       if (k < i) { const d = L[k].match(/(\d+)동$/); if (d) dong = d[1]; }
-      if (k > i && !spec && /㎡/.test(L[k]) && /층/.test(L[k])) spec = L[k];
+      if (k > i && !spec && /㎡|m²|m2/.test(L[k]) && /층/.test(L[k])) spec = L[k];
       if (k > i && !conf) { const c = L[k].match(/확인매물\s*(\d{2}\.\d{2}\.\d{2})/); if (c) conf = c[1]; }
     }
     items.push({ type: p[1], price: p[2].trim(), spec, conf, dong });
