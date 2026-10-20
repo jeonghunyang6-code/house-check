@@ -192,6 +192,27 @@ out['e6'] = e6
 out['e6_names'] = select(db, "SELECT apt_seq, apt_name, region_code, umd_name FROM complexes")
 # E6 서버 계산 갈아타기 목표 후보 (e6_targets, jobs/gap.py)
 out['e6_targets'] = select(db, "SELECT apt_seq, rank, target_seq, ratio_now, gap_pct, dist_m FROM e6_targets ORDER BY apt_seq, rank")
+# 시안 v2 (template_v2.html): 주간 시계열·후보 단지 위치·최근 90일 거래·주변 시설 좌표·정비구역 전체
+out['v2_wk'] = select(db, """SELECT cls_id, week_date::text d, value v FROM rone_weekly WHERE stat = 'sale' AND cls_id IN (50008, 50002)
+ AND week_date >= '2023-06-01' ORDER BY 1, 2""")
+out['v2_info'] = {r['apt_seq']: [r['apt_name'], r['region_code'], r['umd_name'], r['lat'] and round(float(r['lat']), 5), r['lng'] and round(float(r['lng']), 5),
+                   r['station_name'], r['station_m'], r['h2_cbd_min'], r['h2_ybd_min'], r['h2_gbd_min'], r['mart_name'], r['mart_m'], r['hosp_name'], r['hosp_m'],
+                   r['mid_zone'], r['build_year'], r['hh']]
+                  for r in select(db, """SELECT c.apt_seq, c.apt_name, c.region_code, c.umd_name, c.lat, c.lng, c.station_name, c.station_m, c.h2_cbd_min, c.h2_ybd_min,
+ c.h2_gbd_min, c.mart_name, c.mart_m, c.hosp_name, c.hosp_m, c.mid_zone, c.build_year, k.households hh FROM complexes c LEFT JOIN kapt_complexes k USING (kapt_code)
+ WHERE c.apt_seq IN (SELECT apt_seq FROM complex_metrics WHERE ref_10k IS NOT NULL OR a5_est_10k IS NOT NULL)""")}
+out['v2_deals'] = [[r['apt_seq'], r['d'], r['ag'], r['fl'], r['p'], r['dt']] for r in select(db, """SELECT apt_seq, to_char(contract_date, 'YYMMDD') d, area_group ag, floor fl,
+ price_10k p, CASE WHEN deal_type = '직거래' THEN 1 ELSE 0 END dt FROM deals WHERE NOT is_cancelled AND contract_date >= current_date - 90
+ AND area_group BETWEEN 40 AND 135 ORDER BY apt_seq, contract_date DESC""")]
+out['v2_poi'] = {
+  'st': [[r['name'], r['lines'], round(float(r['lat']), 5), round(float(r['lng']), 5)] for r in select(db, "SELECT name, lines, lat, lng FROM station WHERE lat IS NOT NULL")],
+  'hosp': [[r['name'], r['kind'], round(float(r['lat']), 5), round(float(r['lng']), 5)] for r in select(db, "SELECT name, kind, lat, lng FROM hospital WHERE lat IS NOT NULL")],
+  'mart': [[r['name'], r['brand'], round(float(r['lat']), 5), round(float(r['lng']), 5)] for r in select(db, "SELECT name, brand, lat, lng FROM mart WHERE lat IS NOT NULL")],
+  'mid': [[r['name'], round(float(r['lat']), 5), round(float(r['lng']), 5)] for r in select(db, "SELECT name, lat, lng FROM mid_school WHERE lat IS NOT NULL")]}
+out['v2_redev'] = select(db, "SELECT src, region_code rc, umd_name umd, zone_nm, biz_type, stage, stage_no FROM redev_zone WHERE region_code IS NOT NULL AND coalesce(stage_no, 0) < 8")
+out['v2_e6t'] = [[r['apt_seq'], r['target_seq'], float(r['ratio_now']), float(r['gap_pct']), r['dist_m'], r['tname']] for r in select(db,
+  "SELECT e.apt_seq, e.target_seq, e.ratio_now, e.gap_pct, e.dist_m, c.apt_name tname FROM e6_targets e JOIN complexes c ON c.apt_seq = e.target_seq ORDER BY e.apt_seq, e.rank")]
+out['v2_proj'] = select(db, "SELECT name, status, status_date::text, outlook, cbd, region_codes, stations FROM transit_projects")
 out['seqs'] = SEQS
 out['regions'] = {k: v for k, v in REGIONS.items()}
 json.dump(out, open(OUT / 'raw.json', 'w'), ensure_ascii=False, default=str)
