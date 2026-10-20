@@ -40,3 +40,17 @@ python vworld_land.py vworld_targets_atch.csv
 ```
 결과는 같은 `vworld_land_result.csv` 에 이어 붙는다(이미 받은 필지는 건너뜀). 끝나면 그 파일을 다시 첨부.
 부속 지번 수집이 며칠 더 이어져 목록이 늘면 새 목록으로 같은 명령을 다시 실행하면 된다.
+
+## 네이버 부동산 '이 화면 호가 저장' 버튼 (2026-10-21)
+`naver_ask_bookmarklet.js` 를 북마크 한 줄로 만든 것. 화면에 이미 뜬 매물 글자만 읽어 복사한다(네이버 서버를 따로 부르지 않음, 자동 순회 없음).
+
+1. 크롬 북마크바에서 오른쪽 클릭 → 페이지 추가 → 이름 `호가 저장`, URL 에 아래 한 줄 전체를 붙여넣기
+2. 네이버 부동산에서 관심 단지를 열고 왼쪽 매물 목록을 **끝까지 내려** 다 불러온 뒤 `호가 저장` 클릭 → "N건 복사" 알림
+3. house-check 상세 탭 → 해당 단지 → `붙여넣기` 칸에 붙여넣고 저장 (처음 한 번은 네이버 단지 번호와 우리 단지를 잇는다)
+
+주 2~3회면 충분하다(호가 추세는 주 단위로 본다). 매물 수 증감을 보려면 매번 목록을 끝까지 불러온 뒤 누른다.
+화면 모양이 바뀌어 0건이 나오면 그 화면 캡처를 보내 주면 규칙을 고친다.
+
+```
+javascript:(() => { const L = document.body.innerText.split('%5Cn').map(s => s.trim()).filter(Boolean); const no = (location.pathname.match(%2Fcomplexes%5C%2F(%5Cd+)%2F) || [])[1] || null; const items = []; for (let i = 0; i %3C L.length; i++) { const p = L[i].match(%2F%5E(%EB%A7%A4%EB%A7%A4|%EC%A0%84%EC%84%B8|%EC%9B%94%EC%84%B8)%5Cs+([0-9%EC%96%B5,%5Cs%2F]+)%24%2F); if (!p) continue; let spec = '', conf = '', dong = ''; for (let k = Math.max(0, i - 3); k %3C Math.min(L.length, i + 8); k++) { if (k > i && !spec && %2F%E3%8E%A1%2F.test(L[k]) && %2F%EC%B8%B5%2F.test(L[k])) spec = L[k]; if (k > i && !conf) { const c = L[k].match(%2F%ED%99%95%EC%9D%B8%EB%A7%A4%EB%AC%BC%5Cs*(%5Cd{2}%5C.%5Cd{2}%5C.%5Cd{2})%2F); if (c) conf = c[1]; } if (k %3C i) { const d = L[k].match(%2F(%5Cd+)%EB%8F%99%24%2F); if (d) dong = d[1]; } if (k > i && %2F%5E(%EB%A7%A4%EB%A7%A4|%EC%A0%84%EC%84%B8|%EC%9B%94%EC%84%B8)%5Cs%2F.test(L[k])) break; } items.push({ type: p[1], price: p[2].trim(), spec, conf, dong }); } const data = { src: 'naver', no, at: new Date().toISOString().slice(0, 10), n: items.length, items }; const s = JSON.stringify(data); const done = () => alert(%60%ED%98%B8%EA%B0%80 %24{items.length}%EA%B1%B4%EC%9D%84 %EB%B3%B5%EC%82%AC%ED%96%88%EC%8A%B5%EB%8B%88%EB%8B%A4. house-check %EC%83%81%EC%84%B8 %ED%83%AD '%EB%B6%99%EC%97%AC%EB%84%A3%EA%B8%B0'%EC%97%90 %EB%84%A3%EC%96%B4 %EC%A3%BC%EC%84%B8%EC%9A%94.%60 + (items.length ? '' : '%5Cn(0%EA%B1%B4%EC%9D%B4%EB%A9%B4 %EC%99%BC%EC%AA%BD %EB%A7%A4%EB%AC%BC %EB%AA%A9%EB%A1%9D%EC%9D%B4 %EC%97%B4%EB%A0%A4 %EC%9E%88%EB%8A%94%EC%A7%80 %ED%99%95%EC%9D%B8)')); if (navigator.clipboard) navigator.clipboard.writeText(s).then(done, () => prompt('%EB%B3%B5%EC%82%AC%ED%95%B4%EC%84%9C %EB%B6%99%EC%97%AC%EB%84%A3%EC%9C%BC%EC%84%B8%EC%9A%94', s)); else prompt('%EB%B3%B5%EC%82%AC%ED%95%B4%EC%84%9C %EB%B6%99%EC%97%AC%EB%84%A3%EC%9C%BC%EC%84%B8%EC%9A%94', s); })();
+```

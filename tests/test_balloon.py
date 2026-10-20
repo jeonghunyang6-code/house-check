@@ -1,7 +1,7 @@
 from datetime import date, timedelta
 
 from collector.balloon import changes, events, group_path, groups, name_region, path, sgg_adjacency, shares, verdict
-from collector.policy import GANGNAM4, GG12, SEOUL, ZONES
+from collector.policy import DTN3, GANGNAM4, GG12, SEOUL, ZONES
 from collector.regions import REGIONS
 
 
@@ -15,10 +15,11 @@ def test_name_region():
 
 def test_events_from_policy():
     ev = {d: (new, after) for d, new, after in events(ZONES)}
-    assert set(ev) == {date(2025, 3, 24), date(2025, 10, 20)}
+    assert set(ev) == {date(2025, 3, 24), date(2025, 10, 20), date(2026, 7, 5)}
     assert ev[date(2025, 3, 24)][0] == set(GANGNAM4)
     new, after = ev[date(2025, 10, 20)]
     assert new == (set(SEOUL) | set(GG12)) - set(GANGNAM4) and after == set(SEOUL) | set(GG12)
+    assert ev[date(2026, 7, 5)][0] == set(DTN3)                          # 동탄·기흥·구리 토허
 
 
 def test_groups_and_adjacency():

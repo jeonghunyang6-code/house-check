@@ -226,6 +226,9 @@ out['v2_poi'] = {
 out['v2_redev'] = select(db, "SELECT src, region_code rc, umd_name umd, zone_nm, biz_type, stage, stage_no FROM redev_zone WHERE region_code IS NOT NULL AND coalesce(stage_no, 0) < 8")
 out['v2_e6t'] = [[r['apt_seq'], r['target_seq'], float(r['ratio_now']), float(r['gap_pct']), r['dist_m'], r['tname']] for r in select(db,
   "SELECT e.apt_seq, e.target_seq, e.ratio_now, e.gap_pct, e.dist_m, c.apt_name tname FROM e6_targets e JOIN complexes c ON c.apt_seq = e.target_seq ORDER BY e.apt_seq, e.rank")]
+out['v2_drive'] = {}
+for r in select(db, "SELECT apt_seq, dest, minutes FROM complex_drive WHERE minutes IS NOT NULL"):
+    out['v2_drive'].setdefault(r['apt_seq'], {})[r['dest']] = float(r['minutes'])
 out['v2_proj'] = select(db, "SELECT name, status, status_date::text, outlook, cbd, region_codes, stations FROM transit_projects")
 out['seqs'] = SEQS
 out['regions'] = {k: v for k, v in REGIONS.items()}

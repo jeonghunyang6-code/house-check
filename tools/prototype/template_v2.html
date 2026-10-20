@@ -327,15 +327,22 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
       <div class="card" id="dHead"></div>
       <div class="card"><h2>최근 실거래 <small>최근 90일</small></h2><svg class="chart" id="dChart" viewBox="0 0 340 130" role="img" aria-label="최근 90일 실거래"></svg><div id="dDeals"></div></div>
       <div class="card">
-        <h2>호가 매물 <span class="pill ex">수집 방식 결정 전</span></h2>
-        <form class="form" id="askForm" autocomplete="off">
-          <label for="a_area">면적 (㎡)<input id="a_area" inputmode="numeric" value="84"></label>
-          <label for="a_floor">층<input id="a_floor" inputmode="numeric" value="10"></label>
-          <label for="a_price" style="grid-column:1/-1">호가 (만원)<input id="a_price" inputmode="numeric" placeholder="네이버 부동산·중개소에서 본 가격"></label>
-          <button type="submit" class="more" style="grid-column:1/-1">호가 기록</button>
-        </form>
+        <h2>호가 매물 <small id="askAsof"></small></h2>
+        <div class="kpis" id="askSum"></div>
         <div id="askList"></div>
-        <p class="src">호가 ÷ 최근 실거래 기준 시세. 3% 이내 초록, 3~5% 노랑, 5% 넘으면 빨강.</p>
+        <details class="more-f" id="askPasteBox"><summary>네이버 부동산에서 붙여넣기</summary><div class="body">
+          <textarea id="askPaste" rows="3" placeholder="'호가 저장' 버튼으로 복사한 내용을 붙여넣기" style="font:inherit;font-size:14px;width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:10px;padding:8px;background:var(--surface);color:var(--ink)"></textarea>
+          <button type="button" class="more" id="askSave">이 단지 호가로 저장</button>
+          <p class="muted" id="askMsg"></p>
+        </div></details>
+        <details class="more-f"><summary>직접 기록</summary><div class="body">
+          <form class="form" id="askForm" autocomplete="off">
+            <label for="a_area">전용 (㎡)<input id="a_area" inputmode="numeric" value="84"></label>
+            <label for="a_floor">층<input id="a_floor" inputmode="numeric" value="10"></label>
+            <label for="a_price" style="grid-column:1/-1">매매 호가 (만원)<input id="a_price" inputmode="numeric" placeholder="네이버 부동산·중개소에서 본 가격"></label>
+            <button type="submit" class="more" style="grid-column:1/-1">호가 기록</button>
+          </form></div></details>
+        <p class="src">호가 ÷ 최근 실거래 기준 시세: 3% 이내 초록, 3~5% 노랑, 5% 넘으면 빨강, 5% 이상 싸면 파랑. 시안에서는 이 기기에만 저장됩니다.</p>
       </div>
       <div class="card"><h2>주변 지도 <small>반경 1.5km</small></h2><svg class="lmap" id="dMap" viewBox="-1600 -1600 3200 3200" role="img" aria-label="단지 주변 역·병원·마트·중학교"></svg><div class="legend" id="dMapLg"></div></div>
       <div class="card"><h2>개발 호재 · 주변 정비사업</h2><div id="dDev"></div></div>
@@ -743,10 +750,11 @@ const AREAF = { '59형': (a) => a >= 59 && a <= 60, '84형': (a) => a >= 84 && a
 const HHF = { '세대수 전체': () => true, '300~500세대': (h) => h >= 300 && h < 500, '500~1,000세대': (h) => h >= 500 && h < 1000, '1,000세대+': (h) => h >= 1000 };
 const AGEF = { '연식 전체': () => true, '10년 미만': (a) => a < 10, '10~20년': (a) => a >= 10 && a < 20, '20~30년': (a) => a >= 20 && a < 30, '30년 이상': (a) => a >= 30 };
 // 직장: 숫자 = INFO 대중교통 시간 칸(역 → 업무지구 역), 배열 = 자차 목적지 좌표(입지톡 지오코딩 2026-10-20)
-const WORK = { '직장 무관': null, '강남': 9, '여의도': 8, '사대문': 7, 'SK하이닉스 이천': [37.25298, 127.48069], '용인 반도체 클러스터': [37.16232, 127.33242] };
+const WORK = { '직장 무관': null, '강남': 9, '여의도': 8, '사대문': 7, 'SK하이닉스 이천': [37.25298, 127.48069, 'skh_icheon'], '용인 반도체 클러스터': [37.16232, 127.33242, 'yongin_cluster'] };
+const DRIVE = D.v2_drive || {};   // 네이버 클라우드 길찾기로 미리 계산한 자차 분(jobs/drive.py). 없으면 아래 추정
 const MINF = { '30분 이내': 30, '45분 이내': 45, '60분 이내': 60, '90분 이내': 90 };
 // 🔧 자차 시간 추정 = 직선거리 × 1.35(도로 굴곡) ÷ 시속 60km(고속도로 섞인 출근길 평균, 분당→이천 약 47분 기준으로 맞춤). 실제 경로 시간이 아님 → 실제 서비스는 길찾기 API 로 미리 계산
-const carMin = (seq, to) => { const i = INFO[seq]; return i && i[3] ? Math.round(distM(i[3], i[4], to[0], to[1]) * 1.35 / 60000 * 60) : null; };
+const carMin = (seq, to) => { const api = (DRIVE[seq] || {})[to[2]]; if (api != null) return Math.round(api); const i = INFO[seq]; return i && i[3] ? Math.round(distM(i[3], i[4], to[0], to[1]) * 1.35 / 60000 * 60) : null; };
 const workMin = (seq) => { const w = WORK[cst.work]; return w == null ? null : Array.isArray(w) ? carMin(seq, w) : (INFO[seq] || [])[w] ?? null; };
 const STF = { '역 거리 무관': () => true, '역 700m 이내': (m) => m != null && m <= 700, '역 1km 이내': (m) => m != null && m <= 1000 };
 const SORTF = { '급지순': (a, c) => (a.grade || 9) - (c.grade || 9) || (c.newbig - a.newbig) || c.ref - a.ref, '싼 순': (a, c) => a.ref - c.ref, '새 아파트순': (a, c) => (c.by || 0) - (a.by || 0), '역 가까운 순': (a, c) => ((INFO[a.seq] || [])[6] ?? 9e9) - ((INFO[c.seq] || [])[6] ?? 9e9) };
@@ -754,7 +762,7 @@ const phPill = (p) => p ? `<span class="pill ${p === '상승장' ? 'warn' : p ==
 let candList = [];
 function drawCand() {
   const b = budget.price, wmin = MINF[cst.min], car = Array.isArray(WORK[cst.work]);
-  $('#workNote').textContent = WORK[cst.work] == null ? '' : car ? '자차 추정: 직선거리 × 1.35 ÷ 시속 60km (실제 경로 시간 아님, 셔틀도 비슷하게 봄)' : '대중교통: 가까운 역 → 업무지구 역 시간(걷는 시간 제외)';
+  $('#workNote').textContent = WORK[cst.work] == null ? '' : car ? (Object.keys(DRIVE).length ? '자차: 네이버 길찾기(평일 아침 실시간 빠른길). 아직 계산 안 된 단지는 직선거리로 추정' : '자차 추정: 직선거리 × 1.35 ÷ 시속 60km (네이버 길찾기 계산 전)') : '대중교통: 가까운 역 → 업무지구 역 시간(걷는 시간 제외)';
   candList = CAND.filter(r => r.ref <= b && r.ref >= b * 0.8 && REGF[cst.region](r.rc) && AREAF[cst.area](r.ag) && (cst.phase === '지역 국면 전체' || r.phase === cst.phase)
     && (cst.hh === '세대수 전체' || (r.hh && HHF[cst.hh](r.hh))) && (cst.age === '연식 전체' || (r.by && AGEF[cst.age](YEAR - r.by)))
     && (WORK[cst.work] == null || (workMin(r.seq) != null && workMin(r.seq) <= wmin)) && STF[cst.st]((INFO[r.seq] || [])[6])).sort(SORTF[cst.sort]);
@@ -978,14 +986,56 @@ function drawDaily() {
     || '<p class="muted">최근 90일 거래가 없습니다.</p>';
   drawAsks(); drawMap(seq); $('#dDev').innerHTML = devHtml(seq);
 }
+/* 호가: 네이버 부동산 '호가 저장' 버튼(tools/pc/naver_ask_bookmarklet.js) 붙여넣기 + 직접 기록. 단지 → 날짜 → 매물 목록 */
+const NMAP = Object.assign({ '105286': '41450-298' }, store.get('v2-nmap', {}));   // 네이버 단지 번호 → 우리 단지 (105286 = 사용자가 준 미사강변 골든센트로 주소)
+function manOf(t) { const x = String(t).split('/')[0].replace(/[,\s]/g, ''); const m = x.match(/^(?:(\d+)억)?(\d+)?$/); return m && (m[1] || m[2]) ? (+(m[1] || 0)) * 10000 + (+(m[2] || 0)) : null; }
+function specOf(t) { const m = (t || '').match(/(\d+)[A-Z]*\/(\d+(?:\.\d+)?)㎡,\s*([0-9저중고]+)\/(\d+)층(?:,\s*(\S+향))?/); return m ? { ex: +m[2], fl: m[3], tot: +m[4], dir: m[5] || '' } : {}; }
+function parseLines(text) {   // 북마크와 같은 규칙. 화면 글자를 통째로 붙여넣어도 읽는다
+  const L = text.split('\n').map(x => x.trim()).filter(Boolean), items = [];
+  for (let i = 0; i < L.length; i++) {
+    const p = L[i].match(/^(매매|전세|월세)\s+([0-9억,\s/]+)$/); if (!p) continue; let spec = '', conf = '', dong = '';
+    for (let k = Math.max(0, i - 3); k < Math.min(L.length, i + 8); k++) {
+      if (k > i && /^(매매|전세|월세)\s/.test(L[k])) break;
+      if (k < i) { const d = L[k].match(/(\d+)동$/); if (d) dong = d[1]; }
+      if (k > i && !spec && /㎡/.test(L[k]) && /층/.test(L[k])) spec = L[k];
+      if (k > i && !conf) { const c = L[k].match(/확인매물\s*(\d{2}\.\d{2}\.\d{2})/); if (c) conf = c[1]; }
+    }
+    items.push({ type: p[1], price: p[2].trim(), spec, conf, dong });
+  }
+  return { src: 'text', no: null, at: D.asof, items };
+}
+$('#askSave').addEventListener('click', () => {
+  const raw = $('#askPaste').value.trim(); if (!raw) return;
+  let d; try { d = JSON.parse(raw); } catch (e) { d = parseLines(raw); }
+  const items = (d.items || []).map(x => ({ t: x.type, p: manOf(x.price), ...specOf(x.spec), dong: x.dong || '', conf: x.conf || '' })).filter(x => x.p);
+  if (!items.length) { $('#askMsg').textContent = '매물을 찾지 못했습니다. 네이버 부동산 단지 화면에서 버튼을 다시 눌러 주세요.'; return; }
+  const no = d.no ? String(d.no) : null, seq = (no && NMAP[no]) || dSeq; if (!seq) return;
+  if (no && !NMAP[no]) { NMAP[no] = seq; store.set('v2-nmap', NMAP); }   // 처음 보는 단지 번호는 지금 고른 단지로 연결
+  const at = d.at || D.asof, A = store.get('v2-naver', {}); (A[seq] = A[seq] || {})[at] = items; store.set('v2-naver', A);   // 같은 날 다시 저장하면 덮어씀
+  const c = (t) => items.filter(x => x.t === t).length;
+  $('#askMsg').textContent = `${cxName(seq)}: 매매 ${c('매매')} · 전세 ${c('전세')} · 월세 ${c('월세')}건 저장 (${dt(at)})`; $('#askPaste').value = '';
+  if (seq !== dSeq) { if (!watch.has(seq)) toggleWatch(seq); dSeq = seq; drawDaily(); } else drawAsks();
+});
 function drawAsks() {
-  const A = store.get('v2-asks', {}), L = A[dSeq] || [], ref = cxRef(dSeq);
-  $('#askList').innerHTML = L.length ? L.slice().reverse().map(a => { const g = ref ? (a.p / ref - 1) * 100 : null, c = g == null ? 'none' : g <= 3 ? 'good' : g <= 5 ? 'warn' : 'bad';
-    return `<div class="deal"><span class="muted num">${dt(a.d)}</span><span>${a.ag}㎡ · ${a.f}층</span><span class="p">${eok(a.p)} <span class="pill ${c}">${g == null ? '–' : sgn(g, 1)}</span></span></div>`; }).join('')
-    : '<p class="muted">아직 기록한 호가가 없습니다.</p>';
+  const A = store.get('v2-naver', {})[dSeq] || {}, dates = Object.keys(A).sort(), ref = cxRef(dSeq), r = areaRow(dSeq), ag = r ? r.ag : +AREA;
+  const inArea = (x) => x.ex != null && Math.abs(Math.floor(x.ex) - ag) <= 1;
+  const snap = (d) => (A[d] || []).filter(inArea), last = dates[dates.length - 1], now = last ? snap(last) : [], prevD = dates[dates.length - 2];
+  const sale = now.filter(x => x.t === '매매').sort((a, b) => a.p - b.p), jeon = now.filter(x => x.t === '전세').sort((a, b) => a.p - b.p);
+  const med = (a) => { const n = a.length; return n ? (a[(n - 1) >> 1].p + a[n >> 1].p) / 2 : null; }, gap = (p) => ref && p ? (p / ref - 1) * 100 : null;
+  const cl = (g) => g == null ? 'none' : g <= -5 ? 'acc' : g <= 3 ? 'good' : g <= 5 ? 'warn' : 'bad';
+  $('#askAsof').textContent = last ? `${dt(last)} 기록 · ${ag}㎡` : '';
+  const pn = prevD ? snap(prevD).filter(x => x.t === '매매').length : null, gm = gap(med(sale));
+  $('#askSum').innerHTML = !now.length ? '' : `
+    <div class="kpi"><span class="k">매매 매물</span><span class="v">${sale.length}개</span><span class="d">${pn == null ? '지난 기록 없음' : `${dt(prevD)} 대비 ${sale.length - pn >= 0 ? '+' : ''}${sale.length - pn}개`}</span></div>
+    <div class="kpi"><span class="k">중간 호가 <span class="pill ${cl(gm)}">${gm == null ? '–' : sgn(gm, 1)}</span></span><span class="v">${sale.length ? eok(med(sale)) : '–'}</span><span class="d">최저 ${sale.length ? eok(sale[0].p) : '–'} · 기준 ${eok(ref)}</span></div>
+    <div class="kpi"><span class="k">전세 매물</span><span class="v">${jeon.length}개</span><span class="d">중간 ${jeon.length ? eok(med(jeon)) : '–'}</span></div>`;
+  $('#askList').innerHTML = sale.length ? sale.map(x => { const g = gap(x.p);
+    return `<div class="deal"><span class="muted">${x.dong ? x.dong + '동' : ''}</span><span>${x.fl ? x.fl + (x.tot ? '/' + x.tot : '') + '층' : ''} ${x.dir || ''}${x.conf ? ` <span class="muted" style="font-size:12px">${x.conf === '직접' ? '직접 기록' : '확인 ' + x.conf.slice(3)}</span>` : ''}</span><span class="p">${eok(x.p)} <span class="pill ${cl(g)}">${g == null ? '–' : sgn(g, 1)}</span></span></div>`; }).join('')
+    : `<p class="muted">${ag}㎡ 매매 호가 기록이 없습니다. 네이버 부동산 단지 화면에서 '호가 저장' 버튼을 누른 뒤 아래 '붙여넣기'에 넣어 주세요.</p>`;
 }
 $('#askForm').addEventListener('submit', (e) => { e.preventDefault(); const p = parseFloat(String($('#a_price').value).replace(/,/g, '')); if (!isFinite(p) || !dSeq) return;
-  const A = store.get('v2-asks', {}); (A[dSeq] = A[dSeq] || []).push({ d: D.asof, ag: +$('#a_area').value, f: +$('#a_floor').value, p }); store.set('v2-asks', A); $('#a_price').value = ''; drawAsks(); });
+  const A = store.get('v2-naver', {}), S = (A[dSeq] = A[dSeq] || {}); (S[D.asof] = S[D.asof] || []).push({ t: '매매', p, ex: +$('#a_area').value, fl: $('#a_floor').value, tot: 0, dir: '', dong: '', conf: '직접' });
+  store.set('v2-naver', A); $('#a_price').value = ''; drawAsks(); });
 function drawMap(seq) {
   const inf = INFO[seq] || [], la = inf[3], lo = inf[4], svg = $('#dMap'); svg.innerHTML = '';
   if (!la) { txt(svg, 0, 0, '좌표 없음', 'middle'); return; }
@@ -1039,20 +1089,28 @@ function gapStats(a, b) {
   return { g, cur, p20: vals[Math.floor((vals.length - 1) * 0.2)], pct: Math.round(vals.filter(v => v <= cur).length / vals.length * 100), n: g.length };
 }
 function gapChart(st) {
-  const W = 330, H = 170, L = 44, R = 10, T = 14, B = 26, g = st.g, vals = g.map(x => x[1]);
-  const mn = Math.min(...vals), lo = mn > 0 ? Math.floor(mn * 0.8 / 10000) * 10000 : Math.floor(mn / 10000) * 10000, hi = Math.max(...vals) * 1.15, nq = E6.q.length;
+  const W = 360, H = 196, L = 40, R = 8, T = 22, B = 24, g = st.g, vals = g.map(x => x[1]);
+  const mn = Math.min(...vals), lo = mn > 0 ? Math.floor(mn * 0.8 / 10000) * 10000 : Math.floor(mn / 10000) * 10000, hi = Math.max(...vals) * 1.12, nq = E6.q.length;
   const x = (i) => L + (W - L - R) * i / (nq - 1), y = (v) => T + (H - T - B) * (1 - (v - lo) / ((hi - lo) || 1));
   const ticks = [lo, Math.round((lo + hi) / 2 / 5000) * 5000, Math.floor(hi / 10000) * 10000];
-  let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="두 단지 가격 차이 분기 추이">`;
+  const qlab = (q) => `'${q.slice(2, 4)} ${q.slice(5)}Q`;   // 2021Q4 → '21 4Q
+  // 가로 라벨: 첫 분기·매년 1분기·마지막 분기, 34px 안으로 붙으면 뺀다(마지막은 남김)
+  let xi = [0, ...E6.q.map((q, i) => q.endsWith('Q1') ? i : -1).filter(i => i > 0), nq - 1], keep = [];
+  for (let k = xi.length - 1; k >= 0; k--) if (!keep.length || x(keep[0]) - x(xi[k]) >= 34) keep.unshift(xi[k]);
+  const pill = (px, py, txt, col, anchor) => { const w = txt.length * 6.4 + 12, x0 = anchor === 'end' ? px - w : px;
+    return `<rect x="${x0}" y="${py - 12}" width="${w}" height="17" rx="8.5" fill="var(--surface)" stroke="${col}" stroke-width="1"/><text x="${x0 + w / 2}" y="${py}" text-anchor="middle" style="fill:${col};font-weight:700;font-size:10.5px">${txt}</text>`; };
+  let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="두 단지 가격 차이 분기 추이" style="width:calc(100% + 20px);margin-inline:-10px">`;
   s += `<rect x="${L}" y="${y(st.p20)}" width="${W - L - R}" height="${Math.max(0, y(lo) - y(st.p20))}" fill="var(--good-bg)"/>`;
   ticks.forEach(t => { s += `<line x1="${L}" x2="${W - R}" y1="${y(t)}" y2="${y(t)}" stroke="var(--line)"/><text x="${L - 5}" y="${y(t) + 3}" text-anchor="end">${eok(t)}</text>`; });
-  [0, 5, 10, 15, nq - 1].forEach((i, k) => { s += `<text x="${x(i)}" y="${H - 8}" text-anchor="${k === 0 ? 'start' : k === 4 ? 'end' : 'middle'}">${E6.q[i].slice(2).replace('Q', '년 ')}분기</text>`; });
-  s += `<line x1="${L}" x2="${W - R}" y1="${y(st.p20)}" y2="${y(st.p20)}" stroke="var(--good)" stroke-dasharray="4 3"/><text x="${L + 4}" y="${y(st.p20) + 12}" style="fill:var(--good);font-weight:600;paint-order:stroke;stroke:var(--good-bg);stroke-width:3px">하위 20% = ${eok(st.p20)} 이하</text>`;
+  keep.forEach(i => { s += `<text x="${x(i)}" y="${H - 7}" text-anchor="${i === 0 ? 'start' : i === nq - 1 ? 'end' : 'middle'}">${qlab(E6.q[i])}</text>`; });
+  s += `<line x1="${L}" x2="${W - R}" y1="${y(st.p20)}" y2="${y(st.p20)}" stroke="var(--good)" stroke-dasharray="4 3"/>`;
   s += `<path d="${g.map((p, i) => (i ? 'L' : 'M') + x(p[0]).toFixed(1) + ',' + y(p[1]).toFixed(1)).join('')}" fill="none" stroke="var(--c1)" stroke-width="2.2"/>`;
-  g.forEach(p => { s += `<circle cx="${x(p[0])}" cy="${y(p[1])}" r="2" fill="var(--c1)"/>`; });
-  const last = g[g.length - 1];
-  s += `<circle cx="${x(last[0])}" cy="${y(last[1])}" r="5" fill="var(--c1)"/><text x="${x(last[0]) - 8}" y="${y(last[1]) - 9}" text-anchor="end" style="fill:var(--ink);font-weight:700;font-size:11px;paint-order:stroke;stroke:var(--surface);stroke-width:4px">지금 ${eok(last[1])} · 하위 ${st.pct}%</text>`;
-  return s + `</svg><p class="muted" style="font-size:12px">세로 = 두 단지 ${AREA}㎡ 분기 중앙가 차이(목표 − 내 집), 가로 = 분기. 초록 칸까지 내려오면 격차가 좁혀진 때.</p>`;
+  g.forEach(p => { s += `<circle cx="${x(p[0])}" cy="${y(p[1])}" r="3.6" fill="var(--surface)" stroke="var(--c1)" stroke-width="1.8"/>`; });
+  const last = g[g.length - 1], lx = x(last[0]), ly = y(last[1]);
+  // 글씨는 선 위에 배경을 깔고 맨 나중에 그린다(선에 가리지 않게)
+  s += pill(L + 4, Math.min(H - B - 6, y(lo) - 6), `하위 20% = ${eok(st.p20)} 이하`, 'var(--good)', 'start');
+  s += pill(lx - 6, Math.max(14, ly - 10), `지금 ${eok(last[1])} · 하위 ${st.pct}%`, 'var(--ink)', 'end');
+  return s + `</svg><p class="muted" style="font-size:12px">세로 = 두 단지 ${AREA}㎡ 분기 중앙가 차이(목표 − 내 집), 가로 = 분기('21 4Q = 2021년 4분기). 초록 칸까지 내려오면 격차가 좁혀진 때.</p>`;
 }
 function drawMove() {
   const mySel = $('#mySel'), tgSel = $('#tgSel'), seqs = [...watch].filter(s => cxRef(s)), cur = store.get('v2-my2', null);
