@@ -2,41 +2,41 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Gowun+Batang:wght@700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
 <style>
 /* 레이아웃: 휴대폰 한 열(최대 440px) 앱. 아래 탭 4개(시장·찾기·관심·계획) + 단지 상세는 위로 덮는 화면.
-   색: 종이빛 바탕에 먹색 글자, 강조는 청록(누를 수 있는 것). 가격 변화는 한국 관례대로 오름 빨강·내림 파랑, 상태는 녹·황·적 띠. */
+   색·글꼴: 기존 시안(template.html)과 같은 청회색 책상 + 흰 카드, IBM Plex Sans KR. 가격 변화는 오름 빨강·내림 파랑, 상태는 녹·황·적. */
 :root {
-  --bg: #f3f4f1; --surface: #ffffff; --sunk: #e9ebe6; --line: #d9ddd5;
-  --ink: #1d2428; --ink-2: #4c575d; --ink-3: #7b858a;
-  --accent: #0f6b6e; --accent-bg: #dcefee;
-  --good: #2b7a46; --good-bg: #e0f1e5; --warn: #9a6512; --warn-bg: #f7ecd6; --bad: #b3361f; --bad-bg: #f8e1db; --none-bg: #eceee9;
-  --up3: #a3241b; --up2: #d0493a; --up1: #eba596; --mid: #e1e4df; --dn1: #9fc1e6; --dn2: #3f7fcf; --dn3: #1d4f99; --on-strong: #ffffff;
-  --c1: #0f6b6e; --c2: #c2601e; --c3: #6b7a86;
+  --bg: #e9edf0; --surface: #ffffff; --sunk: #f3f5f7; --line: #d9dfe4;
+  --ink: #15212b; --ink-2: #4f5d69; --ink-3: #7c8893;
+  --accent: #0f6a64; --accent-bg: #dcefec;
+  --good: #1f7a3a; --good-bg: #e2f2e6; --warn: #9a6200; --warn-bg: #fbefd5; --bad: #b3341f; --bad-bg: #fbe3dd; --none-bg: #eef1f4;
+  --up3: #a3241b; --up2: #d0493a; --up1: #eba596; --mid: #e3e6e9; --dn1: #9fc1e6; --dn2: #3f7fcf; --dn3: #1d4f99; --on-strong: #ffffff;
+  --c1: #2a78d6; --c2: #eb6834; --c3: #8a96a1;
   --font: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
-  --display: "Gowun Batang", "IBM Plex Sans KR", serif;
+  --display: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  --bg: #121615; --surface: #1b211f; --sunk: #232a28; --line: #313a37;
-  --ink: #e9ece9; --ink-2: #b4bdb9; --ink-3: #85908c;
-  --accent: #5cc2c2; --accent-bg: #173634;
-  --good: #6fcf8f; --good-bg: #183323; --warn: #e2b25a; --warn-bg: #3a2e16; --bad: #f08a72; --bad-bg: #42211a; --none-bg: #262d2b;
-  --up3: #e2675a; --up2: #b9473b; --up1: #6e3832; --mid: #2b3331; --dn1: #2c4a6c; --dn2: #3d74bd; --dn3: #73a6e6; --on-strong: #0f1418;
-  --c1: #5cc2c2; --c2: #e59255; --c3: #93a1ad; color-scheme: dark; } }
+  --bg: #0f1418; --surface: #182128; --sunk: #1f2a32; --line: #2c3a45;
+  --ink: #e8edf1; --ink-2: #b2bec8; --ink-3: #8593a0;
+  --accent: #4fb8ad; --accent-bg: #173a37;
+  --good: #6fcf8a; --good-bg: #183324; --warn: #e6b450; --warn-bg: #3a2e14; --bad: #f08a72; --bad-bg: #3c1f19; --none-bg: #24313a;
+  --up3: #e2675a; --up2: #b9473b; --up1: #6e3832; --mid: #2b343c; --dn1: #2c4a6c; --dn2: #3d74bd; --dn3: #73a6e6; --on-strong: #0f1418;
+  --c1: #3987e5; --c2: #d95926; --c3: #8593a0; color-scheme: dark; } }
 :root[data-theme="dark"] {
-  --bg: #121615; --surface: #1b211f; --sunk: #232a28; --line: #313a37;
-  --ink: #e9ece9; --ink-2: #b4bdb9; --ink-3: #85908c;
-  --accent: #5cc2c2; --accent-bg: #173634;
-  --good: #6fcf8f; --good-bg: #183323; --warn: #e2b25a; --warn-bg: #3a2e16; --bad: #f08a72; --bad-bg: #42211a; --none-bg: #262d2b;
-  --up3: #e2675a; --up2: #b9473b; --up1: #6e3832; --mid: #2b3331; --dn1: #2c4a6c; --dn2: #3d74bd; --dn3: #73a6e6; --on-strong: #0f1418;
-  --c1: #5cc2c2; --c2: #e59255; --c3: #93a1ad; color-scheme: dark; }
+  --bg: #0f1418; --surface: #182128; --sunk: #1f2a32; --line: #2c3a45;
+  --ink: #e8edf1; --ink-2: #b2bec8; --ink-3: #8593a0;
+  --accent: #4fb8ad; --accent-bg: #173a37;
+  --good: #6fcf8a; --good-bg: #183324; --warn: #e6b450; --warn-bg: #3a2e14; --bad: #f08a72; --bad-bg: #3c1f19; --none-bg: #24313a;
+  --up3: #e2675a; --up2: #b9473b; --up1: #6e3832; --mid: #2b343c; --dn1: #2c4a6c; --dn2: #3d74bd; --dn3: #73a6e6; --on-strong: #0f1418;
+  --c1: #3987e5; --c2: #d95926; --c3: #8593a0; color-scheme: dark; }
 html, body { background: var(--bg); color: var(--ink); }
 body { font-family: var(--font); font-size: 15px; line-height: 1.55; -webkit-font-smoothing: antialiased; }
 .app { max-width: 440px; margin: 0 auto; min-height: 100vh; background: var(--bg); position: relative; padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)); }
 .wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
 .top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 14px 10px; display: flex; align-items: baseline; justify-content: space-between; gap: 8px; border-bottom: 1px solid transparent; }
 body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
-.top h1 { font-family: var(--display); font-size: 22px; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+.top h1 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
 .top .asof { font-size: 12px; color: var(--ink-3); white-space: nowrap; }
 .tab { display: grid; gap: 14px; padding-block: 4px 20px; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 10px; min-width: 0; }
@@ -54,25 +54,28 @@ p { margin: 0; }
 .pill.ex { background: transparent; border: 1px dashed var(--ink-3); color: var(--ink-3); font-weight: 500; }
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .sig { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.sig .s { border-radius: 12px; padding: 12px; background: var(--sunk); display: grid; gap: 4px; align-content: start; border-top: 4px solid var(--ink-3); min-width: 0; }
-.sig .s.good { border-top-color: var(--good); } .sig .s.warn { border-top-color: var(--warn); } .sig .s.bad { border-top-color: var(--bad); }
-.sig .k { font-size: 12px; color: var(--ink-3); } .sig .v { font-size: 17px; font-weight: 700; } .sig .d { font-size: 12.5px; color: var(--ink-2); line-height: 1.45; }
+.sig .s { border-radius: 12px; padding: 12px; background: var(--sunk); display: grid; gap: 8px; align-content: start; min-width: 0; }
+.sig .hd { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.sig .hd b { font-size: 15px; }
+.sig .mr { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; font-size: 12.5px; color: var(--ink-2); }
+.sig .mr span:last-child { font-size: 15px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .seg { display: inline-flex; background: var(--sunk); border-radius: 10px; padding: 3px; gap: 2px; }
 .seg button { font: inherit; font-size: 13px; border: 0; background: transparent; color: var(--ink-2); padding: 5px 12px; border-radius: 8px; cursor: pointer; }
 .seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
-.chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chips button { font: inherit; font-size: 13px; white-space: nowrap; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); padding: 5px 11px; border-radius: 999px; cursor: pointer; }
 .chips button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-strong); font-weight: 600; }
 button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible, .item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 svg.chart { width: 100%; height: auto; display: block; overflow: visible; }
-svg text { fill: var(--ink-3); font-size: 10px; font-family: var(--font); }
+svg.chart:not(.map) text { fill: var(--ink-3); font-size: 10px; font-family: var(--font); }
+.map text { font-family: var(--font); text-anchor: middle; pointer-events: none; paint-order: stroke; }
 .grid line { stroke: var(--line); }
 .legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--ink-3); align-items: center; }
 .legend i { display: inline-block; width: 12px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
 .scale { display: flex; align-items: center; gap: 2px; font-size: 11px; color: var(--ink-3); white-space: nowrap; flex-wrap: wrap; }
 .scale .sw { width: 22px; height: 10px; border-radius: 2px; }
-.map path.r { stroke: var(--surface); stroke-width: 0.8; cursor: pointer; }
-.map path.r:hover { stroke: var(--ink); stroke-width: 1.4; }
+.map path.r { stroke: var(--surface); stroke-width: 1; stroke-linejoin: round; cursor: pointer; }
+.map path.r:hover { stroke: var(--ink); stroke-width: 1.6; }
 .rank { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; font-size: 13px; }
 .rank div { display: flex; justify-content: space-between; gap: 6px; border-bottom: 1px dashed var(--line); padding-bottom: 3px; }
 .up { color: var(--up2); } .dn { color: var(--dn2); }
@@ -89,6 +92,13 @@ svg text { fill: var(--ink-3); font-size: 10px; font-family: var(--font); }
 .form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .form label { display: grid; gap: 4px; font-size: 12.5px; color: var(--ink-2); }
 .form input, .form select { font: inherit; font-size: 16px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); width: 100%; box-sizing: border-box; font-variant-numeric: tabular-nums; }
+.fsec { grid-column: 1 / -1; margin: 6px 0 -2px; font-size: 13px; font-weight: 700; color: var(--ink); border-top: 1px solid var(--line); padding-top: 10px; }
+.kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.kpi { background: var(--sunk); border-radius: 12px; padding: 10px 12px; display: grid; gap: 2px; min-width: 0; align-content: start; }
+.kpi.wide { grid-column: 1 / -1; }
+.kpi .k { font-size: 12px; color: var(--ink-3); display: flex; justify-content: space-between; gap: 6px; align-items: center; }
+.kpi .v { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.kpi .d { font-size: 12px; color: var(--ink-2); line-height: 1.45; }
 .stack { display: flex; height: 26px; border-radius: 8px; overflow: hidden; }
 .stack span { display: flex; align-items: center; justify-content: center; font-size: 11.5px; color: var(--on-strong); font-weight: 600; white-space: nowrap; overflow: hidden; }
 .bar2 { display: grid; grid-template-columns: 64px 1fr auto; gap: 8px; align-items: center; font-size: 13px; }
@@ -140,8 +150,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
     <div class="top wrap"><h1>지금 시장은</h1><span class="asof num" id="hAsof"></span></div>
     <div class="tab wrap">
       <div class="card"><p class="lead" id="headline"></p><div class="row" id="headChips"></div></div>
-      <div class="card policy" id="policyCard"></div>
-      <div class="card"><h2>핵심 신호 <small>바뀌면 알림</small></h2><div class="sig" id="sigs"></div><p class="src">한 줄 해석과 📖 책 쪽수는 각 칸 아래. 판정 기준이 작가가 숫자로 말하지 않은 것이면 🔧.</p></div>
+      <div class="card"><h2>핵심 신호 <small>바뀌면 알림</small></h2><div class="sig" id="sigs"></div></div>
       <div class="card">
         <h2>이번 주 가격 <small id="wkDate"></small></h2>
         <div class="row" style="justify-content:space-between">
@@ -164,9 +173,10 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
         <h2>가격대별 1년 변화 <small>84㎡로 환산</small></h2>
         <div class="seg" id="pbScope"><button data-v="서울" aria-pressed="true">서울</button><button data-v="경기·인천" aria-pressed="false">경기·인천</button></div>
         <div class="list" id="pbBars" style="gap:8px"></div>
-        <p class="src">단지별 12개월 기준 시세 변화의 가격대별 중앙값. 📖 가격대별로 다른 시장(p.152). 15·25억은 대출 한도가 바뀌는 경계.</p>
+        <p class="src">단지별 12개월 기준 시세 변화의 가격대별 중앙값.</p>
       </div>
       <div class="card"><h2>최근 등록된 거래</h2><p id="todayLine"></p><p class="src">국토부 실거래가. 신고가 = 같은 단지·면적의 그전 최고가보다 비싼 거래(직거래·해제 제외).</p></div>
+      <div class="card policy" id="policyCard"></div>
     </div>
   </section>
 
@@ -179,17 +189,20 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
         <form class="form" id="budgetForm" autocomplete="off">
           <label for="b_seed">종잣돈 (만원)<input id="b_seed" inputmode="numeric" value="40000"></label>
           <label for="b_income">세후 월소득 (만원)<input id="b_income" inputmode="numeric" value="600"></label>
-          <label for="b_rate">대출 금리 (%)<input id="b_rate" inputmode="decimal" value="4.5"></label>
-          <label for="b_years">대출 기간 (년)<input id="b_years" inputmode="numeric" value="30"></label>
-          <label for="b_reg" style="grid-column:1/-1">살 곳<select id="b_reg"><option value="1">서울 전역·경기 12곳 (규제지역, LTV 40%)</option><option value="0">그 밖 수도권 (LTV 70%)</option></select></label>
+          <label for="b_reg" style="grid-column:1/-1">살 곳<select id="b_reg"><option value="1">서울 전역·경기 12곳 (규제지역)</option><option value="0">그 밖 수도권</option></select></label>
+          <p class="fsec">주택담보대출</p>
+          <label for="b_type">종류<select id="b_type"><option value="first">생애최초</option><option value="normal">일반</option></select></label>
+          <label for="b_mort">받을 금액 (만원)<input id="b_mort" inputmode="numeric" value="60000" placeholder="비우면 최대"></label>
+          <label for="b_rate">금리 (%)<input id="b_rate" inputmode="decimal" value="4.5"></label>
+          <label for="b_years">기간 (년)<input id="b_years" inputmode="numeric" value="30"></label>
+          <p class="fsec">그 밖의 대출 <span class="muted">신용대출·사내대출 등</span></p>
+          <label for="b_other">금액 (만원)<input id="b_other" inputmode="numeric" value="10000"></label>
+          <label for="b_orate">금리 (%)<input id="b_orate" inputmode="decimal" value="5.0"></label>
+          <label for="b_orep" style="grid-column:1/-1">갚는 방식<select id="b_orep"><option value="bullet">이자만 내고 만기에 갚기 (만기 5년)</option><option value="amort5">5년 원리금 균등</option></select></label>
         </form>
-        <div>
-          <span class="muted">볼 수 있는 집값</span>
-          <div class="big" id="bPrice"></div>
-        </div>
+        <div class="kpis" id="bKpis"></div>
         <div class="stack" id="bStack" aria-hidden="true"></div>
         <div class="legend" id="bLegend"></div>
-        <p id="bWhy" style="font-size:14px"></p>
         <p class="src" id="bRule"></p>
       </div>
       <div class="card">
@@ -197,10 +210,12 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
         <div class="chips" id="fRegion" aria-label="지역"></div>
         <div class="chips" id="fArea" aria-label="면적"></div>
         <div class="chips" id="fPhase" aria-label="지역 국면"></div>
+        <div class="chips" id="fHh" aria-label="세대수"></div>
+        <div class="chips" id="fAge" aria-label="연식"></div>
         <div class="chips" id="fReb" aria-label="재건축"></div>
         <div class="list" id="cList"></div>
         <button type="button" class="more" id="cMore">20곳 더 보기</button>
-        <p class="src">기준 시세가 예산의 80~100%인 단지. 급지 높은 순, 같은 급지면 신축 대단지 먼저. 국면은 지역(R-ONE) 기준(단지 실거래 국면은 백테스트에서 예측력이 없었음). 시안에서 전체 상세는 예시 9개 단지만, 나머지는 요약.</p>
+        <p class="src">기준 시세가 예산의 80~100%인 단지. 급지 높은 순, 같은 급지면 신축 대단지 먼저. 국면은 지역(R-ONE) 기준. 세대수를 모르는 단지(공동주택 단지 목록에 없음)는 세대수 조건을 고르면 빠집니다. 시안에서 전체 상세는 예시 9개 단지만, 나머지는 요약.</p>
       </div>
     </div>
   </section>
@@ -288,7 +303,7 @@ const CX = D.cx || [];
 const CXBY = Object.fromEntries(CX.map(c => [c.name + '|' + c.seq.slice(0, 5), c]));
 
 /* 대출·세금 규칙 (collector/policy.py LOAN_RULES 와 같음, 10·15 대책 2025-10-16~). 정책 바뀌면 이 표만 고친다 */
-const RULE = { name: '10·15 대책', from: '2025-10-16', cap: (p) => p <= 150000 ? 60000 : p <= 250000 ? 40000 : 20000, ltv: (reg) => reg ? 0.4 : 0.7, dsrShare: 0.3 };
+const RULE = { name: '10·15 대책', from: '2025-10-16', cap: (p) => p <= 150000 ? 60000 : p <= 250000 ? 40000 : 20000, ltv: (reg) => reg ? 0.4 : 0.7, ltvFirst: 0.7, dsrShare: 0.3 };
 const Calc = {
   payment(pr, rate, yrs) { const r = rate / 100 / 12, n = yrs * 12; return r === 0 ? pr / n : pr * r * Math.pow(1 + r, n) / (Math.pow(1 + r, n) - 1); },   // 3억·4.5%·30년 = 1,520,056원 (📖 p.40)
   principal(pay, rate, yrs) { const r = rate / 100 / 12, n = yrs * 12; return r === 0 ? pay * n : pay * (Math.pow(1 + r, n) - 1) / (r * Math.pow(1 + r, n)); },
@@ -322,9 +337,8 @@ $('#hAsof').textContent = `${D.asof.slice(5).replace('-', '월 ')}일 기준`;
 })();
 
 (function policyCard() {
-  const P = D.policy || [];
-  const last = P[P.length - 1] ? P[P.length - 1][0] : null;
-  const same = P.filter(p => { const d = (new Date(p[0]) - new Date(last)) / 864e5; return d > -20; });
+  const P = (D.policy || []).slice().sort((x, y) => x[0] < y[0] ? 1 : -1).slice(0, 5);
+  const KC = { '대출': 'acc', '규제지역': 'warn', '토허': 'bad', '세금': 'none' };
   const bl = (D.balloon || {})['2025-10-20'];
   const path = bl ? bl.path : [];
   const G = { inside: ['규제 안', 'var(--up2)'], adjacent: ['붙은 바깥', 'var(--c2)'], far: ['먼 바깥', 'var(--c3)'] };
@@ -338,35 +352,37 @@ $('#hAsof').textContent = `${D.asof.slice(5).replace('-', '월 ')}일 기준`;
   for (const g in G) { const s = series[g] || []; if (!s.length) continue;
     svg += `<path d="${s.map((p, i) => (i ? 'L' : 'M') + x(p[0]).toFixed(1) + ',' + y(p[1]).toFixed(1)).join('')}" fill="none" stroke="${G[g][1]}" stroke-width="2"/>`;
     const e = s[s.length - 1]; svg += `<text x="${x(e[0]) + 4}" y="${y(e[1]) + 3}" style="fill:${G[g][1]};font-weight:600">${G[g][0]} ${sgn(e[1])}</text>`; }
-  svg += `<text x="${L}" y="${H - 4}" text-anchor="start">발표</text><text x="${W - R}" y="${H - 4}" text-anchor="end">${maxW}주 뒤</text></svg>`;
+  svg += `<text x="${L}" y="${H - 4}" text-anchor="start">지정</text><text x="${W - R}" y="${H - 4}" text-anchor="end">${maxW}주 뒤</text></svg>`;
   $('#policyCard').innerHTML = `
-    <span class="tag">최근 정책 · ${dt(last)} <span class="pill ex">시안: 새 대책이 나오면 이 자리에</span></span>
-    <h2 style="display:block">${(same.map(p => p[2].split(':')[0]).find(n => n.includes('대책')) || same[0][2].split(':')[0])}</h2>
-    <ul style="margin:0;padding-left:18px;display:grid;gap:4px;font-size:14px">${same.map(p => `<li>${p[2].includes(':') ? p[2].split(':').slice(1).join(':').trim() : p[2]}</li>`).join('')}</ul>
-    <div class="row"><button type="button" class="more" style="flex:1" id="polGo">내 예산에 미치는 영향 보기 →</button></div>
-    <p style="font-size:14px;font-weight:600;margin-top:4px">과거 비슷한 정책 뒤 실제로는</p>
+    <h2>정책·규제 기록 <span class="pill ex">새 대책이 나오면 맨 위에</span></h2>
+    <div class="list">${P.map(p => `<div style="display:grid;grid-template-columns:auto 1fr;gap:2px 8px;padding:8px 0;border-bottom:1px solid var(--line);font-size:13.5px"><span class="muted num">${dt(p[0])}</span><span><span class="pill ${KC[p[1]] || 'none'}">${p[1]}</span> ${p[2]}</span></div>`).join('')}</div>
+    <button type="button" class="more" id="polGo">지금 대출 규칙으로 내 예산 계산 →</button>
+    <p style="font-size:14px;font-weight:700;margin-top:4px">토허제 확대(25.10.20) 뒤 실제 가격</p>
     ${svg}
-    <p class="src">2025-10-20 토허제 확대 뒤 R-ONE 매매지수 누적 변화 중앙값(시군구). 가격은 규제 안에서도 계속 올랐고, 붙은 바깥이 먼 바깥보다 더 올랐습니다(번짐). 📖 토허제는 속도를 늦출 뿐 가격을 떨어뜨리진 않는다(p.269~270), 풍선효과를 따라가지 마라(p.288~292). 예측이 아니라 지난 사례입니다.</p>`;
+    <p class="src">R-ONE 매매지수 누적 변화 중앙값(시군구). 예측이 아니라 지난 사례입니다.</p>`;
   $('#polGo').addEventListener('click', () => go('find'));
 })();
 
 (function signals() {
-  const mr = (D.macro || {}).mortgage_rate || [];
-  const spark = (pts, col) => { if (pts.length < 2) return ''; const v = pts.map(p => p[1]), lo = Math.min(...v), hi = Math.max(...v), W = 120, H = 26;
-    return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" aria-hidden="true"><path d="${v.map((a, i) => (i ? 'L' : 'M') + (i * W / (v.length - 1)).toFixed(1) + ',' + (H - 3 - (H - 6) * (a - lo) / ((hi - lo) || 1)).toFixed(1)).join('')}" fill="none" stroke="${col}" stroke-width="1.6"/></svg>`; };
-  const b1 = S.b1_seoul || {}, hot = S.b5_low_highs || {}, b4 = S.b4_class || {}, g3 = S.g3_mortgage_rate || {}, g4 = S.g4_household_loans || {};
-  const met = +(b4.value || 0);
-  const tiles = [
-    { k: '시장 국면 · 서울', v: b1.state, c: b1.state === '상승장' ? 'warn' : b1.state === '하락장' ? 'bad' : 'good',
-      d: `1년 ${sgn(+b1.value)}. 1년 넘게 오르면 상승장(📖 p.136). 상승장은 쌀 때가 아니라는 뜻이지 사면 안 된다는 뜻은 아님.` },
-    { k: '과열 확산', v: hot.state === '보통' ? '아직 아님' : hot.state, c: hot.state === '과열' ? 'bad' : hot.state === '주의' ? 'warn' : 'good',
-      d: `약한 단지(하위 급지) 거래 중 신고가 ${hot.value}%. 외곽·구축까지 신고가면 과열(📖 p.111~114, 🔧 10% 주의·25% 과열).` },
-    { k: '대세 하락 신호', v: `${met}/3`, c: met >= 2 ? 'bad' : met === 1 ? 'warn' : 'good',
-      d: `하락 지역 확산·전세 동반 하락·실업률. 2개 이상이면 대세 하락 의심(📖 p.142~144). 지금 ${b4.state || '–'}.` },
-    { k: '대출 환경', v: `금리 ${g3.value}%`, c: +g3.value >= 7 ? 'bad' : +g3.value >= 5 ? 'warn' : 'good',
-      d: `주담대 3~5%는 심리적 한계, 7%면 체감이 완전히 다름(▶). 가계대출 증가율 ${g4.state || '–'}.`, s: spark(mr.slice(-24), 'var(--c2)') },
+  const v = (k) => S[k] && S[k].value != null ? +S[k].value : null;
+  const last = (k) => { const x = (D.macro || {})[k] || []; return x.length ? x[x.length - 1][1] : null; };
+  const pc = (x, d = 1) => x == null ? '–' : (x > 0 ? '+' : '') + x.toFixed(d) + '%';
+  const PH = { '상승장': 'warn', '하락장': 'acc', '보합장': 'good', '일시 반등': 'warn', '일시 조정': 'acc' };
+  const b1 = S.b1_seoul || {}, b1c = S.b1_sudo || {}, hot = S.b5_low_highs || {}, b4 = S.b4_class || {};
+  const met = v('b4_class') || 0, rate = v('g3_mortgage_rate');
+  const phasePill = b1.state === b1c.state ? `<span class="pill ${PH[b1.state] || 'none'}">${b1.state}</span>` : `<span class="pill ${PH[b1.state] || 'none'}">서울 ${b1.state}</span>`;
+  const rateState = rate == null ? ['–', 'none'] : rate >= 7 ? ['위험', 'bad'] : rate >= 5 ? ['부담', 'warn'] : rate >= 3 ? ['보통', 'none'] : ['완화', 'good'];
+  const cards = [
+    ['시장국면', phasePill, [['서울', pc(v('b1_seoul'), 2)], ['수도권', pc(v('b1_sudo'), 2)]].concat(b1.state === b1c.state ? [] : [['수도권 국면', b1c.state]])],
+    ['과열신호', `<span class="pill ${hot.state === '과열' ? 'bad' : hot.state === '주의' ? 'warn' : 'good'}">${hot.state === '보통' ? '보통' : hot.state || '–'}</span>`,
+      [['상승 지역', (v('b5_up_cap') ?? 0).toFixed(1) + '%'], ['하위 신고가', (v('b5_low_highs') ?? 0).toFixed(1) + '%'], ['상위 대비', (v('b5_spread') ?? 0).toFixed(2) + '배']]],
+    ['하락신호', `<span class="pill ${met >= 2 ? 'bad' : met === 1 ? 'warn' : 'good'}">${met}/3</span>`,
+      [['하락 지역', (v('b4_down_ratio') ?? 0).toFixed(1) + '%'], ['전세 하락', (v('b4_jeonse_8w') ?? 0) + '주 연속'], ['실업률', (v('b4_unemployment') ?? 0).toFixed(1) + '%']]],
+    ['거시지표', `<span class="pill ${rateState[1]}">${rateState[0]}</span>`,
+      [['기준금리', last('base_rate') == null ? '–' : last('base_rate').toFixed(2) + '%'], ['주담대', rate == null ? '–' : rate.toFixed(2) + '%'],
+       ['가계대출', pc(v('g4_household_loans'))], ['미분양', v('f3_unsold') == null ? '–' : v('f3_unsold').toLocaleString() + '호']]],
   ];
-  $('#sigs').innerHTML = tiles.map(t => `<div class="s ${t.c}"><span class="k">${t.k}</span><span class="v">${t.v}</span>${t.s || ''}<span class="d">${t.d}</span></div>`).join('');
+  $('#sigs').innerHTML = cards.map(([t, pill, rows]) => `<div class="s"><div class="hd"><b>${t}</b>${pill}</div>${rows.map(([k, x]) => `<div class="mr"><span>${k}</span><span>${x}</span></div>`).join('')}</div>`).join('');
 })();
 
 (function weekly() {
@@ -392,13 +408,13 @@ $('#hAsof').textContent = `${D.asof.slice(5).replace('-', '월 ')}일 기준`;
       if (st.scope === 'sudo') p.style.strokeWidth = '2.5';
       hover(p, nd ? `${names[k]} · 주간 조사 대상 아님` : `<b>${names[k]}</b><br>이번 주 ${fmt(v)} · 1년 ${V[k]['y' + st.kind] == null ? '–' : fmt(V[k]['y' + st.kind])}`);
     });
-    const fs = st.scope === 'seoul' ? 8.6 : 24;
+    const fs = st.scope === 'seoul' ? 8.6 : 26;
     keys.forEach(k => {
       const c = G[k].c; if (!c || NODATA.has(k) || !V[k] || V[k][st.kind] == null) return;
       if (st.scope === 'sudo' && (k.startsWith('11') || G[k].a < 9000)) return;
       const v = V[k][st.kind], col = bin(v)[3] ? 'var(--on-strong)' : 'var(--ink)';
       txt(svg, c[0], c[1] - fs * 0.15, short(k), 'middle', { 'font-size': fs, 'font-weight': 600, style: `fill:${col};pointer-events:none` });
-      txt(svg, c[0], c[1] + fs * 0.95, fmt(v), 'middle', { 'font-size': fs * 0.9, style: `fill:${col};pointer-events:none` });
+      txt(svg, c[0], c[1] + fs * 1.0, fmt(v), 'middle', { 'font-size': fs * 0.92, style: `fill:${col};pointer-events:none` });
     });
     const t = W.tot[`${st.scope}_${st.kind}`], what = st.kind === 't' ? '매매' : '전세';
     $('#wkLead').innerHTML = `${st.scope === 'seoul' ? '서울' : '수도권'} ${what} <span class="${t.w >= 0 ? 'up' : 'dn'}">${fmt(t.w)}</span> · ${t.streak}주 연속 ${t.w >= 0 ? '상승' : '하락'}`;
@@ -425,7 +441,7 @@ $('#hAsof').textContent = `${D.asof.slice(5).replace('-', '월 ')}일 기준`;
   });
   const p = ms.filter(m => m.partial && m.share);
   $('#volNote').textContent = '실거래는 계약 뒤 30일 안에 신고해서 최근 달은 덜 잡힙니다. ' + p.map(m => `${+m.m.slice(4)}월 계약분 약 ${m.share}% 신고됨${m.est ? ` → 약 ${m.est.toLocaleString()}건 예상` : ''}`).join(' · ')
-    + '. 📖 전체 거래량은 방향 신호가 아니라 현황입니다(p.147~148).';
+    + '.';
 })();
 
 (function bands() {
@@ -446,40 +462,56 @@ $('#hAsof').textContent = `${D.asof.slice(5).replace('-', '월 ')}일 기준`;
 /* ───── ② 찾기 ───── */
 const budget = { price: 0 };
 (function budgetCalc() {
-  const ids = ['b_seed', 'b_income', 'b_rate', 'b_years', 'b_reg'];
-  const saved = store.get('v2-budget', null);
+  const ids = ['b_seed', 'b_income', 'b_reg', 'b_type', 'b_mort', 'b_rate', 'b_years', 'b_other', 'b_orate', 'b_orep'];
+  const saved = store.get('v2-budget2', null);
   if (S.g3_mortgage_rate && S.g3_mortgage_rate.value) $('#b_rate').value = Number(S.g3_mortgage_rate.value).toFixed(2);
   if (saved) ids.forEach(k => { if (saved[k] != null) $('#' + k).value = saved[k]; });
-  const num = (id) => { const v = parseFloat(String($('#' + id).value).replace(/,/g, '')); return isFinite(v) ? v : 0; };
+  const raw = (id) => String($('#' + id).value).replace(/,/g, '').trim();
+  const num = (id) => { const v = parseFloat(raw(id)); return isFinite(v) ? v : 0; };
+  const won = (v) => Math.round(v * 10000).toLocaleString() + '원';
   function calc() {
-    store.set('v2-budget', Object.fromEntries(ids.map(k => [k, $('#' + k).value])));
-    const seed = num('b_seed'), inc = num('b_income'), rate = num('b_rate'), yrs = Math.max(1, num('b_years')), reg = $('#b_reg').value === '1';
-    const incCap = Calc.principal(inc * RULE.dsrShare * 10000, rate, yrs) / 10000;
+    store.set('v2-budget2', Object.fromEntries(ids.map(k => [k, $('#' + k).value])));
+    const seed = num('b_seed'), inc = num('b_income'), reg = $('#b_reg').value === '1', first = $('#b_type').value === 'first';
+    const want = raw('b_mort') === '' ? Infinity : num('b_mort'), rate = num('b_rate'), yrs = Math.max(1, num('b_years'));
+    const other = num('b_other'), orate = num('b_orate'), bullet = $('#b_orep').value === 'bullet';
+    const ltv = first ? RULE.ltvFirst : RULE.ltv(reg);
+    const rule = (p) => Math.min(RULE.cap(p), p * ltv);                     // 이 집값에서 제도상 받을 수 있는 주담대(만원)
     let best = null;
     for (let p = 1000; p <= 500000; p += 100) {
-      const caps = { '가격 구간 상한': RULE.cap(p), [`LTV ${RULE.ltv(reg) * 100}%`]: p * RULE.ltv(reg), '소득 30%': incCap };
-      const why = Object.keys(caps).reduce((a, b) => caps[a] <= caps[b] ? a : b), loan = caps[why];
-      const need = p + Calc.costs(p) - seed;
-      if (need <= loan) best = { p, loan: Math.max(0, need), max: loan, why, costs: Calc.costs(p) };
+      const mort = Math.min(want, rule(p)), need = p + Calc.costs(p) - seed - other;   // 주담대로 채워야 하는 돈
+      if (need <= mort) best = { p, mort: Math.max(0, need), cap: rule(p), capWhy: RULE.cap(p) <= p * ltv ? `${p <= 150000 ? '15억 이하' : p <= 250000 ? '25억 이하' : '25억 초과'} 상한 ${man(RULE.cap(p))}` : `LTV ${Math.round(ltv * 100)}%` };
     }
     budget.price = best ? best.p : 0;
-    if (!best) { $('#bPrice').textContent = '–'; $('#bStack').innerHTML = ''; $('#bWhy').textContent = '종잣돈을 넣어 주세요.'; return; }
-    $('#bPrice').innerHTML = `약 ${eok(best.p)}`;
-    const tot = seed + best.loan, parts = [['종잣돈', Math.min(seed, tot), 'var(--c1)'], ['대출', best.loan, 'var(--c2)']];
-    $('#bStack').innerHTML = parts.map(([n, v, c]) => `<span style="width:${v / tot * 100}%;background:${c}">${v / tot > 0.18 ? n + ' ' + man(v) : ''}</span>`).join('');
-    $('#bLegend').innerHTML = parts.map(([n, v, c]) => `<span><i style="background:${c};height:8px"></i>${n} ${man(v)}</span>`).join('') + `<span>그중 세금·수수료 ${man(best.costs)}</span>`;
-    const pay = Calc.payment(best.loan * 10000, rate, yrs) / 10000;
-    $('#bWhy').innerHTML = `대출 ${man(best.loan)} · 월 원리금 약 <b>${man(pay)}</b>(세후 소득의 ${inc ? Math.round(pay / inc * 100) : '–'}%). 대출 한도를 정한 건 <b>${best.why}</b>입니다.`
-      + (best.p > 140000 && best.p <= 160000 ? ' 15억 경계 근처라 은행 시세(KB) 기준 구간을 확인해야 합니다.' : '');
-    $('#bRule').textContent = `${RULE.name}(${RULE.from}~) 기준: 주담대 상한 15억 이하 6억·25억 이하 4억·초과 2억, 규제지역 LTV 40%. 원리금은 세후 소득 30% 이내(📖 p.474). 생애최초·DSR 세부는 은행 확인. 정책이 바뀌면 이 기준이 바뀌고 '시장' 탭 정책 카드에 영향이 나옵니다.`;
+    if (!best) { $('#bKpis').innerHTML = '<div class="kpi wide"><span class="k">볼 수 있는 집값</span><span class="v">–</span><span class="d">종잣돈을 넣어 주세요.</span></div>'; $('#bStack').innerHTML = ''; $('#bLegend').innerHTML = ''; drawCand(); return; }
+    const p = best.p, mort = best.mort, cost = Calc.costs(p);
+    const mPay = Calc.payment(mort * 10000, rate, yrs) / 10000;
+    const oPay = other ? (bullet ? other * orate / 100 / 12 : Calc.payment(other * 10000, orate, 5) / 10000) : 0;
+    const mInt = mPay * yrs * 12 - mort, oInt = other ? (bullet ? other * orate / 100 * 5 : oPay * 60 - other) : 0;
+    const share = inc ? (mPay + oPay) / inc * 100 : null;
+    const over = want !== Infinity && want > best.cap;
+    $('#bKpis').innerHTML = `
+      <div class="kpi wide"><span class="k">볼 수 있는 집값</span><span class="v" style="font-size:28px">${eok(p)}</span><span class="d">종잣돈 ${man(seed)} + 주담대 ${man(mort)}${other ? ` + 그 밖 대출 ${man(other)}` : ''} − 부대비용 ${man(cost)}</span></div>
+      <div class="kpi"><span class="k">대출 판정 <span class="pill ${over ? 'warn' : 'good'}">${over ? '희망액 초과' : '제도 상한 안'}</span></span><span class="v">${man(best.cap)}</span><span class="d">이 집값에서 받을 수 있는 주담대 (${best.capWhy}${first ? ', 생애최초' : ''})${over ? `. 희망 ${man(want)}은 못 받음` : ''}</span></div>
+      <div class="kpi"><span class="k">월 상환 <span class="pill ${share > 40 ? 'bad' : share > 30 ? 'warn' : 'good'}">소득의 ${share == null ? '–' : Math.round(share)}%</span></span><span class="v">${won(mPay + oPay)}</span><span class="d">주담대 ${man(mPay)}${other ? ` + 그 밖 ${man(oPay)}${bullet ? '(이자)' : ''}` : ''}</span></div>
+      <div class="kpi"><span class="k">총 대출 이자</span><span class="v">${man(mInt + oInt)}</span><span class="d">주담대 ${yrs}년 ${man(mInt)}${other ? ` · 그 밖 5년 ${man(oInt)}` : ''}</span></div>
+      <div class="kpi"><span class="k">부대비용</span><span class="v">${man(cost)}</span><span class="d">취득세 ${man(Calc.acqTax(p))} · 중개보수 ${man(Calc.brokerFee(p))} · 법무사·등기 ${man(Math.max(60, p * 0.0015))} · 이사 200만</span></div>`;
+    const tot = seed + mort + other, parts = [['종잣돈', seed, 'var(--c1)'], ['주담대', mort, 'var(--c2)'], ['그 밖 대출', other, 'var(--c3)']].filter(x => x[1] > 0);
+    $('#bStack').innerHTML = parts.map(([n, v, c]) => `<span style="width:${v / tot * 100}%;background:${c}">${v / tot > 0.16 ? n + ' ' + man(v) : ''}</span>`).join('');
+    $('#bLegend').innerHTML = parts.map(([n, v, c]) => `<span><i style="background:${c};height:8px"></i>${n} ${man(v)}</span>`).join('');
+    $('#bRule').textContent = `${RULE.name}(${RULE.from}~) 기준: 주담대 상한 15억 이하 6억·25억 이하 4억·초과 2억. LTV 규제지역 40%·그 밖 70%, 생애최초 70%(6·27 대책, 6개월 안 전입). 월 상환은 세후 소득 30% 이내 권장. 은행 DSR(스트레스 DSR 포함, 그 밖 대출도 합산)과 생애최초 취득세 감면은 계산하지 않음 → 은행·세무 확인.`
+      + (p > 140000 && p <= 160000 ? ' 15억 경계 근처라 은행 시세(KB) 기준 구간 확인 필요.' : '');
     drawCand();
   }
-  $('#budgetForm').addEventListener('input', calc); $('#budgetForm').addEventListener('submit', e => e.preventDefault());
+  $('#budgetForm').addEventListener('input', calc); $('#budgetForm').addEventListener('change', calc); $('#budgetForm').addEventListener('submit', e => e.preventDefault());
   window.runBudget = calc;   // 후보 목록(CAND)이 정의된 뒤 맨 아래에서 처음 계산
 })();
 
 const CAND = (D.cand || []).map(r => ({ name: r[0], rc: r[1], umd: r[2], ag: r[3], ref: r[4], conf: r[5], phase: r[6], grade: r[7], rebuild: r[8], newbig: r[10], hh: r[11], by: r[12], tv: r[13], dr: r[14], est: r[15], vl: r[17], stage: r[19], sno: r[20], gp: r[21], zsrc: r[22] }));
-const cst = { region: '전체', area: '84형', phase: '지역 국면 전체', reb: '재건축 무관', shown: 20 };
+const cst = { region: '전체', area: '84형', phase: '지역 국면 전체', hh: '세대수 전체', age: '연식 전체', reb: '재건축 무관', shown: 20 };
+const YEAR = +D.asof.slice(0, 4);
+// 세대수: 2026-10 84형 후보 4,735곳 중앙 605세대, 상위 25% 949세대 → 300·500·1,000 기준(1,000 = 대단지, 📖 시세 투명·환금성 p.116~122)
+const HHF = { '세대수 전체': () => true, '300세대+': (h) => h >= 300, '500세대+': (h) => h >= 500, '1,000세대+': (h) => h >= 1000 };
+const AGEF = { '연식 전체': () => true, '10년 미만': (a) => a < 10, '10~20년': (a) => a >= 10 && a < 20, '20~30년': (a) => a >= 20 && a < 30, '30년 이상': (a) => a >= 30 };
 const REGF = { '전체': () => true, '서울': (rc) => rc.startsWith('11'), '경기': (rc) => rc.startsWith('41'), '인천': (rc) => rc.startsWith('28') };
 const AREAF = { '59형': (a) => a >= 59 && a <= 60, '84형': (a) => a >= 84 && a <= 85, '전체 면적': () => true };
 const REBF = { '재건축 무관': () => true, '정비구역만': (r) => !!r.stage, '조합설립 이후': (r) => r.sno != null && r.sno >= 3 };
@@ -487,13 +519,14 @@ const rn = (rc) => (D.region_names[rc] || rc).replace(/^(서울|경기|인천) /
 const phPill = (p) => p ? `<span class="pill ${p === '상승장' ? 'warn' : p === '하락장' ? 'acc' : ''}">지역 ${p}</span>` : '';
 function drawCand() {
   const b = budget.price;
-  const list = CAND.filter(r => r.ref <= b && r.ref >= b * 0.8 && REGF[cst.region](r.rc) && AREAF[cst.area](r.ag) && (cst.phase === '지역 국면 전체' || r.phase === cst.phase) && REBF[cst.reb](r))
+  const list = CAND.filter(r => r.ref <= b && r.ref >= b * 0.8 && REGF[cst.region](r.rc) && AREAF[cst.area](r.ag) && (cst.phase === '지역 국면 전체' || r.phase === cst.phase) && REBF[cst.reb](r)
+    && (cst.hh === '세대수 전체' || (r.hh && HHF[cst.hh](r.hh))) && (cst.age === '연식 전체' || (r.by && AGEF[cst.age](YEAR - r.by))))
     .sort((a, c) => (a.grade || 9) - (c.grade || 9) || (c.newbig - a.newbig) || c.ref - a.ref);
   $('#cCount').textContent = `${list.length.toLocaleString()}곳`;
   $('#cList').innerHTML = list.slice(0, cst.shown).map((r, i) => {
     const full = CXBY[r.name + '|' + r.rc];
     return `<button type="button" class="item" data-i="${i}"><span class="nm">${r.name}</span><span class="pr">${eok(r.ref)}${r.est ? '<span class="muted">*</span>' : ''}</span>
-      <span class="sub">${rn(r.rc)} ${r.umd} · ${r.ag}㎡ · ${r.by ? 2026 - r.by + '년차' : ''}${r.hh ? ' · ' + r.hh.toLocaleString() + '세대' : ''}</span>
+      <span class="sub">${rn(r.rc)} ${r.umd} · ${r.ag}㎡ · ${r.by ? YEAR - r.by + '년차' : ''}${r.hh ? ' · ' + r.hh.toLocaleString() + '세대' : ''}</span>
       <span class="tags">${r.grade ? `<span class="pill">${r.grade}급지</span>` : ''}${phPill(r.phase)}${r.newbig ? '<span class="pill acc">신축 대단지</span>' : ''}${r.stage ? `<span class="pill ${r.sno >= 3 ? 'acc' : 'warn'}">정비 ${r.stage}</span>` : ''}${full ? '<span class="pill good">상세</span>' : ''}</span></button>`;
   }).join('') || '<p class="muted" style="padding:12px 0">조건에 맞는 단지가 없습니다. 지역이나 면적을 넓혀 보세요.</p>';
   $('#cMore').hidden = list.length <= cst.shown;
@@ -502,6 +535,8 @@ function drawCand() {
 chips('#fRegion', Object.keys(REGF), cst.region, v => { cst.region = v; cst.shown = 20; drawCand(); });
 chips('#fArea', Object.keys(AREAF), cst.area, v => { cst.area = v; cst.shown = 20; drawCand(); });
 chips('#fPhase', ['지역 국면 전체', '상승장', '보합장', '하락장'], cst.phase, v => { cst.phase = v; cst.shown = 20; drawCand(); });
+chips('#fHh', Object.keys(HHF), cst.hh, v => { cst.hh = v; cst.shown = 20; drawCand(); });
+chips('#fAge', Object.keys(AGEF), cst.age, v => { cst.age = v; cst.shown = 20; drawCand(); });
 chips('#fReb', Object.keys(REBF), cst.reb, v => { cst.reb = v; cst.shown = 20; drawCand(); });
 $('#cMore').addEventListener('click', () => { cst.shown += 20; drawCand(); });
 
