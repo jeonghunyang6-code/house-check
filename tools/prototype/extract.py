@@ -112,7 +112,7 @@ out['cx_rphase'] = select(db, f"SELECT apt_seq, region_name, phase, chg_12m, aso
 # D3. 후보 단지 찾기 (⑦): 기준 시세가 있는 단지·면적 전체 + 급지·표시
 out['cand'] = select(db, f"""SELECT m.apt_seq, m.area_group, coalesce(m.ref_10k, m.a5_est_10k) AS ref_10k, m.ref_10k IS NULL AS est, m.confidence, rp.phase, m.pattern, m.turnover_pct, c.apt_name, c.region_code, c.umd_name,
   c.build_year, k.households, g.grade, g.flag_rebuild, g.flag_gap, g.new_big_name, l.down_rank,
-  rb.vl_rat, rb.land_per_hh, rz.stage, rz.stage_no, rz.gen_pct, rz.src AS zsrc
+  rb.vl_rat, rb.land_per_hh, rz.stage, rz.stage_no, rz.gen_pct, rz.src AS zsrc, m.jeonse_10k, m.jeonse_n, m.reverse_risk, m.jeonse_24m_10k
  FROM complex_metrics m JOIN complexes c USING (apt_seq)
  LEFT JOIN kapt_complexes k ON k.kapt_code = c.kapt_code
  LEFT JOIN complex_liquidity l ON l.apt_seq = m.apt_seq
@@ -176,11 +176,16 @@ import glob, gzip, csv as _csv
 from statistics import median as _med
 _q = lambda ym: f"{ym[:4]}Q{(int(ym[4:6]) - 1) // 3 + 1}"
 _v: dict = {}
+_v59: dict = {}   # 시안 v2: 59㎡(면적군 59·60)도 같은 방법으로
 for f in sorted(glob.glob(os.path.join((os.environ.get('HC_ARCHIVE') or '').removeprefix('dir:') or str(ROOT / 'data/archive'), 'deals_hist_*.csv.gz'))):
     for r in _csv.DictReader(gzip.open(f, 'rt', encoding='utf-8')):
-        if r['is_cancelled'] in ('1', 'True', 'true') or r['deal_type'] != '중개' or r.get('floor') == '1' or not r['area_m2'] or math.floor(float(r['area_m2'])) not in (84, 85):
+        if r['is_cancelled'] in ('1', 'True', 'true') or r['deal_type'] != '중개' or r.get('floor') == '1' or not r['area_m2']:
             continue
-        _v.setdefault((r['apt_seq'], _q(r['contract_month'])), []).append(int(r['price_10k']))
+        _ag = math.floor(float(r['area_m2']))
+        if _ag in (84, 85):
+            _v.setdefault((r['apt_seq'], _q(r['contract_month'])), []).append(int(r['price_10k']))
+        elif _ag in (59, 60):
+            _v59.setdefault((r['apt_seq'], _q(r['contract_month'])), []).append(int(r['price_10k']))
 e6 = {}
 for (a, q), v in _v.items():
     e6.setdefault(a, {})[q] = _med(v)
@@ -189,9 +194,42 @@ for r in select(db, """SELECT apt_seq, substr(contract_month,1,4)||'Q'||((substr
   WHERE NOT is_cancelled AND deal_type = '중개' AND floor IS DISTINCT FROM 1 AND area_group IN (84, 85) GROUP BY 1, 2"""):
     e6.setdefault(r['apt_seq'], {})[r['q']] = float(r['p'])
 out['e6'] = e6
+_e59 = {}
+for (a, q), v in _v59.items():
+    _e59.setdefault(a, {})[q] = _med(v)
+for r in select(db, """SELECT apt_seq, substr(contract_month,1,4)||'Q'||((substr(contract_month,5,2)::int-1)/3+1) q,
+  percentile_cont(0.5) WITHIN GROUP (ORDER BY price_10k) p FROM deals
+  WHERE NOT is_cancelled AND deal_type = '중개' AND floor IS DISTINCT FROM 1 AND area_group IN (59, 60) GROUP BY 1, 2"""):
+    _e59.setdefault(r['apt_seq'], {})[r['q']] = float(r['p'])
+out['v2_q84'] = e6
+out['v2_q59'] = _e59
 out['e6_names'] = select(db, "SELECT apt_seq, apt_name, region_code, umd_name FROM complexes")
 # E6 서버 계산 갈아타기 목표 후보 (e6_targets, jobs/gap.py)
 out['e6_targets'] = select(db, "SELECT apt_seq, rank, target_seq, ratio_now, gap_pct, dist_m FROM e6_targets ORDER BY apt_seq, rank")
+# 시안 v2 (template_v2.html): 주간 시계열·후보 단지 위치·최근 90일 거래·주변 시설 좌표·정비구역 전체
+out['v2_wk'] = select(db, """SELECT cls_id, week_date::text d, value v FROM rone_weekly WHERE stat = 'sale' AND cls_id IN (50008, 50002)
+ AND week_date >= '2023-06-01' ORDER BY 1, 2""")
+out['v2_info'] = {r['apt_seq']: [r['apt_name'], r['region_code'], r['umd_name'], r['lat'] and round(float(r['lat']), 5), r['lng'] and round(float(r['lng']), 5),
+                   r['station_name'], r['station_m'], r['h2_cbd_min'], r['h2_ybd_min'], r['h2_gbd_min'], r['mart_name'], r['mart_m'], r['hosp_name'], r['hosp_m'],
+                   r['mid_zone'], r['build_year'], r['hh']]
+                  for r in select(db, """SELECT c.apt_seq, c.apt_name, c.region_code, c.umd_name, c.lat, c.lng, c.station_name, c.station_m, c.h2_cbd_min, c.h2_ybd_min,
+ c.h2_gbd_min, c.mart_name, c.mart_m, c.hosp_name, c.hosp_m, c.mid_zone, c.build_year, k.households hh FROM complexes c LEFT JOIN kapt_complexes k USING (kapt_code)
+ WHERE c.apt_seq IN (SELECT apt_seq FROM complex_metrics WHERE ref_10k IS NOT NULL OR a5_est_10k IS NOT NULL)""")}
+out['v2_deals'] = [[r['apt_seq'], r['d'], r['ag'], r['fl'], r['p'], r['dt']] for r in select(db, """SELECT apt_seq, to_char(contract_date, 'YYMMDD') d, area_group ag, floor fl,
+ price_10k p, CASE WHEN deal_type = '직거래' THEN 1 ELSE 0 END dt FROM deals WHERE NOT is_cancelled AND contract_date >= current_date - 90
+ AND area_group BETWEEN 40 AND 135 ORDER BY apt_seq, contract_date DESC""")]
+out['v2_poi'] = {
+  'st': [[r['name'], r['lines'], round(float(r['lat']), 5), round(float(r['lng']), 5)] for r in select(db, "SELECT name, lines, lat, lng FROM station WHERE lat IS NOT NULL")],
+  'hosp': [[r['name'], r['kind'], round(float(r['lat']), 5), round(float(r['lng']), 5)] for r in select(db, "SELECT name, kind, lat, lng FROM hospital WHERE lat IS NOT NULL")],
+  'mart': [[r['name'], r['brand'], round(float(r['lat']), 5), round(float(r['lng']), 5)] for r in select(db, "SELECT name, brand, lat, lng FROM mart WHERE lat IS NOT NULL")],
+  'mid': [[r['name'], round(float(r['lat']), 5), round(float(r['lng']), 5)] for r in select(db, "SELECT name, lat, lng FROM mid_school WHERE lat IS NOT NULL")]}
+out['v2_redev'] = select(db, "SELECT src, region_code rc, umd_name umd, zone_nm, biz_type, stage, stage_no FROM redev_zone WHERE region_code IS NOT NULL AND coalesce(stage_no, 0) < 8")
+out['v2_e6t'] = [[r['apt_seq'], r['target_seq'], float(r['ratio_now']), float(r['gap_pct']), r['dist_m'], r['tname']] for r in select(db,
+  "SELECT e.apt_seq, e.target_seq, e.ratio_now, e.gap_pct, e.dist_m, c.apt_name tname FROM e6_targets e JOIN complexes c ON c.apt_seq = e.target_seq ORDER BY e.apt_seq, e.rank")]
+out['v2_drive'] = {}
+for r in select(db, "SELECT apt_seq, dest, minutes FROM complex_drive WHERE minutes IS NOT NULL"):
+    out['v2_drive'].setdefault(r['apt_seq'], {})[r['dest']] = float(r['minutes'])
+out['v2_proj'] = select(db, "SELECT name, status, status_date::text, outlook, cbd, region_codes, stations FROM transit_projects")
 out['seqs'] = SEQS
 out['regions'] = {k: v for k, v in REGIONS.items()}
 json.dump(out, open(OUT / 'raw.json', 'w'), ensure_ascii=False, default=str)

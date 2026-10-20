@@ -236,8 +236,7 @@ def e6():
     for r in d.get('e6_targets', []):
         if r['apt_seq'] in ix and r['target_seq'] in ix:
             t.setdefault(ix[r['apt_seq']], []).append([ix[r['target_seq']], float(r['ratio_now']), float(r['gap_pct']), r['dist_m']])
-    for r in rows:
-        r.pop()
+    # 다섯째 칸(단지 일련번호)은 시안 v2 가 쓴다(build_v2.py). 기존 시안은 앞 네 칸만 읽는다
     return {'q': qs, 'cx': rows, 't': t}
 
 from collector.regions import REGIONS
@@ -265,7 +264,9 @@ json.dump({'monthly': monthly, 'cx': cx, 'today': today,
                      r['households'], r['build_year'], r['turnover_pct'] and float(r['turnover_pct']),
                      r.get('down_rank') and float(r['down_rank']), bool(r.get('est')), r['apt_seq'] in CANDP,
                      r.get('vl_rat') and float(r['vl_rat']), r.get('land_per_hh') and float(r['land_per_hh']), r.get('stage'), r.get('stage_no'),
-                     r.get('gen_pct') and float(r['gen_pct']), r.get('zsrc')] for r in d.get('cand', [])],
+                     r.get('gen_pct') and float(r['gen_pct']), r.get('zsrc'), r['apt_seq'],
+                     r.get('jeonse_10k'), r.get('jeonse_n'), r.get('reverse_risk'), r.get('jeonse_24m_10k')] for r in d.get('cand', [])],
+           **{k: v for k, v in d.items() if k.startswith('v2_')},   # 시안 v2 전용(extract.py 'v2_' 키를 그대로)
            'price_bands': d.get('price_bands', []),
            'b2_validation': d.get('b2_validation', []),
            'geo': json.load(open(ROOT / 'data/geo/sudogwon_sgg_20260701.json')),

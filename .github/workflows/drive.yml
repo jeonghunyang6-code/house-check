@@ -1,0 +1,39 @@
+# 직장까지 자차 시간: 네이버 클라우드 Maps Directions 5 (jobs/drive.py → complex_drive). 실시간 교통이라 평일 출근 시간대에 돈다.
+# 필요한 시크릿: NCP_MAPS_KEY_ID·NCP_MAPS_KEY(네이버 클라우드 Maps Application, Directions 5 사용), DATABASE_URL
+name: drive
+
+on:
+  schedule:
+    - cron: "47 21 * * 1-5"   # 평일 06:47 KST (GitHub 지연으로 실제 7~8시대). 받은 단지는 120일 동안 건너뜀
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "이번에 부를 최대 횟수"
+        default: "3000"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: drive
+  cancel-in-progress: false
+
+jobs:
+  drive:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: psql 확인
+        run: command -v psql || (sudo apt-get update -q && sudo apt-get install -y -q postgresql-client)
+      - name: 자차 시간
+        env:
+          NCP_MAPS_KEY_ID: ${{ secrets.NCP_MAPS_KEY_ID }}
+          NCP_MAPS_KEY: ${{ secrets.NCP_MAPS_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          HC_DB_BACKEND: psql
+          PYTHONUNBUFFERED: "1"
+        run: python -m jobs.drive --limit "${{ inputs.limit || '3000' }}"
