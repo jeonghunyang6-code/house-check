@@ -150,6 +150,11 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
 .dotlegend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 11.5px; color: var(--ink-3); }
 .dotlegend span { display: inline-flex; gap: 4px; align-items: center; }
 .dotlegend i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.pol { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 9px 0 9px 10px; border-bottom: 1px solid var(--line); border-left: 4px solid var(--c3); cursor: pointer; align-items: center; }
+.pol .pt { display: grid; gap: 1px; min-width: 0; font-size: 14px; } .pol .pt span { font-size: 12px; }
+.pol .pe { font-size: 12.5px; white-space: nowrap; text-align: right; }
+.pol .full { grid-column: 1 / -1; display: none; font-size: 12.5px; color: var(--ink-2); padding-top: 4px; }
+.pol.open .full { display: block; }
 .ev { display: grid; grid-template-columns: 22px auto 1fr; gap: 8px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; cursor: pointer; }
 .ev .no { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: var(--on-strong); }
 .ev .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
@@ -218,19 +223,19 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
         <div class="list" id="pbBars" style="gap:8px"></div>
         <p class="src">단지별 12개월 기준 시세 변화의 가격대별 중앙값.</p>
       </div>
-      <div class="card"><h2>최근 등록된 거래</h2><p id="todayLine"></p><p class="src">국토부 실거래가. 신고가 = 같은 단지·면적의 그전 최고가보다 비싼 거래(직거래·해제 제외).</p></div>
+      <div class="card"><h2>나와 관련된 거래 <small>최근 30일 계약</small></h2><div id="myDeals" style="display:grid;gap:12px"></div>
+        <p class="src">국토부 실거래가(중개). 급매 = 그 단지·평형 기준 시세보다 5% 이상 싸게, 비싸게 = 3% 이상 비싸게. 최근 거래는 신고 기한(30일) 전이라 더 늘어납니다.</p></div>
       <div class="card">
-        <h2>정책과 서울 집값 <small>주간 변동률</small></h2>
-        <svg class="chart" id="polChart" viewBox="0 0 340 170" role="img" aria-label="서울 주간 매매 변동률과 정책 발표 시점"></svg>
-        <div class="legend" id="polLegend"></div>
+        <h2>정책·규제 <small>발표 뒤 서울 집값</small></h2>
+        <div class="row" style="gap:10px" id="polLegend"></div>
         <div id="polList"></div>
-        <p class="src">번호를 누르면 내용이 펼쳐집니다. 막대 = 한국부동산원 서울 주간 매매 변동률.</p>
-      </div>
-      <div class="card">
-        <h2>규제 뒤 실제 가격 <small id="blH"></small></h2>
-        <div id="blRows"></div>
-        <div class="legend"><span><i style="background:var(--up2)"></i>규제된 곳</span><span><i style="background:var(--c2)"></i>붙은 바깥</span><span><i style="background:var(--c3)"></i>먼 바깥</span></div>
-        <p class="src">토허제가 시군구 전체에 새로 걸린 날 기준, R-ONE 매매지수 누적 변화 중앙값. 예측이 아니라 지난 사례입니다.</p>
+        <button type="button" class="more" id="polMore">이전 정책 더 보기</button>
+        <details class="more-f"><summary>규제 뒤 실제 가격 · 토허제 3번 비교</summary><div class="body">
+          <div id="blRows"></div>
+          <div class="legend"><span><i style="background:var(--up2)"></i>규제된 곳</span><span><i style="background:var(--c2)"></i>붙은 바깥</span><span><i style="background:var(--c3)"></i>먼 바깥</span></div>
+          <p class="src">토허제가 시군구 전체에 새로 걸린 날 기준, 지정 15주 뒤 R-ONE 매매지수 누적 변화 중앙값.</p>
+        </div></details>
+        <p class="src">오른쪽 = 서울 주간 매매 변동률 평균, 발표 전 4주 → 뒤 8주. 금리 등 다른 일도 섞여 있어 정책만의 효과는 아닙니다. 줄을 누르면 내용이 펼쳐집니다.</p>
       </div>
       <p class="fontchk" id="fontChk"></p>
     </div>
@@ -266,27 +271,28 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
         <h2>예산 안 후보 <small id="cCount"></small></h2>
         <div class="chips" id="fRegion" aria-label="지역"></div>
         <div class="chips" id="fArea" aria-label="면적"></div>
-        <div class="chips" id="fPhase" aria-label="지역 국면"></div>
         <div class="chips" id="fHh" aria-label="세대수"></div>
         <div class="chips" id="fAge" aria-label="연식"></div>
-        <details class="more-f" id="moreF"><summary>조건 더 보기 · 출퇴근·역세권·정렬</summary><div class="body" style="gap:10px">
+        <details class="more-f" id="moreF"><summary>조건 더 보기 · 출퇴근·역세권·국면·정렬</summary><div class="body" style="gap:10px">
           <div class="chips" id="fWork" aria-label="직장"></div>
+          <p class="muted" id="workNote" style="font-size:12px"></p>
           <div class="chips" id="fMin" aria-label="출퇴근 시간"></div>
           <div class="chips" id="fSt" aria-label="역세권"></div>
+          <div class="chips" id="fPhase" aria-label="지역 국면"></div>
           <div class="chips" id="fSort" aria-label="정렬"></div>
         </div></details>
         <div class="list" id="cList"></div>
         <button type="button" class="more" id="cMore">20곳 더 보기</button>
-        <p class="src">기준 시세가 예산의 80~100%인 단지. ♡를 누르면 관심 단지에 담깁니다. 세대수·출퇴근 시간을 모르는 단지는 그 조건을 고르면 빠집니다. 출퇴근 = 가장 가까운 역에서 그 업무지구 역까지 대중교통 시간(걷는 시간 제외).</p>
+        <p class="src">기준 시세가 예산의 80~100%인 단지. ♡를 누르면 관심 단지에 담깁니다. 세대수·출퇴근 시간을 모르는 단지는 그 조건을 고르면 빠집니다.</p>
       </div>
     </div>
   </section>
 
   <!-- ③ 관심 -->
   <section class="tab-page" id="watch" aria-label="관심" hidden>
-    <div class="top wrap"><h1>고른 단지들</h1><span class="asof" id="wCount"></span></div>
+    <div class="top wrap"><h1>고른 단지들</h1><div class="seg areaSeg" role="group" aria-label="평형"><button type="button" data-v="84" aria-pressed="true">84㎡</button><button type="button" data-v="59" aria-pressed="false">59㎡</button></div></div>
     <div class="tab wrap">
-      <div class="card"><h2>관심 단지</h2><div class="list" id="wList"></div></div>
+      <div class="card"><h2>관심 단지 <small id="wCount"></small></h2><div class="list" id="wList"></div></div>
       <div class="card">
         <h2>비교 <small>충족 개수순</small></h2>
         <div class="dotlegend"><span><i style="background:var(--good)"></i>충족</span><span><i style="background:var(--warn)"></i>미충족</span><span><i style="background:var(--line)"></i>자료 없음</span></div>
@@ -310,7 +316,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
 
   <!-- ④ 상세 -->
   <section class="tab-page" id="daily" aria-label="상세" hidden>
-    <div class="top wrap"><h1>관심 단지 매일 보기</h1><span class="asof num" id="dAsof"></span></div>
+    <div class="top wrap"><h1>관심 단지 매일 보기</h1><div class="seg areaSeg" role="group" aria-label="평형"><button type="button" data-v="84" aria-pressed="true">84㎡</button><button type="button" data-v="59" aria-pressed="false">59㎡</button></div></div>
     <div class="tab wrap">
       <div class="chips" id="dSel" aria-label="단지 고르기"></div>
       <div class="card" id="dHead"></div>
@@ -333,7 +339,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
 
   <!-- ⑤ 계획 -->
   <section class="tab-page" id="plan" aria-label="계획" hidden>
-    <div class="top wrap"><h1>사고 나서 다음은</h1></div>
+    <div class="top wrap"><h1>사고 나서 다음은</h1><div class="seg areaSeg" role="group" aria-label="평형"><button type="button" data-v="84" aria-pressed="true">84㎡</button><button type="button" data-v="59" aria-pressed="false">59㎡</button></div></div>
     <div class="tab wrap">
       <div class="card">
         <h2>어떻게 살까 <span class="pill ex">예시 값</span></h2>
@@ -349,10 +355,13 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
       </div>
       <div class="card">
         <h2>언제 갈아탈까</h2>
-        <label class="muted" for="mySel">내 집 (관심 단지에서)</label>
-        <select id="mySel" class="icon-btn" style="width:100%;text-align:left"></select>
-        <div class="list" id="moveList" style="gap:12px"></div>
-        <p class="src">갈아타기는 1.5배 이상, 두 단지 가격 차이가 좁혀졌을 때. 격차 위치 = 지금 차이가 지난 5년 중 몇 % 위치인지, 하위 20% = 좁혀진 때(🔧, 백테스트: 그 뒤 4분기 목표 단지가 9~12% 더 오름).</p>
+        <div class="form">
+          <label for="mySel" style="grid-column:1/-1">내 집 (관심 단지)<select id="mySel"></select></label>
+          <label for="tgSel" style="grid-column:1/-1">갈아탈 곳<select id="tgSel"></select></label>
+        </div>
+        <div id="moveMain" style="display:grid;gap:10px"></div>
+        <details class="more-f"><summary>추천 목표 단지는 이렇게 골랐어요</summary><div class="body"><div id="moveAuto"></div>
+          <p class="src">84㎡ 분기 중앙가로 지금 집의 1.5~2.5배, 직선 10km 안, 2021Q4~ 12분기 이상 거래가 있는 단지 중 '격차 위치'가 낮은 순 5곳(jobs/gap.py). 원하는 단지는 관심에 담으면 '갈아탈 곳'에서 고를 수 있습니다.</p></div></details>
       </div>
       <div class="card">
         <h2>갈아타기 자금 <small id="fundTitle"></small></h2>
@@ -432,11 +441,25 @@ const Calc = {
 };
 
 /* ───── 공통: 단지 모델 ───── */
-const CAND = (D.cand || []).map(r => ({ name: r[0], rc: r[1], umd: r[2], ag: r[3], ref: r[4], conf: r[5], phase: r[6], grade: r[7], newbig: r[10], hh: r[11], by: r[12], tv: r[13], dr: r[14], est: r[15], vl: r[17], stage: r[19], sno: r[20], seq: r[23] }));
+const CAND = (D.cand || []).map(r => ({ name: r[0], rc: r[1], umd: r[2], ag: r[3], ref: r[4], conf: r[5], phase: r[6], grade: r[7], newbig: r[10], hh: r[11], by: r[12], tv: r[13], dr: r[14], est: r[15], vl: r[17], stage: r[19], sno: r[20], seq: r[23],
+  js: r[24], jn: r[25], rr: r[26], j24: r[27] }));
 const CANDBY = {}; CAND.forEach(r => (CANDBY[r.seq] = CANDBY[r.seq] || []).push(r));
-const main = (seq) => { const rs = CANDBY[seq] || []; return rs.find(r => r.ag >= 84 && r.ag <= 85) || rs.find(r => r.ag >= 59 && r.ag <= 60) || rs[0] || null; };
+/* 평형 선택(관심·상세·계획 공통): 84 = 84·85㎡, 없으면 75~99㎡ 중 가장 가까운 것 / 59 = 59·60㎡, 없으면 50~74㎡ */
+let AREA = store.get('v2-area', '84');
+function areaRow(seq, pref = AREA) {
+  const rs = CANDBY[seq] || [], t = +pref, ex = t === 84 ? [84, 85] : [59, 60], bd = t === 84 ? [75, 99] : [50, 74];
+  return rs.find(r => r.ag >= ex[0] && r.ag <= ex[1]) || rs.filter(r => r.ag >= bd[0] && r.ag <= bd[1]).sort((a, b) => Math.abs(a.ag - t) - Math.abs(b.ag - t))[0] || null;
+}
+const main = (seq) => areaRow(seq) || areaRow(seq, AREA === '84' ? '59' : '84') || (CANDBY[seq] || [])[0] || null;
+const useFull = (seq) => AREA === '84' && !!CXS[seq];
+const agTag = (seq) => { const r = areaRow(seq); return !r ? `<span class="pill warn">${AREA}㎡ 없음</span>` : (r.ag !== +AREA && r.ag !== +AREA + 1) ? `<span class="pill none">대표 ${r.ag}㎡</span>` : ''; };
+function bandFor(p) {   // D1 가격대별 전세가율 정상 범위(compute.py band 와 같음)
+  const pts = [[0, [60, 90]], [50000, [60, 90]], [80000, [50, 60]], [150000, [50, 60]], [200000, [30, 50]], [1e9, [30, 50]]];
+  for (let i = 0; i < pts.length - 1; i++) { const [x0, r0] = pts[i], [x1, r1] = pts[i + 1]; if (p >= x0 && p <= x1) { const t = x1 === x0 ? 0 : (p - x0) / (x1 - x0); return [Math.round(r0[0] + (r1[0] - r0[0]) * t), Math.round(r0[1] + (r1[1] - r0[1]) * t)]; } }
+  return [30, 50];
+}
 function cxName(seq) { return (CXS[seq] && CXS[seq].name) || (INFO[seq] && INFO[seq][0]) || (main(seq) || {}).name || (typeof E6NM !== 'undefined' && E6NM[seq]) || seq; }
-function cxRef(seq) { return CXS[seq] ? CXS[seq].C : (main(seq) || {}).ref; }
+function cxRef(seq) { return useFull(seq) ? CXS[seq].C : (main(seq) || {}).ref; }
 const DEALS = {}; (D.v2_deals || []).forEach(r => (DEALS[r[0]] = DEALS[r[0]] || []).push(r));
 const TODAY_NEW = new Set((D.today || []).map(t => t.apt_seq));
 
@@ -444,6 +467,9 @@ let watch = new Set(store.get('v2-watch2', CX.map(c => c.seq)));
 const watchChanged = [];
 function toggleWatch(seq) { watch.has(seq) ? watch.delete(seq) : watch.add(seq); store.set('v2-watch2', [...watch]); watchChanged.forEach(f => f()); }
 
+/* 평형 선택 버튼(관심·상세·계획) */
+function syncArea() { document.querySelectorAll('.areaSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === AREA)); }
+document.addEventListener('click', (e) => { const b = e.target.closest('.areaSeg button'); if (!b || b.dataset.v === AREA) return; AREA = b.dataset.v; store.set('v2-area', AREA); syncArea(); watchChanged.forEach(f => f()); });
 /* ───── 탭 ───── */
 const TABS = ['home', 'find', 'watch', 'daily', 'plan'];
 function go(t) {
@@ -492,6 +518,22 @@ $('#hAsof').textContent = `${D.asof.slice(5).replace('-', '월 ')}일 기준`;
   $('#sigs').innerHTML = cards.map(([t, pill, rows]) => `<div class="s"><div class="hd"><b>${t}</b>${pill}</div>${rows.map(([k, x, c]) => `<div class="mr"><span class="lb"><i class="${c}"></i>${k}</span><span class="${c === 'ref' ? '' : c}">${x}</span></div>`).join('')}</div>`).join('');
 })();
 
+/* 지도 글씨 위치: 무게중심 대신 경계에서 가장 먼 안쪽 점(경계·바깥에 글씨가 걸리지 않게) */
+const LABEL = {};
+function labelPt(k, g) {
+  if (LABEL[k]) return LABEL[k];
+  const rings = []; let cur = null;
+  (g.d.match(/[MLZ][^MLZ]*/g) || []).forEach(seg => { const t = seg[0], n = seg.slice(1).trim().split(/[ ,]+/).map(Number);
+    if (t === 'M') { cur = []; rings.push(cur); } if (t !== 'Z') for (let i = 0; i + 1 < n.length; i += 2) cur.push([n[i], n[i + 1]]); });
+  const pts = rings.flat(); if (!pts.length) return (LABEL[k] = g.c);
+  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const inside = (x, y) => { let c = false; rings.forEach(r => { for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [xi, yi] = r[i], [xj, yj] = r[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } }); return c; };
+  const segD = (x, y, a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], l = dx * dx + dy * dy; let t = l ? ((x - a[0]) * dx + (y - a[1]) * dy) / l : 0; t = Math.max(0, Math.min(1, t)); return Math.hypot(x - a[0] - t * dx, y - a[1] - t * dy); };
+  const edge = (x, y) => { let m = Infinity; rings.forEach(r => { for (let i = 0, j = r.length - 1; i < r.length; j = i++) m = Math.min(m, segD(x, y, r[j], r[i])); }); return m; };
+  let best = g.c, bd = g.c && inside(g.c[0], g.c[1]) ? edge(g.c[0], g.c[1]) : -1; const N = 22;
+  for (let i = 1; i < N; i++) for (let j = 1; j < N; j++) { const x = x0 + (x1 - x0) * i / N, y = y0 + (y1 - y0) * j / N; if (!inside(x, y)) continue; const d = edge(x, y) - 0.15 * Math.hypot(x - (g.c || [x, y])[0], y - (g.c || [x, y])[1]) * 0.1; if (d > bd) { bd = d; best = [x, y]; } }
+  LABEL[k] = best; LABEL[k].inside = inside; return best;
+}
 (function weekly() {
   const W = D.weekly, G = D.geo, V = W.v, NODATA = new Set(W.nodata || []), names = D.region_names;
   const st = { scope: 'seoul', kind: 't' };
@@ -514,9 +556,19 @@ $('#hAsof').textContent = `${D.asof.slice(5).replace('-', '월 ')}일 기준`;
       if (st.scope === 'sudo') p.style.strokeWidth = '3';
       hover(p, nd ? `${names[k]} · 주간 조사 대상 아님` : `<b>${names[k]}</b><br>이번 주 ${fmt(v)} · 1년 ${V[k]['y' + st.kind] == null ? '–' : fmt(V[k]['y' + st.kind])}`);
     });
-    const fs = st.scope === 'seoul' ? 8.6 : 26;
-    keys.forEach(k => {
-      const c = G[k].c; if (!c || NODATA.has(k) || !V[k] || V[k][st.kind] == null) return;
+    const fs = st.scope === 'seoul' ? 8.6 : 26, boxes = [];
+    const hit = (b) => boxes.some(o => b[0] < o[2] && b[2] > o[0] && b[1] < o[3] && b[3] > o[1]);
+    keys.slice().sort((a, b) => (G[b].a || 0) - (G[a].a || 0)).forEach(k => {
+      if (!G[k].c || NODATA.has(k) || !V[k] || V[k][st.kind] == null) return;
+      const c0 = labelPt(k, G[k]), mx = fs * 2.2, w = fs * 0.62 * Math.max(short(k).length * 1.6, 6), h = fs * 2.15;
+      const clamp = (p) => [Math.max(vb[0] + mx, Math.min(vb[0] + vb[2] - mx, p[0])), Math.max(vb[1] + fs, Math.min(vb[1] + vb[3] - fs * 1.4, p[1]))];
+      const box = (p) => [p[0] - w / 2, p[1] - fs * 1.05, p[0] + w / 2, p[1] - fs * 1.05 + h];
+      // 겹치면 위·아래·옆으로 조금 옮겨 본다(구 안쪽일 때만). 끝까지 겹치면 원래 자리
+      let c = clamp(c0);
+      for (const [dx, dy] of [[0, 0], [0, -fs * 0.9], [0, fs * 0.9], [-fs * 1.4, 0], [fs * 1.4, 0], [0, -fs * 1.6], [0, fs * 1.6]]) {
+        const q = clamp([c0[0] + dx, c0[1] + dy]); if ((dx || dy) && c0.inside && !c0.inside(q[0], q[1])) continue; if (!hit(box(q))) { c = q; break; }
+      }
+      boxes.push(box(c));
       if (st.scope === 'sudo' && (k.startsWith('11') || G[k].a < 9000)) return;
       const v = V[k][st.kind], col = bin(v)[3] ? 'var(--on-strong)' : 'var(--ink)';
       const t1 = el('text', { x: c[0], y: c[1] - fs * 0.15, 'font-size': fs, 'font-weight': 600, fill: col }, svg); t1.textContent = short(k);
@@ -559,48 +611,58 @@ $('#hAsof').textContent = `${D.asof.slice(5).replace('-', '월 ')}일 기준`;
   seg('#pbScope', draw); draw('서울');
 })();
 
-(function today() {
-  const r = D.recent || {}, hi = (D.today || []).filter(t => t.status === 'high');
-  $('#todayLine').innerHTML = `최근 등록 <b class="num">${(r.n || 0).toLocaleString()}건</b> 중 신고가 <b class="num">${(r.highs || 0).toLocaleString()}건</b>(${r.n ? Math.round(r.highs / r.n * 100) : 0}%). `
-    + (hi.length ? `눈에 띄는 신고가: ${hi.slice(0, 3).map(t => `${t.apt_name} ${t.area_group}㎡ ${eok(t.price_10k)}`).join(', ')}.` : '');
-})();
+function myDeals() {
+  const t1 = new Date(D.asof).getTime(), d2 = (x) => new Date(`20${x.slice(0, 2)}-${x.slice(2, 4)}-${x.slice(4)}`).getTime();
+  const recent = (seq) => (DEALS[seq] || []).filter(x => !x[5] && t1 - d2(x[1]) <= 30 * 864e5);
+  const refOf = (seq, ag) => ((CANDBY[seq] || []).find(r => r.ag === ag) || {}).ref;
+  const gapOf = (seq, x) => { const ref = refOf(seq, x[2]); return ref ? (x[4] / ref - 1) * 100 : null; };
+  // 관심 단지
+  const w = [...watch].flatMap(seq => recent(seq).map(x => [seq, x])).sort((a, b) => a[1][1] < b[1][1] ? 1 : -1).slice(0, 5);
+  const wHtml = `<div><p style="font-weight:700;font-size:13.5px">관심 단지 <span class="muted" style="font-weight:400">${w.length ? '' : '최근 30일 거래 없음'}</span></p>` + w.map(([seq, x]) => {
+    const g = gapOf(seq, x); return `<div class="deal"><span class="muted num">${x[1].slice(2, 4)}.${x[1].slice(4)}</span><span>${cxName(seq)} <span class="muted">${x[2]}㎡ ${x[3]}층</span>${g != null && g <= -5 ? ' <span class="pill acc">급매</span>' : ''}</span><span class="p">${eok(x[4])} <span class="${g == null ? 'muted' : g <= -5 ? 'dn' : g >= 3 ? 'up' : 'muted'}" style="font-size:12px;font-weight:500">${g == null ? '' : sgn(g, 0)}</span></span></div>`; }).join('') + '</div>';
+  // 내 예산대
+  const b = budget.price, rows = b ? CAND.filter(r => r.ref <= b && r.ref >= b * 0.8) : [], seen = new Set(rows.map(r => r.seq + '|' + r.ag));
+  let n = 0, cheap = 0, dear = 0;
+  new Set(rows.map(r => r.seq)).forEach(seq => recent(seq).forEach(x => { if (!seen.has(seq + '|' + x[2])) return; n++; const g = gapOf(seq, x); if (g <= -5) cheap++; else if (g >= 3) dear++; }));
+  const mid = n - cheap - dear, pct = (v) => n ? v / n * 100 : 0;
+  const bHtml = b ? `<div><p style="font-weight:700;font-size:13.5px">내 예산대 ${eok(b * 0.8)}~${eok(b)} <span class="muted" style="font-weight:400">${rows.length ? new Set(rows.map(r => r.seq)).size.toLocaleString() + '개 단지 · ' : ''}거래 ${n.toLocaleString()}건</span></p>
+    <div class="stack" style="margin-top:6px"><span style="width:${pct(cheap)}%;background:var(--dn2)">${pct(cheap) > 12 ? '급매 ' + cheap : ''}</span><span style="width:${pct(mid)}%;background:var(--c3)">${pct(mid) > 12 ? '시세 근처 ' + mid : ''}</span><span style="width:${pct(dear)}%;background:var(--up2)">${pct(dear) > 12 ? '비싸게 ' + dear : ''}</span></div>
+    <div class="legend" style="margin-top:4px"><span><i style="background:var(--dn2);height:8px"></i>급매 ${cheap}건 (${Math.round(pct(cheap))}%)</span><span><i style="background:var(--c3);height:8px"></i>시세 근처 ${mid}</span><span><i style="background:var(--up2);height:8px"></i>비싸게 ${dear}건 (${Math.round(pct(dear))}%)</span></div></div>` : '';
+  const r = D.recent || {};
+  $('#myDeals').innerHTML = wHtml + bHtml + `<p class="muted">전체: 최근 등록 ${(r.n || 0).toLocaleString()}건 중 신고가 ${(r.highs || 0).toLocaleString()}건 (${r.n ? Math.round(r.highs / r.n * 100) : 0}%)</p>`;
+}
 
-/* 정책과 서울 집값: 주간 변동률 막대 + 정책 번호 표시, 아래 목록(누르면 펼침) */
+/* 정책·규제: 한 줄 제목 + 발표 전 4주 → 뒤 8주 서울 주간 변동률 */
 const KC = { '대출': 'var(--c1)', '규제지역': 'var(--warn)', '토허': 'var(--bad)', '세금': 'var(--c3)' };
-(function policyChart() {
-  const wk = (D.v2_wk || []).filter(r => r.cls_id === 50008).map(r => [r.d, +r.v]);
+const PSHORT = { '2026-07-31|세금': '세제개편안: 다주택 양도세 중과 완화', '2026-07-05|토허': '기흥·동탄·구리 토허제', '2026-07-01|규제지역': '기흥·동탄·구리 규제지역',
+  '2026-05-12|토허': '토허 실거주 의무 유예 확대', '2026-05-10|세금': '다주택 양도세 중과 재시행', '2025-10-29|대출': '1주택자 전세대출 이자 DSR 반영',
+  '2025-10-20|토허': '서울 전역·경기 12곳 토허제', '2025-10-16|규제지역': '서울 전역·경기 12곳 규제지역', '2025-10-16|대출': '10·15 주담대 한도 축소·LTV 40%',
+  '2025-07-01|대출': '스트레스 DSR 3단계', '2025-06-28|대출': '6·27 수도권 주담대 6억 한도', '2025-03-24|토허': '강남3구·용산 토허제', '2025-02-13|토허': '잠실·삼성·대치·청담 토허 해제' };
+(function policyList() {
+  const wk = (D.v2_wk || []).filter(r => r.cls_id === 50008).map(r => [new Date(r.d).getTime(), +r.v]);
   const ch = wk.slice(1).map((r, i) => [r[0], (r[1] / wk[i][1] - 1) * 100]);
-  const P = (D.policy || []).filter(p => ch.length && p[0] >= ch[0][0]).sort((a, b) => a[0] < b[0] ? -1 : 1);
-  const svg = $('#polChart'), W = 340, H = 170, L = 30, R = 6, T = 34, B = 18;
-  if (!ch.length) return;
-  const t0 = new Date(ch[0][0]).getTime(), t1 = new Date(ch[ch.length - 1][0]).getTime();
-  const x = (d) => L + (W - L - R) * (new Date(d).getTime() - t0) / (t1 - t0);
-  const mx = Math.max(0.3, ...ch.map(c => Math.abs(c[1]))), y = (v) => T + (H - T - B) * (1 - (v + mx) / (2 * mx));
-  for (const t of [-mx, 0, mx]) { el('line', { x1: L, x2: W - R, y1: y(t), y2: y(t), stroke: 'var(--line)' }, svg); txt(svg, L - 4, y(t) + 3, (t > 0 ? '+' : '') + t.toFixed(1) + '%', 'end'); }
-  const bw = Math.max(1, (W - L - R) / ch.length - 0.6);
-  ch.forEach(([d, v]) => { const r = el('rect', { x: x(d) - bw / 2, y: Math.min(y(v), y(0)), width: bw, height: Math.max(0.6, Math.abs(y(v) - y(0))), fill: v >= 0 ? 'var(--up2)' : 'var(--dn2)' }, svg); hover(r, `${dt(d)} 주 ${sgn(v, 2)}`); });
-  for (const yr of [2024, 2025, 2026]) { const d = yr + '-01-01'; if (new Date(d).getTime() > t0) txt(svg, x(d), H - 4, yr + '년'); }
-  let lastX = -99, row = 0;
-  P.forEach((p, i) => {
-    const cx = x(p[0]); row = cx - lastX < 15 ? (row + 1) % 2 : 0; lastX = row ? lastX : cx;
-    const cy = 8 + row * 15;
-    el('line', { x1: cx, x2: cx, y1: cy + 6, y2: H - B, stroke: KC[p[1]] || 'var(--c3)', 'stroke-dasharray': '2 2', 'stroke-width': 1 }, svg);
-    const g = el('g', { id: 'pm' + i, style: 'cursor:pointer' }, svg);
-    el('circle', { cx, cy, r: 7, fill: KC[p[1]] || 'var(--c3)' }, g);
-    txt(g, cx, cy + 3.5, String(i + 1), 'middle', { style: 'fill:var(--on-strong);font-size:9px;font-weight:700' });
-    hover(g, `${i + 1}. ${dt(p[0])} ${p[2]}`);
-  });
-  $('#polLegend').innerHTML = Object.entries(KC).map(([k, c]) => `<span><i style="background:${c};height:8px;width:8px;border-radius:50%"></i>${k}</span>`).join('');
-  const shortT = (s) => s.includes(':') ? s.split(':')[0] : s.length > 26 ? s.slice(0, 26) + '…' : s;
-  $('#polList').innerHTML = P.map((p, i) => ({ p, i })).reverse().map(({ p, i }) => `<div class="ev" tabindex="0" role="button" aria-expanded="false"><span class="no" style="background:${KC[p[1]] || 'var(--c3)'}">${i + 1}</span><span class="muted num">${dt(p[0])}</span><span class="t">${shortT(p[2])}</span><span class="full">${p[2]}</span></div>`).join('');
-  [...$('#polList').children].forEach(e => { const f = () => { e.classList.toggle('open'); e.setAttribute('aria-expanded', e.classList.contains('open')); }; e.addEventListener('click', f); e.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); f(); } }); });
+  const avg = (a, b) => { const xs = ch.filter(c => c[0] > a && c[0] <= b).map(c => c[1]); return xs.length >= 2 ? xs.reduce((x, y) => x + y, 0) / xs.length : null; };
+  const P = (D.policy || []).slice().sort((a, b) => a[0] < b[0] ? 1 : a[0] > b[0] ? -1 : 0);
+  let shown = 6;
+  $('#polLegend').innerHTML = Object.entries(KC).map(([k, c]) => `<span class="muted" style="display:inline-flex;gap:4px;align-items:center"><i style="width:4px;height:12px;border-radius:2px;background:${c}"></i>${k}</span>`).join('');
+  function draw() {
+    $('#polList').innerHTML = P.slice(0, shown).map(p => {
+      const t = new Date(p[0]).getTime(), pre = avg(t - 28 * 864e5, t), post = avg(t, t + 56 * 864e5);
+      const d = pre != null && post != null ? post - pre : null, cl = d == null ? 'muted' : d <= -0.02 ? 'dn' : d >= 0.02 ? 'up' : 'muted';
+      const eff = pre == null || post == null ? '<span class="muted">–</span>' : `<span class="num">${sgn(pre, 2)}</span><span class="${cl}" style="font-weight:700">${d <= -0.02 ? ' ▼ ' : d >= 0.02 ? ' ▲ ' : ' → '}</span><span class="num ${cl}" style="font-weight:700">${sgn(post, 2)}</span>`;
+      return `<div class="pol" tabindex="0" role="button" aria-expanded="false" style="border-left-color:${KC[p[1]] || 'var(--c3)'}"><div class="pt"><b>${PSHORT[p[0] + '|' + p[1]] || p[2].split(':')[0]}</b><span class="muted num">${dt(p[0])} · ${p[1]}</span></div><div class="pe">${eff}</div><div class="full">${p[2]}</div></div>`;
+    }).join('');
+    [...$('#polList').children].forEach(e => { const f = () => { e.classList.toggle('open'); e.setAttribute('aria-expanded', e.classList.contains('open')); }; e.addEventListener('click', f); e.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); f(); } }); });
+    $('#polMore').hidden = shown >= P.length;
+  }
+  $('#polMore').addEventListener('click', () => { shown = P.length; draw(); });
+  draw();
 })();
 
 /* 규제 뒤 실제 가격: 사건마다 같은 기간(15주) 뒤 세 그룹 막대 */
 (function balloonRows() {
   const B = D.balloon || {}, H = 15, G = [['inside', '규제된 곳', 'var(--up2)'], ['adjacent', '붙은 바깥', 'var(--c2)'], ['far', '먼 바깥', 'var(--c3)']];
   const NAMES = { '2025-03-24': '강남3구·용산 토허', '2025-10-20': '서울 전역·경기 12곳 토허', '2026-07-05': '기흥·동탄·구리 토허' };
-  $('#blH').textContent = `지정 ${H}주 뒤`;
   const rows = Object.keys(B).sort().reverse().map(e => {
     const at = (g) => { const pts = B[e].path.filter(p => p[0] === g && p[1] <= H); return pts.length ? pts[pts.length - 1][2] : null; };
     return { e, vals: G.map(([g]) => at(g)) };
@@ -655,7 +717,7 @@ const budget = { price: 0 };
     $('#bLegend').innerHTML = parts.map(([n, v, c]) => `<span><i style="background:${c};height:8px"></i>${n} ${man(v)}</span>`).join('');
     $('#bRule').textContent = `${RULE.name}(${RULE.from}~) 기준: 주담대 상한 15억 이하 6억·25억 이하 4억·초과 2억. LTV 규제지역 40%·그 밖 70%, 생애최초 70%(6개월 안 전입). 은행 DSR(그 밖 대출 합산)과 생애최초 취득세 감면은 계산하지 않음 → 은행·세무 확인.`
       + (p > 140000 && p <= 160000 ? ' 15억 경계 근처라 은행 시세(KB) 기준 구간 확인 필요.' : '');
-    drawCand();
+    drawCand(); myDeals();
   }
   ['input', 'change'].forEach(ev => $('#budgetForm').addEventListener(ev, calc)); $('#budgetForm').addEventListener('submit', e => e.preventDefault());
   window.runBudget = calc;
@@ -667,22 +729,27 @@ const AREAF = { '59형': (a) => a >= 59 && a <= 60, '84형': (a) => a >= 84 && a
 // 세대수: 2026-10 84형 후보 4,735곳 중앙 605세대, 상위 25% 949세대 → 300~500·500~1,000·1,000+ (1,000 = 대단지)
 const HHF = { '세대수 전체': () => true, '300~500세대': (h) => h >= 300 && h < 500, '500~1,000세대': (h) => h >= 500 && h < 1000, '1,000세대+': (h) => h >= 1000 };
 const AGEF = { '연식 전체': () => true, '10년 미만': (a) => a < 10, '10~20년': (a) => a >= 10 && a < 20, '20~30년': (a) => a >= 20 && a < 30, '30년 이상': (a) => a >= 30 };
-const WORK = { '직장 무관': null, '강남': 9, '여의도': 8, '사대문': 7 };   // INFO 칸 번호
-const MINF = { '30분 이내': 30, '45분 이내': 45, '60분 이내': 60 };
+// 직장: 숫자 = INFO 대중교통 시간 칸(역 → 업무지구 역), 배열 = 자차 목적지 좌표(입지톡 지오코딩 2026-10-20)
+const WORK = { '직장 무관': null, '강남': 9, '여의도': 8, '사대문': 7, 'SK하이닉스 이천': [37.25298, 127.48069], '용인 반도체 클러스터': [37.16232, 127.33242] };
+const MINF = { '30분 이내': 30, '45분 이내': 45, '60분 이내': 60, '90분 이내': 90 };
+// 🔧 자차 시간 추정 = 직선거리 × 1.35(도로 굴곡) ÷ 시속 60km(고속도로 섞인 출근길 평균, 분당→이천 약 47분 기준으로 맞춤). 실제 경로 시간이 아님 → 실제 서비스는 길찾기 API 로 미리 계산
+const carMin = (seq, to) => { const i = INFO[seq]; return i && i[3] ? Math.round(distM(i[3], i[4], to[0], to[1]) * 1.35 / 60000 * 60) : null; };
+const workMin = (seq) => { const w = WORK[cst.work]; return w == null ? null : Array.isArray(w) ? carMin(seq, w) : (INFO[seq] || [])[w] ?? null; };
 const STF = { '역 거리 무관': () => true, '역 700m 이내': (m) => m != null && m <= 700, '역 1km 이내': (m) => m != null && m <= 1000 };
 const SORTF = { '급지순': (a, c) => (a.grade || 9) - (c.grade || 9) || (c.newbig - a.newbig) || c.ref - a.ref, '싼 순': (a, c) => a.ref - c.ref, '새 아파트순': (a, c) => (c.by || 0) - (a.by || 0), '역 가까운 순': (a, c) => ((INFO[a.seq] || [])[6] ?? 9e9) - ((INFO[c.seq] || [])[6] ?? 9e9) };
 const phPill = (p) => p ? `<span class="pill ${p === '상승장' ? 'warn' : p === '하락장' ? 'bad' : 'none'}">지역 ${p}</span>` : '';
 let candList = [];
 function drawCand() {
-  const b = budget.price, wcol = WORK[cst.work], wmin = MINF[cst.min];
+  const b = budget.price, wmin = MINF[cst.min], car = Array.isArray(WORK[cst.work]);
+  $('#workNote').textContent = WORK[cst.work] == null ? '' : car ? '자차 추정: 직선거리 × 1.35 ÷ 시속 60km (실제 경로 시간 아님, 셔틀도 비슷하게 봄)' : '대중교통: 가까운 역 → 업무지구 역 시간(걷는 시간 제외)';
   candList = CAND.filter(r => r.ref <= b && r.ref >= b * 0.8 && REGF[cst.region](r.rc) && AREAF[cst.area](r.ag) && (cst.phase === '지역 국면 전체' || r.phase === cst.phase)
     && (cst.hh === '세대수 전체' || (r.hh && HHF[cst.hh](r.hh))) && (cst.age === '연식 전체' || (r.by && AGEF[cst.age](YEAR - r.by)))
-    && (wcol == null || ((INFO[r.seq] || [])[wcol] != null && INFO[r.seq][wcol] <= wmin)) && STF[cst.st]((INFO[r.seq] || [])[6])).sort(SORTF[cst.sort]);
+    && (WORK[cst.work] == null || (workMin(r.seq) != null && workMin(r.seq) <= wmin)) && STF[cst.st]((INFO[r.seq] || [])[6])).sort(SORTF[cst.sort]);
   $('#cCount').textContent = `${candList.length.toLocaleString()}곳`;
   $('#cList').innerHTML = candList.slice(0, cst.shown).map((r, i) => {
-    const inf = INFO[r.seq] || [], wm = wcol != null ? inf[wcol] : null;
+    const inf = INFO[r.seq] || [], wm = workMin(r.seq);
     return `<div class="irow"><button type="button" class="open" data-i="${i}"><span class="nm">${r.name}</span>
-      <span class="sub">${rn(r.rc)} ${r.umd} · ${r.ag}㎡ · ${r.by ? YEAR - r.by + '년차' : ''}${r.hh ? ' · ' + r.hh.toLocaleString() + '세대' : ''}${inf[6] != null ? ` · ${inf[5]}역 ${inf[6]}m` : ''}${wm != null ? ` · ${cst.work} ${wm}분` : ''}</span>
+      <span class="sub">${rn(r.rc)} ${r.umd} · ${r.ag}㎡ · ${r.by ? YEAR - r.by + '년차' : ''}${r.hh ? ' · ' + r.hh.toLocaleString() + '세대' : ''}${inf[6] != null ? ` · ${inf[5]}역 ${inf[6]}m` : ''}${wm != null ? ` · ${cst.work} ${car ? '차 ' : ''}${wm}분` : ''}</span>
       <span class="tags">${r.grade ? `<span class="pill none">${r.grade}급지</span>` : ''}${phPill(r.phase)}${r.newbig ? '<span class="pill acc">신축 대단지</span>' : ''}${r.stage ? `<span class="pill ${r.sno >= 3 ? 'acc' : 'warn'}">정비 ${r.stage}</span>` : ''}</span></button>
       <span class="side"><span class="pr">${eok(r.ref)}${r.est ? '<span class="muted">*</span>' : ''}</span><button type="button" class="heart" data-s="${r.seq}" aria-pressed="${watch.has(r.seq)}" aria-label="관심 단지">${watch.has(r.seq) ? '♥' : '♡'}</button></span></div>`;
   }).join('') || '<p class="muted" style="padding:12px 0">조건에 맞는 단지가 없습니다. 조건을 넓혀 보세요.</p>';
@@ -699,7 +766,7 @@ chips('#fHh', Object.keys(HHF), cst.hh, reset('hh')); chips('#fAge', Object.keys
 chips('#fWork', Object.keys(WORK), cst.work, reset('work')); chips('#fMin', Object.keys(MINF), cst.min, reset('min'));
 chips('#fSt', Object.keys(STF), cst.st, reset('st')); chips('#fSort', Object.keys(SORTF), cst.sort, reset('sort'));
 $('#cMore').addEventListener('click', () => { cst.shown += 20; drawCand(); });
-watchChanged.push(drawCand);
+watchChanged.push(drawCand, myDeals);
 
 /* ───── 개발 호재 · 주변 정비사업 (상세 화면·상세 탭 공용) ───── */
 const POI = D.v2_poi || { st: [], hosp: [], mart: [], mid: [] };
@@ -708,18 +775,22 @@ const distM = (la1, lo1, la2, lo2) => { const dx = (lo2 - lo1) * 111320 * Math.c
 const PST = { '개통': 'none', '착공': 'good', '확정': 'acc', '계획': 'none', '예타 탈락': 'bad', '취소': 'bad' };
 function devHtml(seq) {
   const inf = INFO[seq] || [], rc = inf[1] || (main(seq) || {}).rc, umd = inf[2] || (main(seq) || {}).umd, la = inf[3], lo = inf[4];
-  const near = (D.v2_proj || []).map(p => {
+  let near = (D.v2_proj || []).map(p => {
     const sts = (p.stations || '').split(',').filter(Boolean);
     let best = null;
     if (la) sts.forEach(n => (STBY[n] || []).forEach(s => { const d = distM(la, lo, s[2], s[3]); if (!best || d < best[1]) best = [n, d]; }));
     const inReg = (p.region_codes || '').split(',').includes(rc);
     return { p, best, inReg };
-  }).filter(x => (x.best && x.best[1] <= 1500) || x.inReg).sort((a, b) => (a.best ? a.best[1] : 9e9) - (b.best ? b.best[1] : 9e9));
+  });
+  // 역 좌표가 있으면 반경 1.5km 안만. 새 역 좌표가 없는 사업(위례신사선 등)은 같은 시군구여도 거리를 몰라 따로 흐리게
+  const far = near.filter(x => !x.best && x.inReg).map(x => x.p.name);
+  near = near.filter(x => x.best && x.best[1] <= 1500).sort((a, b) => a.best[1] - b.best[1]);
   const zones = (D.v2_redev || []).filter(z => z.rc === rc);
   const sameDong = zones.filter(z => z.umd === umd), byStage = {};
   zones.forEach(z => { byStage[z.stage] = (byStage[z.stage] || 0) + 1; });
   return `<p style="font-weight:700;font-size:13.5px">교통 호재</p>` + (near.length ? near.map(({ p, best }) => `<div class="proj"><span class="pill ${PST[p.status] || 'none'}">${p.status}</span><span><b>${p.name}</b>${p.cbd ? ` → ${p.cbd.replace(/,/g, '·')}` : ''}</span>
-      <span class="o">${best ? `${best[0]}역 ${Math.round(best[1]).toLocaleString()}m · ` : '같은 시군구 · '}${p.status_date ? dt(p.status_date) + ' · ' : ''}${p.outlook || ''}</span></div>`).join('') : '<p class="muted">반경 1.5km·같은 시군구에 잡힌 철도 사업이 없습니다.</p>')
+      <span class="o">${best[0]}역 ${Math.round(best[1]).toLocaleString()}m · ${p.status_date ? dt(p.status_date) + ' · ' : ''}${p.outlook || ''}</span></div>`).join('') : '<p class="muted">반경 1.5km 안에 역이 생기거나 지나는 철도 사업이 없습니다.</p>')
+    + (far.length ? `<p class="muted" style="font-size:12.5px">같은 시군구지만 새 역 위치가 없어 거리를 확인하지 못한 사업: ${far.join(', ')}</p>` : '')
     + `<p style="font-weight:700;font-size:13.5px;margin-top:10px">주변 정비사업 <span class="muted" style="font-weight:400">${rn(rc)} ${zones.length}곳</span></p>`
     + (zones.length ? `<div class="row">${Object.entries(byStage).sort((a, b) => b[1] - a[1]).map(([k, n]) => `<span class="pill none">${k} ${n}</span>`).join('')}</div>` : '')
     + (sameDong.length ? sameDong.slice(0, 6).map(z => `<div class="proj"><span class="pill ${z.stage_no >= 3 ? 'acc' : 'warn'}">${z.stage}</span><span>${z.zone_nm} <span class="muted">${z.biz_type || ''}</span></span></div>`).join('') : `<p class="muted">${umd || '같은 동'}에는 진행 중인 정비구역이 없습니다.</p>`);
@@ -739,9 +810,18 @@ function cxChecks(c) {
     ['역전세', !c.m || c.m.reverse_risk == null ? 'none' : c.m.reverse_risk ? 'bad' : 'good', !c.m || c.m.reverse_risk == null ? '자료 없음' : c.m.reverse_risk ? '위험: 2년 전 전세보다 낮음' : '안전: 2년 전 전세보다 높음'],
   ];
 }
+function liteRatio(r) { return r && r.js && r.ref ? r.js / r.ref * 100 : null; }
 function liteChecks(r) {
-  return [['전세가율', 'none', '시안: 예시 단지만'], ['거래 활발', r.tv == null ? 'none' : r.tv >= 0.5 ? 'good' : 'warn', r.tv == null ? '세대수 없음' : `월 ${r.tv.toFixed(2)}%`],
-    ['하락기에도 거래', r.dr == null ? 'none' : r.dr >= 50 ? 'good' : 'warn', r.dr == null ? '자료 없음' : `구 안 ${Math.round(r.dr)}분위`], ['역전세', 'none', '시안: 예시 단지만']];
+  const ratio = liteRatio(r), b = r ? bandFor(r.ref) : [0, 0];
+  return [['전세가율', ratio == null ? 'none' : ratio >= b[0] && ratio <= b[1] && ratio <= 80 ? 'good' : 'warn', ratio == null ? '전세 자료 부족' : `${Math.round(ratio)}% · 정상 ${b[0]}~${b[1]}%`],
+    ['거래 활발', r.tv == null ? 'none' : r.tv >= 0.5 ? 'good' : 'warn', r.tv == null ? '세대수 없음' : `월 ${r.tv.toFixed(2)}% (0.5% 이상 양호)`],
+    ['하락기에도 거래', r.dr == null ? 'none' : r.dr >= 50 ? 'good' : 'warn', r.dr == null ? '자료 없음' : `2022~23 구 안 ${Math.round(r.dr)}분위`],
+    ['역전세', r.rr == null ? 'none' : r.rr ? 'bad' : 'good', r.rr == null ? '자료 없음' : r.rr ? '위험: 2년 전 전세보다 낮음' : '안전: 2년 전 전세보다 높음']];
+}
+function liteJeonse(r) {
+  const ratio = liteRatio(r), b = bandFor(r.ref);
+  return `<dl class="kv"><dt>전세 중앙값</dt><dd>${eok(r.js)} <span class="muted">${r.jn || 0}건</span></dd><dt>전세가율</dt><dd>${Math.round(ratio)}%</dd>${r.j24 ? `<dt>2년 전 전세</dt><dd>${eok(r.j24)}</dd><dt>역전세 대비금</dt><dd>${eok(r.js * 0.1)}</dd>` : ''}</dl>
+    <div class="gauge"><div class="zone" style="left:${b[0]}%;width:${b[1] - b[0]}%"></div><div class="mk" style="left:${Math.min(100, ratio)}%"></div></div><p class="muted">초록 = 이 가격대 정상 범위, 막대 = 이 단지${(r.jn || 0) < 3 ? ' · 최근 전세 거래가 적어 흔들릴 수 있음' : ''}</p>`;
 }
 function cxChart(c) {
   const W = 340, H = 190, L = 34, R = 8, T = 10, B = 20, from = '2021-01-01';
@@ -763,7 +843,7 @@ function cxChart(c) {
   return s + '</svg><div class="legend"><span><i style="background:var(--c3);height:6px;width:6px;border-radius:50%"></i>실거래</span><span><i style="background:var(--c1)"></i>기준 시세</span><span><i style="background:var(--c2)"></i>전세 중앙값</span></div>';
 }
 function openCx(seq) {
-  const c = CXS[seq], r = main(seq), inf = INFO[seq] || [];
+  const c = useFull(seq) ? CXS[seq] : null, r = main(seq), inf = INFO[seq] || [];
   if (!c && !r) return;
   const sec = (title, inner, open) => `<details${open ? ' open' : ''}><summary>${title}</summary><div class="body">${inner}</div></details>`;
   const name = c ? c.name : r.name, region = c ? c.region : D.region_names[r.rc] || '', on = watch.has(seq);
@@ -789,14 +869,14 @@ function openCx(seq) {
         ${m.e3_target_10k ? `<dt>바로 위 급지 시세</dt><dd>${eok(m.e3_target_10k)}</dd>` : ''}</dl>`, true) : ''}
       ${c ? sec('전세', `<dl class="kv"><dt>전세 중앙값</dt><dd>${eok(c.J)} <span class="muted">${c.jn}건</span></dd><dt>전세가율</dt><dd>${c.ratio == null ? '–' : Math.round(c.ratio) + '%'}</dd>
         ${m.jeonse_24m_10k ? `<dt>2년 전 전세</dt><dd>${eok(m.jeonse_24m_10k)}</dd><dt>역전세 대비금</dt><dd>${eok(m.reserve_10k)}</dd>` : ''}${m.d4_jeonse_chg != null ? `<dt>전세 1년 변화</dt><dd>${sgn(+m.d4_jeonse_chg)}${m.d4_cause ? ` · ${m.d4_cause}` : ''}</dd>` : ''}</dl>
-        ${c.ratio != null ? `<div class="gauge"><div class="zone" style="left:${c.band[0]}%;width:${c.band[1] - c.band[0]}%"></div><div class="mk" style="left:${Math.min(100, c.ratio)}%"></div></div><p class="muted">초록 = 이 가격대 정상 범위, 막대 = 이 단지</p>` : ''}`) : ''}
+        ${c.ratio != null ? `<div class="gauge"><div class="zone" style="left:${c.band[0]}%;width:${c.band[1] - c.band[0]}%"></div><div class="mk" style="left:${Math.min(100, c.ratio)}%"></div></div><p class="muted">초록 = 이 가격대 정상 범위, 막대 = 이 단지</p>` : ''}`) : r && r.js ? sec('전세', liteJeonse(r)) : ''}
       ${sec('거래·환금성', `<dl class="kv">${(c ? m.turnover_pct : r.tv) != null ? `<dt>월 거래 회전율</dt><dd>${(+(c ? m.turnover_pct : r.tv)).toFixed(2)}%</dd>` : ''}${(c ? c.liq && c.liq.down_rank : r.dr) != null ? `<dt>하락기(2022~23) 거래</dt><dd>구 안 ${Math.round(+(c ? c.liq.down_rank : r.dr))}분위</dd>` : ''}<dt>최근 90일 거래</dt><dd>${(DEALS[seq] || []).length}건</dd></dl>`)}
       ${sec('위치·급지', `<dl class="kv">${grade ? `<dt>급지</dt><dd>${c ? g.umd_name : r.umd} ${grade}급지</dd>` : ''}${st ? `<dt>가까운 역</dt><dd>${st}역 ${stm}m · 걸어서 ${Math.round(stm / 70)}분</dd>` : ''}
         ${mins.length ? `<dt>${mins.map(x => x[0]).join(' · ')}</dt><dd>${mins.map(x => x[1]).join(' · ')}분</dd>` : ''}${z.name ? `<dt>생활권</dt><dd>${z.name}</dd>` : ''}${inf[10] ? `<dt>대형마트</dt><dd>${inf[10]} ${inf[11]}m</dd>` : ''}${inf[12] ? `<dt>큰 병원</dt><dd>${inf[12]} ${(inf[13] / 1000).toFixed(1)}km</dd>` : ''}${inf[14] ? `<dt>중학교군</dt><dd>${inf[14]}</dd>` : ''}</dl>`)}
       ${sec('개발 호재', devHtml(seq))}
       ${redev || (b && b.vl_rat) || (r && r.vl) ? sec('재건축', `<dl class="kv">${redev ? `<dt>정비사업</dt><dd>${redev.zone_nm} · <b>${redev.stage}</b></dd>` : ''}${b && b.vl_rat ? `<dt>용적률</dt><dd>${Math.round(+b.vl_rat)}%</dd>` : r && r.vl ? `<dt>용적률</dt><dd>${Math.round(r.vl)}%</dd>` : ''}${b && b.land_per_hh ? `<dt>세대당 대지</dt><dd>${(+b.land_per_hh).toFixed(0)}㎡</dd>` : ''}</dl>`) : ''}
       ${sec('현장에서 확인할 것', `<ul style="margin:0;padding-left:18px;display:grid;gap:4px"><li>역까지 실제로 걸어 보기: 평지인지, 밝은 상권길인지</li><li>동·층 차이: 저층은 중고층보다 약 10%, 로얄동과 기피동 5~10%</li><li>호가가 최근 실거래보다 5% 넘게 높으면 이유 물어보기</li><li>부동산 여러 곳에서 급매·전세 매물 분위기</li></ul>`)}
-    </div>${c ? '' : '<p class="src">시안에서는 예시 9개 단지만 차트·전세·가격 상세가 있습니다. 실제 서비스는 모든 단지가 같은 화면입니다.</p>'}</div>`;
+    </div>${c ? '' : '<p class="src">시안에서는 예시 9개 단지의 84㎡만 가격 차트·전고점이 있습니다. 실제 서비스는 모든 단지·평형이 같은 화면입니다.</p>'}</div>`;
   detail.hidden = false; detail.scrollTop = 0;
   $('#dBack').addEventListener('click', closeDetail);
   $('#dWatch').addEventListener('click', () => { toggleWatch(seq); const o = watch.has(seq); $('#dWatch').setAttribute('aria-pressed', o); $('#dWatch').textContent = o ? '♥ 관심' : '♡ 관심'; });
@@ -809,13 +889,13 @@ function drawWatch() {
   const spark = (c) => { const v = (c.ref || []).slice(-24).map(r => r.v).filter(Boolean); if (v.length < 2) return ''; const lo = Math.min(...v), hi = Math.max(...v), W = 64, H = 20;
     return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" aria-hidden="true"><path d="${v.map((a, i) => (i ? 'L' : 'M') + (i * W / (v.length - 1)).toFixed(1) + ',' + (H - 2 - (H - 4) * (a - lo) / ((hi - lo) || 1)).toFixed(1)).join('')}" fill="none" stroke="var(--c1)" stroke-width="1.5"/></svg>`; };
   $('#wList').innerHTML = seqs.map(seq => {
-    const c = CXS[seq], r = main(seq), ch = c && c.phase ? +c.phase.chg_12m : null, n90 = (DEALS[seq] || []).length;
+    const c = useFull(seq) ? CXS[seq] : null, r = main(seq), ch = c && c.phase ? +c.phase.chg_12m : null, ag = r ? r.ag : +AREA, n90 = (DEALS[seq] || []).filter(x => x[2] === ag).length;
     return `<div class="irow"><button type="button" class="open" data-s="${seq}"><span class="nm">${cxName(seq)}</span>
-      <span class="sub">${c ? c.region.replace(/^서울 /, '') : rn(r.rc) + ' ' + r.umd}${ch != null ? ` · 1년 <span class="${ch >= 0 ? 'up' : 'dn'}">${sgn(ch)}</span>` : ''} · 90일 거래 ${n90}건</span>
-      <span class="tags">${phPill(c && c.rph ? c.rph.phase : r && r.phase)}${TODAY_NEW.has(seq) ? '<span class="pill acc">새 거래</span>' : ''}${c && (c.redev || []).length ? `<span class="pill acc">정비 ${c.redev[0].stage}</span>` : r && r.stage ? `<span class="pill acc">정비 ${r.stage}</span>` : ''}</span></button>
+      <span class="sub">${c ? c.region.replace(/^서울 /, '') : rn(r.rc) + ' ' + r.umd}${ch != null ? ` · 1년 <span class="${ch >= 0 ? 'up' : 'dn'}">${sgn(ch)}</span>` : ''} · ${ag}㎡ 90일 거래 ${n90}건</span>
+      <span class="tags">${agTag(seq)}${phPill(c && c.rph ? c.rph.phase : r && r.phase)}${TODAY_NEW.has(seq) ? '<span class="pill acc">새 거래</span>' : ''}${c && (c.redev || []).length ? `<span class="pill acc">정비 ${c.redev[0].stage}</span>` : r && r.stage ? `<span class="pill acc">정비 ${r.stage}</span>` : ''}</span></button>
       <span class="side"><span class="pr">${eok(cxRef(seq))}</span>${c ? spark(c) : ''}<button type="button" class="heart" data-s="${seq}" aria-pressed="true" aria-label="관심 해제">♥</button></span></div>`;
   }).join('') || '<p class="muted">찾기 탭 후보 목록에서 ♡를 누르면 여기에 모입니다.</p>';
-  const rows = seqs.map(seq => { const c = CXS[seq], k = (c ? cxChecks(c) : liteChecks(main(seq))).slice(0, 3); return { seq, k, ok: k.filter(x => x[1] === 'good').length }; })
+  const rows = seqs.map(seq => { const k = (useFull(seq) ? cxChecks(CXS[seq]) : liteChecks(main(seq))).slice(0, 3); return { seq, k, ok: k.filter(x => x[1] === 'good').length }; })
     .sort((a, b) => b.ok - a.ok || (cxRef(b.seq) || 0) - (cxRef(a.seq) || 0));
   $('#cmpT').innerHTML = `<thead><tr><th>단지</th><th>전세가율</th><th>거래</th><th>하락기</th><th>충족</th></tr></thead><tbody>` +
     rows.map(({ seq, k, ok }) => { const n = cxName(seq); return `<tr><td><b>${n.length > 9 ? n.slice(0, 9) + '…' : n}</b><br><span class="muted">${eok(cxRef(seq))}</span></td>${k.map(x => `<td><span class="dot ${x[1]}" style="display:inline-block" title="${x[2]}"></span></td>`).join('')}<td class="sc num">${ok}/3</td></tr>`; }).join('') + '</tbody>';
@@ -843,15 +923,14 @@ let dSeq = null;
 function drawDaily() {
   const seqs = [...watch].filter(s => CXS[s] || main(s));
   if (!seqs.includes(dSeq)) dSeq = seqs[0] || null;
-  $('#dAsof').textContent = `${D.asof.slice(5).replace('-', '월 ')}일 갱신`;
   $('#dSel').innerHTML = seqs.map(s => `<button type="button" data-v="${s}" aria-pressed="${s === dSeq}">${cxName(s)}</button>`).join('');
   if (!dSeq) { $('#dHead').innerHTML = '<p class="muted">관심 단지가 없습니다. 찾기 탭에서 ♡를 눌러 담아 주세요.</p>'; return; }
-  const seq = dSeq, c = CXS[seq], r = main(seq), inf = INFO[seq] || [], ref = cxRef(seq);
+  const seq = dSeq, c = useFull(seq) ? CXS[seq] : null, r = main(seq), inf = INFO[seq] || [], ref = cxRef(seq);
   const deals = DEALS[seq] || [];
-  const mainAg = c ? 84 : r ? r.ag : 84;
+  const mainAg = c ? 84 : r ? r.ag : +AREA;
   const same = deals.filter(x => Math.abs(x[2] - mainAg) <= 1 && !x[5]);
   const d2 = (s) => `20${s.slice(0, 2)}-${s.slice(2, 4)}-${s.slice(4)}`;
-  $('#dHead').innerHTML = `<div class="row" style="justify-content:space-between"><b style="font-size:17px">${cxName(seq)}</b><button type="button" class="icon-btn" id="dOpen">단지 상세 →</button></div>
+  $('#dHead').innerHTML = `<div class="row" style="justify-content:space-between"><b style="font-size:17px">${cxName(seq)} ${agTag(seq)}</b><button type="button" class="icon-btn" id="dOpen">단지 상세 →</button></div><span class="muted">${D.asof.slice(5).replace('-', '월 ')}일 아침 갱신</span>
     <div class="kpis"><div class="kpi"><span class="k">${mainAg}㎡ 기준 시세</span><span class="v">${eok(ref)}</span></div><div class="kpi"><span class="k">최근 90일 거래</span><span class="v">${deals.length}건</span><span class="d">${mainAg}㎡ ${same.length}건${TODAY_NEW.has(seq) ? ' · 오늘 새로 등록' : ''}</span></div></div>`;
   $('#dOpen').addEventListener('click', () => openCx(seq));
   // 90일 차트: 면적 같은 거래 점, 기준 시세 선
@@ -924,42 +1003,61 @@ watchChanged.push(drawDaily);
 
 const E6T = {}, E6NM = {}; (D.v2_e6t || []).forEach(r => { (E6T[r[0]] = E6T[r[0]] || []).push(r); E6NM[r[1]] = r[5]; });
 const E6 = D.v2_e6 || { q: [], s: {} };
-let myTarget = null;
-function gapChart(a, b) {
-  const sa = E6.s[a], sb = E6.s[b]; if (!sa || !sb) return '';
-  const g = E6.q.map((q, i) => sa[i] != null && sb[i] != null ? [i, sb[i] - sa[i]] : null).filter(Boolean); if (g.length < 3) return '';
-  const vals = g.map(x => x[1]).sort((x, y) => x - y), p20 = vals[Math.floor((vals.length - 1) * 0.2)];
-  const W = 320, H = 110, L = 40, R = 8, T = 8, B = 16, lo = Math.min(0, vals[0]), hi = vals[vals.length - 1] * 1.05;
-  const x = (i) => L + (W - L - R) * i / (E6.q.length - 1), y = (v) => T + (H - T - B) * (1 - (v - lo) / ((hi - lo) || 1));
-  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="두 단지 가격 차이 추이"><line x1="${L}" x2="${W - R}" y1="${y(p20)}" y2="${y(p20)}" stroke="var(--good)" stroke-dasharray="4 3"/><text x="${W - R}" y="${y(p20) - 3}" text-anchor="end" style="fill:var(--good)">하위 20%</text>`
-    + [lo, hi].map(t => `<text x="${L - 4}" y="${y(t) + 3}" text-anchor="end">${eok(t)}</text>`).join('')
-    + `<path d="${g.map((p, i) => (i ? 'L' : 'M') + x(p[0]).toFixed(1) + ',' + y(p[1]).toFixed(1)).join('')}" fill="none" stroke="var(--c1)" stroke-width="2"/>`
-    + `<circle cx="${x(g[g.length - 1][0])}" cy="${y(g[g.length - 1][1])}" r="3.5" fill="var(--c1)"/><text x="${L}" y="${H - 3}" text-anchor="start">${E6.q[0]}</text><text x="${W - R}" y="${H - 3}" text-anchor="end">${E6.q[E6.q.length - 1]}</text></svg>`;
+let myTarget = store.get('v2-tg', null);
+function gapStats(a, b) {
+  const sa = E6.s[a], sb = E6.s[b]; if (!sa || !sb) return null;
+  const g = E6.q.map((q, i) => sa[i] != null && sb[i] != null ? [i, sb[i] - sa[i]] : null).filter(Boolean); if (g.length < 6) return null;
+  const vals = g.map(x => x[1]).slice().sort((x, y) => x - y), cur = g[g.length - 1][1];
+  return { g, cur, p20: vals[Math.floor((vals.length - 1) * 0.2)], pct: Math.round(vals.filter(v => v <= cur).length / vals.length * 100), n: g.length };
+}
+function gapChart(st) {
+  const W = 330, H = 170, L = 44, R = 10, T = 14, B = 26, g = st.g, vals = g.map(x => x[1]);
+  const mn = Math.min(...vals), lo = mn > 0 ? Math.floor(mn * 0.8 / 10000) * 10000 : Math.floor(mn / 10000) * 10000, hi = Math.max(...vals) * 1.15, nq = E6.q.length;
+  const x = (i) => L + (W - L - R) * i / (nq - 1), y = (v) => T + (H - T - B) * (1 - (v - lo) / ((hi - lo) || 1));
+  const ticks = [lo, (lo + hi) / 2, hi];
+  let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="두 단지 84㎡ 가격 차이 분기 추이">`;
+  s += `<rect x="${L}" y="${y(st.p20)}" width="${W - L - R}" height="${Math.max(0, y(lo) - y(st.p20))}" fill="var(--good-bg)"/>`;
+  ticks.forEach(t => { s += `<line x1="${L}" x2="${W - R}" y1="${y(t)}" y2="${y(t)}" stroke="var(--line)"/><text x="${L - 5}" y="${y(t) + 3}" text-anchor="end">${eok(t)}</text>`; });
+  [0, 5, 10, 15, nq - 1].forEach(i => { s += `<text x="${x(i)}" y="${H - 8}" text-anchor="middle">${E6.q[i].slice(2).replace('Q', '년 ')}분기</text>`; });
+  s += `<line x1="${L}" x2="${W - R}" y1="${y(st.p20)}" y2="${y(st.p20)}" stroke="var(--good)" stroke-dasharray="4 3"/><text x="${L + 4}" y="${y(st.p20) + 12}" style="fill:var(--good);font-weight:600;paint-order:stroke;stroke:var(--good-bg);stroke-width:3px">하위 20% = ${eok(st.p20)} 이하</text>`;
+  s += `<path d="${g.map((p, i) => (i ? 'L' : 'M') + x(p[0]).toFixed(1) + ',' + y(p[1]).toFixed(1)).join('')}" fill="none" stroke="var(--c1)" stroke-width="2.2"/>`;
+  g.forEach(p => { s += `<circle cx="${x(p[0])}" cy="${y(p[1])}" r="2" fill="var(--c1)"/>`; });
+  const last = g[g.length - 1];
+  s += `<circle cx="${x(last[0])}" cy="${y(last[1])}" r="5" fill="var(--c1)"/><text x="${x(last[0]) - 8}" y="${y(last[1]) - 9}" text-anchor="end" style="fill:var(--ink);font-weight:700;font-size:11px;paint-order:stroke;stroke:var(--surface);stroke-width:4px">지금 ${eok(last[1])} · 하위 ${st.pct}%</text>`;
+  return s + '</svg><p class="muted" style="font-size:12px">세로 = 두 단지 84㎡ 분기 중앙가 차이(목표 − 내 집), 가로 = 분기. 초록 칸까지 내려오면 격차가 좁혀진 때.</p>';
 }
 function drawMove() {
-  const sel = $('#mySel'), seqs = [...watch].filter(s => cxRef(s)), cur = store.get('v2-my2', null);
-  sel.innerHTML = seqs.map(s => `<option value="${s}">${cxName(s)} · ${eok(cxRef(s))}</option>`).join('');
-  sel.value = seqs.includes(cur) ? cur : seqs.find(s => (E6T[s] || []).length) || seqs[0] || '';
-  const my = sel.value, C = cxRef(my), t = (E6T[my] || []).slice(0, 3);
-  if (!t.find(x => x[1] === myTarget)) myTarget = t[0] ? t[0][1] : null;
-  $('#moveList').innerHTML = !my ? '<p class="muted">관심 단지를 먼저 담아 주세요.</p>' : t.length ? t.map(([, ts, ratio, pos, dist]) => {
-    const okR = ratio >= 1.5, okP = pos <= 20, on = ts === myTarget;
-    return `<div class="card" style="padding:12px;gap:6px;${on ? 'border-color:var(--accent)' : ''}"><div class="row" style="justify-content:space-between"><b>${cxName(ts)}</b><span class="muted">${(dist / 1000).toFixed(1)}km</span></div>
-      <div class="row"><span class="pill ${okR ? 'good' : 'warn'}">${ratio.toFixed(2)}배</span><span class="pill ${okP ? 'good' : 'none'}">격차 위치 ${Math.round(pos)}%${okP ? ' · 좁혀진 때' : ''}</span></div>
-      <div class="gauge"><div class="zone" style="left:0;width:20%"></div><div class="mk" style="left:${Math.min(100, pos)}%"></div></div>
-      ${gapChart(my, ts)}
-      <div class="row" style="justify-content:space-between"><span class="muted">목표 시세 약 ${eok(C * ratio)} · 차이 ${eok(C * (ratio - 1))}</span><button type="button" class="icon-btn" data-t="${ts}" aria-pressed="${on}">${on ? '자금 계산 중' : '이 단지로 자금 계산'}</button></div></div>`;
-  }).join('') : '<p class="muted">이 단지와 비교할 1.5~2.5배 목표 단지(10km 안) 자료가 없습니다.</p>';
+  const mySel = $('#mySel'), tgSel = $('#tgSel'), seqs = [...watch].filter(s => cxRef(s)), cur = store.get('v2-my2', null);
+  mySel.innerHTML = seqs.map(s => `<option value="${s}">${cxName(s)} · ${eok(cxRef(s))}</option>`).join('');
+  mySel.value = seqs.includes(cur) ? cur : seqs.find(s => (E6T[s] || []).length) || seqs[0] || '';
+  const my = mySel.value, auto = (E6T[my] || []).slice(0, 5);
+  const opts = [...seqs.filter(s => s !== my).map(s => [s, cxName(s)]), ...auto.filter(t => !watch.has(t[1])).map(t => [t[1], cxName(t[1]) + ' (추천)'])];
+  tgSel.innerHTML = opts.map(([v, n]) => `<option value="${v}">${n}</option>`).join('');
+  if (!opts.find(o => o[0] === myTarget)) myTarget = auto[0] ? auto[0][1] : opts[0] ? opts[0][0] : null;
+  tgSel.value = myTarget || '';
+  if (!my || !myTarget) { $('#moveMain').innerHTML = '<p class="muted">관심 단지를 두 곳 이상 담아 주세요.</p>'; $('#moveAuto').innerHTML = ''; drawFund(); return; }
+  const C = cxRef(my), T = cxRef(myTarget) || (auto.find(t => t[1] === myTarget) ? C * auto.find(t => t[1] === myTarget)[2] : null), ratio = T && C ? T / C : null;
+  const im = INFO[my] || [], it = INFO[myTarget] || [], dist = im[3] && it[3] ? distM(im[3], im[4], it[3], it[4]) : null;
+  const st = AREA === '84' ? gapStats(my, myTarget) : null;
+  const rm = (main(my) || {}), rt = (main(myTarget) || {}), yr = (seq) => { const rc = (INFO[seq] || [])[1]; const v = rc && D.weekly.v[rc]; return v && v.yt != null ? v.yt : null; };
+  const cmp = [['지역', rn(im[1]), rn(it[1])], ['지역 국면', rm.phase || '–', rt.phase || '–'], ['지역 1년 매매', sgn(yr(my), 1), sgn(yr(myTarget), 1)], ['급지', rm.grade ? rm.grade + '급지' : '–', rt.grade ? rt.grade + '급지' : '–'],
+    ['역까지', im[6] != null ? im[6] + 'm' : '–', it[6] != null ? it[6] + 'm' : '–']].concat(WORK[cst.work] != null ? [[`${cst.work}까지`, (workMin(my) ?? '–') + '분', (workMin(myTarget) ?? '–') + '분']] : []);
+  $('#moveMain').innerHTML = `<div class="row"><span class="pill ${ratio >= 1.5 ? 'good' : 'warn'}">${ratio ? ratio.toFixed(2) + '배' : '–'} ${ratio >= 1.5 ? '(1.5배 이상)' : '(1.5배 미만)'}</span>${st ? `<span class="pill ${st.pct <= 20 ? 'good' : 'none'}">격차 하위 ${st.pct}%</span>` : ''}${dist ? `<span class="pill none">${(dist / 1000).toFixed(1)}km</span>` : ''}</div>
+    <p style="font-size:14px">${st ? `지금 차이 <b>${eok(st.cur)}</b>는 지난 ${st.n}분기 중 <b>하위 ${st.pct}%</b> 위치입니다. ${st.pct <= 20 ? '<b>좁혀진 때</b>라 갈아타기 좋은 구간입니다.' : `${eok(st.p20)} 이하(하위 20%)로 좁혀지면 갈아타기 좋은 때입니다. 지금보다 ${eok(st.cur - st.p20)} 더 좁혀져야 합니다.`}` : AREA === '84' ? '두 단지 84㎡ 분기 거래가 부족해 격차 추이를 계산하지 못했습니다.' : '격차 추이는 84㎡ 분기 거래로만 계산합니다(84㎡로 바꾸면 보임).'}</p>
+    ${st ? gapChart(st) : ''}
+    <table class="cmp"><thead><tr><th></th><th>${cxName(my).slice(0, 8)}</th><th>${cxName(myTarget).slice(0, 8)}</th></tr></thead><tbody>${cmp.map(r => `<tr><td class="muted">${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join('')}</tbody></table>`;
+  $('#moveAuto').innerHTML = auto.length ? auto.map(([, ts, r, pos, d]) => `<div class="deal" style="grid-template-columns:1fr auto auto"><span>${cxName(ts)} <span class="muted">${(d / 1000).toFixed(1)}km</span></span><span class="num">${r.toFixed(2)}배</span><span class="pill ${pos <= 20 ? 'good' : 'none'}">하위 ${Math.round(pos)}%</span></div>`).join('') : '<p class="muted">조건에 맞는 자동 추천이 없습니다.</p>';
   drawFund();
 }
 $('#mySel').addEventListener('change', () => { store.set('v2-my2', $('#mySel').value); myTarget = null; fundTouched = false; drawMove(); });
-$('#moveList').addEventListener('click', (e) => { const b = e.target.closest('button[data-t]'); if (!b) return; myTarget = b.dataset.t; fundTouched = false; drawMove(); });
+$('#tgSel').addEventListener('change', () => { myTarget = $('#tgSel').value; store.set('v2-tg', myTarget); fundTouched = false; drawMove(); });
 let fundTouched = false;
 function drawFund() {
   const num = (id) => { const v = parseFloat(String($('#' + id).value).replace(/,/g, '')); return isFinite(v) ? v : 0; };
   const my = $('#mySel').value, t = (E6T[my] || []).find(x => x[1] === myTarget);
-  if (!fundTouched && my) { const c0 = cxRef(my) || 0, r0 = t ? t[2] : 1.5; $('#f_cur').value = Math.round(c0); $('#f_target').value = Math.round(c0 * r0 / 100) * 100; $('#f_tjeonse').value = Math.round(c0 * r0 * 0.5 / 100) * 100; }
-  $('#fundTitle').textContent = my ? `${cxName(my)} → ${t ? cxName(t[1]) : '목표 집'}` : '';
+  if (!fundTouched && my) { const c0 = cxRef(my) || 0, tp = cxRef(myTarget) || c0 * (t ? t[2] : 1.5), tr = main(myTarget) || {};
+    $('#f_cur').value = Math.round(c0); $('#f_target').value = Math.round(tp / 100) * 100; $('#f_tjeonse').value = Math.round((tr.js || tp * 0.5) / 100) * 100; }
+  $('#fundTitle').textContent = my ? `${cxName(my)} → ${myTarget ? cxName(myTarget) : '목표 집'}` : '';
   const rate = parseFloat($('#b_rate').value) || 4.5, yrs = parseFloat($('#b_years').value) || 30;
   const cur = num('f_cur'), debt = num('f_debt'), cash = num('f_cash'), target = num('f_target'), tj = num('f_tjeonse'), rent = num('f_rent');
   const sellFee = Calc.brokerFee(cur), net = cur - sellFee - debt + cash, need = target + Calc.costs(target);
@@ -979,6 +1077,6 @@ $('#fundForm').addEventListener('input', () => { fundTouched = true; drawFund();
 watchChanged.push(drawMove);
 
 /* 처음 열 때 */
-drawWatch(); window.runBudget(); drawDaily(); drawMove();
+syncArea(); drawWatch(); window.runBudget(); drawDaily(); drawMove();
 go((location.hash || '').slice(1) || store.get('v2-tab', 'home'));
 </script>
