@@ -168,6 +168,9 @@ out['balloon'] = select(db, """SELECT event_date::text e, region_code rc, grp, c
   seoul_before sb, seoul_after sa FROM balloon ORDER BY event_date, grp, chg_now DESC""")
 out['balloon_path'] = select(db, "SELECT event_date::text e, grp, week, median_chg m, n FROM balloon_path ORDER BY event_date, grp, week")
 out['policy_events'] = select(db, "SELECT event_date::text d, kind, title, source FROM policy_events ORDER BY event_date")
+# 정책 발표 감지(0067): 확인 대기 후보(정책 이력에 없는 것)
+out['v2_pnews'] = select(db, "SELECT kind, first_date::text d, n_press n, regions, articles->0 a FROM policy_news "
+                             "WHERE status = 'new' AND known IS NULL AND first_date > current_date - 30 ORDER BY first_date DESC")
 # G. 유동성·소득·집값 (G1): 2005년부터 전체
 out['g1'] = select(db, """SELECT series, period, value FROM macro_monthly
  WHERE series IN ('m2', 'household_income', 'apt_kb_nat', 'apt_kb_seoul', 'base_rate') AND period >= '2004' ORDER BY series, period""")

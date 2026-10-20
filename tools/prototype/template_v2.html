@@ -228,6 +228,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
       <div class="card">
         <h2>정책·규제 <small>발표 뒤 서울 집값</small></h2>
         <div class="row" style="gap:10px" id="polLegend"></div>
+        <div id="polNew"></div>
         <div id="polList"></div>
         <button type="button" class="more" id="polMore">이전 정책 더 보기</button>
         <details class="more-f"><summary>규제 뒤 실제 가격 · 토허제 3번 비교</summary><div class="body">
@@ -654,7 +655,7 @@ const KC = { '대출': 'var(--c1)', '규제지역': 'var(--warn)', '토허': 'va
 const PSHORT = { '2026-07-31|세금': '세제개편안: 다주택 양도세 중과 완화', '2026-07-05|토허': '기흥·동탄·구리 토허제', '2026-07-01|규제지역': '기흥·동탄·구리 규제지역',
   '2026-05-12|토허': '토허 실거주 의무 유예 확대', '2026-05-10|세금': '다주택 양도세 중과 재시행', '2025-10-29|대출': '1주택자 전세대출 이자 DSR 반영',
   '2025-10-20|토허': '서울 전역·경기 12곳 토허제', '2025-10-16|규제지역': '서울 전역·경기 12곳 규제지역', '2025-10-16|대출': '10·15 주담대 한도 축소·LTV 40%',
-  '2025-07-01|대출': '스트레스 DSR 3단계', '2025-06-28|대출': '6·27 수도권 주담대 6억 한도', '2025-03-24|토허': '강남3구·용산 토허제', '2025-02-13|토허': '잠실·삼성·대치·청담 토허 해제' };
+  '2025-09-08|대출': '9·7 규제지역 LTV 40%·전세대출 2억', '2025-07-01|대출': '스트레스 DSR 3단계', '2025-06-28|대출': '6·27 수도권 주담대 6억 한도', '2025-03-24|토허': '강남3구·용산 토허제', '2025-02-13|토허': '잠실·삼성·대치·청담 토허 해제' };
 (function policyList() {
   const wk = (D.v2_wk || []).filter(r => r.cls_id === 50008).map(r => [new Date(r.d).getTime(), +r.v]);
   const ch = wk.slice(1).map((r, i) => [r[0], (r[1] / wk[i][1] - 1) * 100]);
@@ -672,6 +673,9 @@ const PSHORT = { '2026-07-31|세금': '세제개편안: 다주택 양도세 중�
     [...$('#polList').children].forEach(e => { const f = () => { e.classList.toggle('open'); e.setAttribute('aria-expanded', e.classList.contains('open')); }; e.addEventListener('click', f); e.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); f(); } }); });
     $('#polMore').hidden = shown >= P.length;
   }
+  const PN = D.v2_pnews || [];   // 뉴스 감지 후보(확인 전): 정책 이력에 넣기 전까지 따로
+  $('#polNew').innerHTML = PN.length ? PN.map(n => `<div class="pol" style="border-left-color:${KC[n.kind] || 'var(--c3)'};border-left-style:dashed"><div class="pt"><b>${n.kind} 새 발표? <span class="pill warn">확인 전</span></b><span class="muted num">${dt(n.d)} · 언론사 ${n.n}곳</span></div>${n.a ? `<div class="pe"><a href="${n.a.u}" target="_blank" rel="noopener">${n.a.t.slice(0, 60)}</a></div>` : ''}</div>`).join('')
+    : '<p class="muted" style="font-size:12.5px;margin:0 0 4px">뉴스 감지(하루 두 번): 최근 30일 새 정책 후보 없음</p>';
   $('#polMore').addEventListener('click', () => { shown = P.length; draw(); });
   draw();
 })();

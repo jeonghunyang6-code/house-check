@@ -28,7 +28,7 @@ def test_zones_for():
 
 def test_loan_events_and_regulated_now():
     from collector.policy import DTN3, LOAN_RULES, regulated_now
-    assert sum(1 for e in EVENTS if e[1] == "대출") == 6
+    assert sum(1 for e in EVENTS if e[1] == "대출") == 7
     assert len({(d, k) for d, k, _, _ in EVENTS}) == len(EVENTS)      # policy_events 기본키 (날짜, 종류)
     now = regulated_now(date(2026, 10, 18))
     assert set(SEOUL) | set(GG12) | set(DTN3) == set(now)            # 10·15 서울 전역 + 경기 12곳, 2026-07 동탄·기흥·구리

@@ -78,6 +78,7 @@ S_LOAN_2019 = "https://www.dailian.co.kr/news/view/853146/"
 S_LOAN_2022 = "https://mobile.newsis.com/view/NISX20221110_0002080430"
 S_LOAN_DSR3 = "https://fsc.go.kr/eng/pr010101/84620"
 S_LOAN_0627 = "https://www.korea.kr/news/policyNewsView.do?newsId=148945077"
+S_LOAN_0907 = "https://www.sedaily.com/NewsView/2GXT6LR4Q1"
 S_LOAN_1015 = "https://biz.sbs.co.kr/amp/article/20000265270"
 S_LOAN_1015_JS = "https://mobile.newsis.com/view/NISX20251015_0003363513"
 
@@ -94,6 +95,7 @@ EVENTS: tuple[tuple[date, str, str, str], ...] = (
     (date(2022, 12, 1), "대출", "15억 초과 아파트 주담대 허용, 무주택·1주택 LTV 50%(12월 시행, 날짜는 1일로 둠)", S_LOAN_2022),
     (date(2025, 7, 1), "대출", "스트레스 DSR 3단계(수도권·규제지역, 가산금리 1.5%p)", S_LOAN_DSR3),
     (date(2025, 6, 28), "대출", "6·27 대책: 수도권·규제지역 주택구입 주담대 6억 한도, 6개월 안 전입, 생애최초 LTV 70%", S_LOAN_0627),
+    (date(2025, 9, 8), "대출", "9·7 대출수요 추가 관리: 규제지역 LTV 50→40%, 수도권·규제지역 1주택자 전세대출 한도 2억, 주택매매·임대사업자 주담대 금지(2026-10-21 정책 감지 시험에서 찾음)", S_LOAN_0907),
     (date(2025, 10, 16), "대출", "10·15 대책: 주담대 한도 15억 이하 6억·25억 이하 4억·초과 2억, 규제지역 LTV 40%, 스트레스 금리 하한 3%", S_LOAN_1015),
     (date(2025, 10, 29), "대출", "1주택자 수도권·규제지역 전세대출 이자 DSR 반영", S_LOAN_1015_JS),
     (date(2020, 6, 19), "규제지역", "6·17 대책: 경기·인천 대부분 조정대상지역, 수원·안양·용인 수지 등 경기 10곳·인천 3구 투기과열", S_2020_06),
