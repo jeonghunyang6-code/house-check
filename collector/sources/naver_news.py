@@ -22,9 +22,9 @@ class NewsBlocked(RuntimeError):
     """401·403·429 → 멈춘다."""
 
 
-def search(query: str, display: int = 100, start: int = 1, sleep=time.sleep) -> list[dict]:
+def search(query: str, display: int = 100, start: int = 1, sleep=time.sleep, sort: str = "date") -> list[dict]:
     h = {"X-NCP-APIGW-API-KEY-ID": os.environ["NAVER_CLIENT_ID"], "X-NCP-APIGW-API-KEY": os.environ["NAVER_CLIENT_SECRET"]}
-    q = urllib.parse.urlencode({"query": query, "display": display, "start": start, "sort": "date"})
+    q = urllib.parse.urlencode({"query": query, "display": display, "start": start, "sort": sort})
     for i in range(4):
         try:
             with urllib.request.urlopen(urllib.request.Request(f"{URL}?{q}", headers=h), timeout=30) as r:

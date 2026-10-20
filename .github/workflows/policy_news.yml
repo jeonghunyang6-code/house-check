@@ -1,0 +1,51 @@
+# 정책 발표 감지 (jobs/policy_news.py → policy_news, 0067): 네이버 뉴스 제목·요약문에서 새로 결정된 부동산 정책을 찾는다.
+# 새 후보가 있으면 GitHub 이슈로 올려 알린다(텔레그램 알림 전 임시). 확인 뒤 collector/policy.py 에 넣는 건 사람이 한다.
+# 필요한 시크릿: NAVER_CLIENT_ID·NAVER_CLIENT_SECRET(NAVER API HUB 뉴스), DATABASE_URL
+name: policy_news
+
+on:
+  schedule:
+    - cron: "37 23 * * *"   # 08:37 KST (전날 저녁·밤 발표)
+    - cron: "37 10 * * *"   # 19:37 KST (낮 발표)
+  push:   # 임시: Actions 에서 한 번 시험(합치기 전에 뺀다)
+    branches: [claude/busy-meitner-ojizbi]
+    paths: [.github/workflows/policy_news.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: policy_news
+  cancel-in-progress: false
+
+jobs:
+  policy_news:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: psql 확인
+        run: command -v psql || (sudo apt-get update -q && sudo apt-get install -y -q postgresql-client)
+      - name: 정책 발표 감지
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
+          NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
+          HC_DB_BACKEND: psql
+          PYTHONUNBUFFERED: "1"
+        run: python -m jobs.policy_news --issue-file new_policy.md
+      - name: 새 후보 알림(이슈)
+        if: hashFiles('new_policy.md') != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -s new_policy.md ]; then
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "새 정책 후보 $(TZ=Asia/Seoul date +%F)" --body-file new_policy.md
+          else
+            echo "새 후보 없음"
+          fi
