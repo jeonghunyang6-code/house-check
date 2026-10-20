@@ -1029,9 +1029,14 @@ function drawAsks() {
     <div class="kpi"><span class="k">매매 매물</span><span class="v">${sale.length}개</span><span class="d">${pn == null ? '지난 기록 없음' : `${dt(prevD)} 대비 ${sale.length - pn >= 0 ? '+' : ''}${sale.length - pn}개`}</span></div>
     <div class="kpi"><span class="k">중간 호가 <span class="pill ${cl(gm)}">${gm == null ? '–' : sgn(gm, 1)}</span></span><span class="v">${sale.length ? eok(med(sale)) : '–'}</span><span class="d">최저 ${sale.length ? eok(sale[0].p) : '–'} · 기준 ${eok(ref)}</span></div>
     <div class="kpi"><span class="k">전세 매물</span><span class="v">${jeon.length}개</span><span class="d">중간 ${jeon.length ? eok(med(jeon)) : '–'}</span></div>`;
-  $('#askList').innerHTML = sale.length ? sale.map(x => { const g = gap(x.p);
-    return `<div class="deal"><span class="muted">${x.dong ? x.dong + '동' : ''}</span><span>${x.fl ? x.fl + (x.tot ? '/' + x.tot : '') + '층' : ''} ${x.dir || ''}${x.conf ? ` <span class="muted" style="font-size:12px">${x.conf === '직접' ? '직접 기록' : '확인 ' + x.conf.slice(3)}</span>` : ''}</span><span class="p">${eok(x.p)} <span class="pill ${cl(g)}">${g == null ? '–' : sgn(g, 1)}</span></span></div>`; }).join('')
-    : `<p class="muted">${ag}㎡ 매매 호가 기록이 없습니다. 네이버 부동산 단지 화면에서 '호가 저장' 버튼을 누른 뒤 아래 '붙여넣기'에 넣어 주세요.</p>`;
+  const row = (x) => { const g = gap(x.p);
+    return `<div class="deal"><span class="muted">${x.dong ? x.dong + '동' : ''}</span><span>${x.fl ? x.fl + (x.tot ? '/' + x.tot : '') + '층' : ''} ${x.dir || ''}${x.conf ? `<br><span class="muted" style="font-size:11.5px">${x.conf === '직접' ? '직접 기록' : '확인 ' + x.conf.slice(3)}</span>` : ''}</span><span class="p">${eok(x.p)} <span class="pill ${cl(g)}">${g == null ? '–' : sgn(g, 1)}</span></span></div>`; };
+  const all = last ? A[last] : [], other = {};   // 다른 면적 매매 매물 수
+  all.filter(x => x.t === '매매' && x.ex != null && !inArea(x)).forEach(x => { const k = Math.floor(x.ex); other[k] = (other[k] || 0) + 1; });
+  const oth = Object.entries(other).sort((a, b) => a[0] - b[0]).map(([k, n]) => `${k}㎡ ${n}개`).join(' · ');
+  $('#askList').innerHTML = sale.length ? `<p class="muted" style="font-size:12.5px;margin:6px 0 0">싼 순서${oth ? ` · 다른 면적 매매: ${oth}` : ''}</p>` + sale.slice(0, 5).map(row).join('')
+      + (sale.length > 5 ? `<details class="more-f"><summary>나머지 ${sale.length - 5}개 보기</summary>${sale.slice(5).map(row).join('')}</details>` : '')
+    : `<p class="muted">${ag}㎡ 매매 호가 기록이 없습니다${oth ? `(다른 면적 매매: ${oth})` : ''}. 네이버 부동산 단지 화면에서 '호가 저장' 버튼을 누른 뒤 아래 '붙여넣기'에 넣어 주세요.</p>`;
 }
 $('#askForm').addEventListener('submit', (e) => { e.preventDefault(); const p = parseFloat(String($('#a_price').value).replace(/,/g, '')); if (!isFinite(p) || !dSeq) return;
   const A = store.get('v2-naver', {}), S = (A[dSeq] = A[dSeq] || {}); (S[D.asof] = S[D.asof] || []).push({ t: '매매', p, ex: +$('#a_area').value, fl: $('#a_floor').value, tot: 0, dir: '', dong: '', conf: '직접' });
