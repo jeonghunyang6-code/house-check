@@ -5,9 +5,6 @@ name: drive
 on:
   schedule:
     - cron: "47 21 * * 1-5"   # 평일 06:47 KST (GitHub 지연으로 실제 7~8시대). 받은 단지는 120일 동안 건너뜀
-  push:   # 임시: 키 확인용 6건(합치기 전에 뺀다)
-    branches: [claude/busy-meitner-ojizbi]
-    paths: [.github/workflows/drive.yml]
   workflow_dispatch:
     inputs:
       limit:
@@ -39,4 +36,4 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           HC_DB_BACKEND: psql
           PYTHONUNBUFFERED: "1"
-        run: python -m jobs.drive --limit "${{ github.event_name == 'push' && '6' || inputs.limit || '3000' }}"
+        run: python -m jobs.drive --limit "${{ inputs.limit || '3000' }}"
