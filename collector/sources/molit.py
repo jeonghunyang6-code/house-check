@@ -28,6 +28,8 @@ from datetime import date
 
 TRADE_URL = "https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev"
 RENT_URL = "https://apis.data.go.kr/1613000/RTMSDataSvcAptRent/getRTMSDataSvcAptRent"
+# 분양권·입주권 전매 (2026-10-21 사용자 활용신청 뒤 확인). 신축·재건축은 등기 전까지 매매 자료에 안 나오고 여기로만 신고된다
+RIGHT_URL = "https://apis.data.go.kr/1613000/RTMSDataSvcSilvTrade/getRTMSDataSvcSilvTrade"
 # 이 환경(클라우드 세션)에서는 1000건 요청 시 터널이 끊겨 100 이 기본. Actions 에서는 HC_PAGE_SIZE=1000 을 시도한다(미검증).
 PAGE_SIZE = int(os.environ.get("HC_PAGE_SIZE", "100"))
 
@@ -59,6 +61,58 @@ class Deal:
     @property
     def deal_key(self) -> str:
         return f"{self.apt_seq}|{self.contract_date.isoformat()}|{self.area_m2:g}|{self.floor}|{self.price_10k}"
+
+
+@dataclass(frozen=True)
+class RightDeal:
+    """분양권·입주권 거래 1건. 2026-10-21 실제 응답(강동구 2025-06~2026-10)으로 확인.
+
+    - aptNm 표기가 같은 단지도 달라진다('더샵 강동센트럴시티' / '더샵강동센트럴시티'), jibun 도 바뀐다(410-100 → 585). aptSeq 없음
+    - ownershipGbn '입' = 입주권(재건축·재개발 조합원 권리), 그 밖(공백 등) = 분양권으로 둔다
+    - 입주권 가격은 추가분담금이 빠진 권리가라 같은 평형 새 아파트 값보다 낮게 보일 수 있다
+    """
+
+    region_code: str
+    apt_name: str
+    umd_name: str
+    jibun: str
+    contract_date: date
+    area_m2: float
+    floor: int | None
+    price_10k: int
+    kind: str          # '입주권' | '분양권'
+    deal_type: str     # '중개' | '직거래'
+    is_cancelled: bool
+    cancel_date: date | None
+
+    @property
+    def area_group(self) -> int:
+        return int(self.area_m2)
+
+    @property
+    def base_key(self) -> str:
+        return f"{self.region_code}|{self.apt_name.replace(' ', '')}|{self.contract_date.isoformat()}|{self.area_m2:g}|{self.floor}|{self.price_10k}"
+
+
+def _item_to_right(item: ET.Element) -> RightDeal:
+    cancelled = _t(item, "cdealType") == "O"
+    return RightDeal(
+        region_code=_t(item, "sggCd"), apt_name=_t(item, "aptNm"), umd_name=_t(item, "umdNm"), jibun=_t(item, "jibun"),
+        contract_date=date(int(_t(item, "dealYear")), int(_t(item, "dealMonth")), int(_t(item, "dealDay"))),
+        area_m2=float(_t(item, "excluUseAr")), floor=int(_t(item, "floor")) if _t(item, "floor").lstrip("-").isdigit() else None,
+        price_10k=int(_t(item, "dealAmount").replace(",", "")), kind="입주권" if _t(item, "ownershipGbn") == "입" else "분양권",
+        deal_type="직거래" if _t(item, "dealingGbn") == "직거래" else "중개",
+        is_cancelled=cancelled, cancel_date=_yy_mm_dd(_t(item, "cdealDay")) if cancelled else None,
+    )
+
+
+def parse_right_page(xml_text: str) -> tuple[list[RightDeal], int]:
+    return _parse_page(xml_text, _item_to_right)
+
+
+def fetch_rights(lawd_cd: str, deal_ymd: str, service_key: str | None = None) -> list[RightDeal]:
+    """시군구 1곳·계약월 1개의 분양권·입주권 거래 전체 (해제 포함)."""
+    return _fetch_all(RIGHT_URL, parse_right_page, lawd_cd, deal_ymd, service_key)
 
 
 @dataclass(frozen=True)
