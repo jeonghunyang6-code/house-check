@@ -5,7 +5,7 @@
     python -m jobs.right_deals --regions 11740 --months 6
 
 같은 달·같은 값 거래가 두 건 이상이면(실제로 있음) 순번(#1, #2)으로 구분한다. 받은 뒤 단지 연결(apt_seq):
-① 같은 시군구에서 이름(우리 단지 이름 또는 K-apt 이름, 띄어쓰기·괄호·가운뎃점 무시)이 같으면 ② 같은 동·지번이면.
+① 같은 시군구에서 이름(우리 단지 이름 또는 K-apt 이름, 띄어쓰기·괄호·가운뎃점 무시)이 같으면 ② 같은 동·지번이면. 그래도 못 붙인 거래는 분양 단지(presale_complexes, 0070)로 묶어 pc_seq 를 단다(입주 전 신축도 찾고 ♡).
 """
 
 from __future__ import annotations
@@ -67,6 +67,17 @@ UPDATE right_deals r SET apt_seq = x.apt_seq FROM (
   JOIN complexes c ON c.region_code = r2.region_code AND c.umd_name = r2.umd_name AND c.jibun = r2.jibun
   WHERE r2.apt_seq IS NULL AND r2.jibun <> '' ORDER BY r2.deal_key, c.build_year DESC NULLS LAST) x
 WHERE r.deal_key = x.deal_key;""")
+    # 단지 목록에 없는 거래 → 분양 단지(0070). 시군구 + 정규화 이름으로 묶고, 이름은 가장 최근 표기
+    db.query(f"""INSERT INTO presale_complexes (pc_seq, region_code, nkey, apt_name, umd_name, jibun)
+SELECT DISTINCT ON (region_code, nk) 'P' || region_code || '-' || substr(md5(nk), 1, 6), region_code, nk, apt_name, umd_name, jibun
+FROM (SELECT *, {n('apt_name')} nk FROM right_deals WHERE apt_seq IS NULL AND pc_seq IS NULL) u
+ORDER BY region_code, nk, contract_date DESC
+ON CONFLICT (region_code, nkey) DO NOTHING;
+UPDATE right_deals r SET pc_seq = p.pc_seq FROM presale_complexes p
+WHERE r.pc_seq IS NULL AND r.apt_seq IS NULL AND p.region_code = r.region_code AND p.nkey = {n('r.apt_name')};
+UPDATE presale_complexes p SET apt_seq = x.apt_seq FROM (
+  SELECT pc_seq, max(apt_seq) apt_seq FROM right_deals WHERE pc_seq IS NOT NULL AND apt_seq IS NOT NULL GROUP BY 1) x
+WHERE p.pc_seq = x.pc_seq AND p.apt_seq IS DISTINCT FROM x.apt_seq;""")
 
 
 def run(db: Db, regions: list[str], months: int, backfill: bool = False) -> int:

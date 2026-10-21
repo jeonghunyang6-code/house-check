@@ -62,7 +62,7 @@ WHERE NOT d.is_cancelled AND d.apt_seq IN ({ins}) AND d.first_seen_date > {since
 UNION ALL
 SELECT r.apt_seq, coalesce(k.kapt_name, r.apt_name), r.area_m2, r.floor, r.price_10k, r.contract_date::text, r.deal_type, NULL, NULL, r.kind
 FROM right_deals r LEFT JOIN complexes c ON c.apt_seq = r.apt_seq LEFT JOIN kapt_complexes k ON k.kapt_code = c.kapt_code
-WHERE NOT r.is_cancelled AND r.apt_seq IN ({ins}) AND r.first_seen_date > {since}) x
+WHERE NOT r.is_cancelled AND (r.apt_seq IN ({ins}) OR r.pc_seq IN ({ins})) AND r.first_seen_date > {since}) x
 ORDER BY apt_name, cd""")
 
 

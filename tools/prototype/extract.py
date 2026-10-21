@@ -231,10 +231,22 @@ out['v2_srch'] = [[r['apt_seq'], r['apt_name'], r['kname'] if r['kname'] and r['
  LEFT JOIN LATERAL (SELECT price_10k, contract_date, area_group FROM deals d WHERE d.apt_seq = c.apt_seq AND NOT d.is_cancelled ORDER BY contract_date DESC LIMIT 1) ld ON true
  WHERE c.region_code ~ '^(11|28|41)' AND (c.kapt_code IS NOT NULL OR n.n3 >= 3)
    AND c.apt_seq NOT IN (SELECT apt_seq FROM complex_metrics WHERE ref_10k IS NOT NULL OR a5_est_10k IS NOT NULL)""")]
+# 분양 단지(0070, 입주·등기 전이라 단지 목록에 없음): 분양권·입주권 거래로만 안다. 청약홈 분양정보(presale)와 이름이 맞으면 세대·입주 예정·좌표.
+# 16번째 칸 = 입주 예정 YYYYMM(모르면 '?') → 화면은 '분양 단지'로 표시
+_N = "regexp_replace(lower({}), '[[:space:]()·.-]', '', 'g')"
+out['v2_srch'] += [[r['pc_seq'], r['apt_name'], None, r['region_code'], r['umd_name'], None, r['hh'], None, None, None, r['n'],
+                    r['lat'] and round(float(r['lat']), 5), r['lng'] and round(float(r['lng']), 5), None, None, r['mi'] or '?']
+                   for r in select(db, f"""SELECT p.pc_seq, p.apt_name, p.region_code, p.umd_name, s.total_hh hh, s.move_in_ym mi, s.lat, s.lng,
+  (SELECT count(*) FROM right_deals r WHERE r.pc_seq = p.pc_seq AND NOT r.is_cancelled) n
+ FROM presale_complexes p LEFT JOIN LATERAL (SELECT total_hh, move_in_ym, lat, lng FROM presale s WHERE s.region_code = p.region_code
+   AND ({_N.format('s.name')} LIKE '%' || p.nkey || '%' OR p.nkey LIKE '%' || {_N.format('s.name')} || '%') ORDER BY s.notice_date DESC NULLS LAST LIMIT 1) s ON true
+ WHERE p.apt_seq IS NULL""")]
+# 분양 단지가 나중에 단지 목록에 생겨 연결되면 화면의 관심 ♡ 를 옮긴다
+out['v2_pmap'] = {r['pc_seq']: r['apt_seq'] for r in select(db, "SELECT pc_seq, apt_seq FROM presale_complexes WHERE apt_seq IS NOT NULL")}
 # 분양권·입주권 거래(0069, 단지 연결된 것, 해제 뺌) 1년: [단지, YYMMDD, 평형, 층, 가격, 1=입주권 0=분양권]. 신축·재건축은 등기 전까지 여기만 있다
-out['v2_rights'] = [[r['apt_seq'], r['d'], r['ag'], r['fl'], r['p'], r['k']] for r in select(db, """SELECT apt_seq, to_char(contract_date, 'YYMMDD') d, area_group ag,
- floor fl, price_10k p, CASE WHEN kind = '입주권' THEN 1 ELSE 0 END k FROM right_deals WHERE apt_seq IS NOT NULL AND NOT is_cancelled
- AND contract_date >= current_date - 365 ORDER BY apt_seq, contract_date""")]
+out['v2_rights'] = [[r['s'], r['d'], r['ag'], r['fl'], r['p'], r['k']] for r in select(db, """SELECT coalesce(apt_seq, pc_seq) s, to_char(contract_date, 'YYMMDD') d, area_group ag,
+ floor fl, price_10k p, CASE WHEN kind = '입주권' THEN 1 ELSE 0 END k FROM right_deals WHERE coalesce(apt_seq, pc_seq) IS NOT NULL AND NOT is_cancelled
+ AND contract_date >= current_date - 365 ORDER BY 1, contract_date""")]
 out['v2_deals'] = [[r['apt_seq'], r['d'], r['ag'], r['fl'], r['p'], r['dt']] for r in select(db, """SELECT apt_seq, to_char(contract_date, 'YYMMDD') d, area_group ag, floor fl,
  price_10k p, CASE WHEN deal_type = '직거래' THEN 1 ELSE 0 END dt FROM deals WHERE NOT is_cancelled AND contract_date >= current_date - 90
  AND area_group BETWEEN 40 AND 135 ORDER BY apt_seq, contract_date DESC""")]
