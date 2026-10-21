@@ -218,6 +218,18 @@ out['v2_info'] = {r['apt_seq']: [r['apt_name'], r['region_code'], r['umd_name'],
                   for r in select(db, """SELECT c.apt_seq, c.apt_name, c.region_code, c.umd_name, c.lat, c.lng, c.station_name, c.station_m, c.h2_cbd_min, c.h2_ybd_min,
  c.h2_gbd_min, c.mart_name, c.mart_m, c.hosp_name, c.hosp_m, c.mid_zone, c.build_year, k.households hh FROM complexes c LEFT JOIN kapt_complexes k USING (kapt_code)
  WHERE c.apt_seq IN (SELECT apt_seq FROM complex_metrics WHERE ref_10k IS NOT NULL OR a5_est_10k IS NOT NULL)""")}
+# 검색용: 기준 시세가 없는 단지(거래가 적은 신축·소규모, 재건축 뒤 아직 매매 신고가 없는 곳)도 찾고 ♡ 할 수 있게.
+# K-apt 등록 단지 또는 3년 안 매매 3건+. 재건축으로 K-apt 이름·사용승인이 바뀐 곳(예: 코오롱상가아파트 → 더샵강동센트럴시티)은 K-apt 이름으로도 찾는다
+out['v2_srch'] = [[r['apt_seq'], r['apt_name'], r['kname'] if r['kname'] and r['kname'].replace(' ', '') != r['apt_name'].replace(' ', '') else None, r['region_code'], r['umd_name'],
+                   r['by'], r['hh'], r['lp'], r['ld'], r['la'], r['n3']]
+                  for r in select(db, """SELECT c.apt_seq, c.apt_name, k.kapt_name kname, c.region_code, c.umd_name,
+  GREATEST(c.build_year, extract(year FROM k.use_date)::int) "by", k.households hh,
+  ld.price_10k lp, to_char(ld.contract_date, 'YYMMDD') ld, ld.area_group la, coalesce(n.n3, 0) n3
+ FROM complexes c LEFT JOIN kapt_complexes k USING (kapt_code)
+ LEFT JOIN (SELECT apt_seq, count(*) n3 FROM deals WHERE NOT is_cancelled AND contract_date >= current_date - 1095 GROUP BY 1) n USING (apt_seq)
+ LEFT JOIN LATERAL (SELECT price_10k, contract_date, area_group FROM deals d WHERE d.apt_seq = c.apt_seq AND NOT d.is_cancelled ORDER BY contract_date DESC LIMIT 1) ld ON true
+ WHERE c.region_code ~ '^(11|28|41)' AND (c.kapt_code IS NOT NULL OR n.n3 >= 3)
+   AND c.apt_seq NOT IN (SELECT apt_seq FROM complex_metrics WHERE ref_10k IS NOT NULL OR a5_est_10k IS NOT NULL)""")]
 out['v2_deals'] = [[r['apt_seq'], r['d'], r['ag'], r['fl'], r['p'], r['dt']] for r in select(db, """SELECT apt_seq, to_char(contract_date, 'YYMMDD') d, area_group ag, floor fl,
  price_10k p, CASE WHEN deal_type = '직거래' THEN 1 ELSE 0 END dt FROM deals WHERE NOT is_cancelled AND contract_date >= current_date - 90
  AND area_group BETWEEN 40 AND 135 ORDER BY apt_seq, contract_date DESC""")]

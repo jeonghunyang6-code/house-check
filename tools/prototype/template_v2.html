@@ -508,7 +508,12 @@ function bandFor(p) {   // D1 가격대별 전세가율 정상 범위(compute.py
   for (let i = 0; i < pts.length - 1; i++) { const [x0, r0] = pts[i], [x1, r1] = pts[i + 1]; if (p >= x0 && p <= x1) { const t = x1 === x0 ? 0 : (p - x0) / (x1 - x0); return [Math.round(r0[0] + (r1[0] - r0[0]) * t), Math.round(r0[1] + (r1[1] - r0[1]) * t)]; } }
   return [30, 50];
 }
-function cxName(seq) { return (CXS[seq] && CXS[seq].name) || (INFO[seq] && INFO[seq][0]) || (main(seq) || {}).name || (typeof E6NM !== 'undefined' && E6NM[seq]) || seq; }
+/* 기준 시세가 없는 단지(검색·관심만): [seq, 이름, K-apt 이름(다르면), 시군구, 동, 준공, 세대, 최근 거래가, 날짜 YYMMDD, 평형, 3년 거래 수] */
+const SR = {}; (D.v2_srch || []).forEach(r => { SR[r[0]] = { n: r[1], kn: r[2], rc: r[3], umd: r[4], by: r[5], hh: r[6], lp: r[7], ld: r[8], la: r[9], n3: r[10] }; });
+const srName = (x) => x.kn && x.by >= YEAR - 3 ? `${x.kn}` : x.n;   // 재건축 뒤 새 이름(K-apt)이 있으면 그 이름
+const srNote = (x) => x.lp ? `최근 거래 ${eok(x.lp)} (${dt('20' + x.ld.slice(0, 2) + '-' + x.ld.slice(2, 4) + '-' + x.ld.slice(4))} · ${x.la}㎡)` : '아직 매매 실거래 없음';
+const light = (seq) => !CXS[seq] && !main(seq) && !!SR[seq];
+function cxName(seq) { return (CXS[seq] && CXS[seq].name) || (INFO[seq] && INFO[seq][0]) || (main(seq) || {}).name || (SR[seq] && srName(SR[seq])) || (typeof E6NM !== 'undefined' && E6NM[seq]) || seq; }
 function cxRef(seq) { return useFull(seq) ? CXS[seq].C : (main(seq) || {}).ref; }
 const E6 = D.v2_e6 || { q: [], s: {}, s59: {} };
 const qser = (seq) => (AREA === '84' ? E6.s : E6.s59 || {})[seq] || null;   // 고른 평형의 분기 중앙가 20분기
@@ -829,14 +834,17 @@ chips('#fWork', Object.keys(WORK), cst.work, reset('work')); chips('#fMin', Obje
 chips('#fSt', Object.keys(STF), cst.st, reset('st')); chips('#fSort', Object.keys(SORTF), cst.sort, reset('sort'));
 $('#cMore').addEventListener('click', () => { cst.shown += 20; drawCand(); });
 /* 단지 검색: 이름·동 (띄어쓰기 무시, 2글자 이상) */
-const SEARCH = Object.entries(INFO).map(([seq, i]) => [seq, (i[0] + ' ' + (i[2] || '') + ' ' + rn(i[1])).replace(/\s+/g, '')]);
+const SEARCH = Object.entries(INFO).map(([seq, i]) => [seq, (i[0] + ' ' + (i[2] || '') + ' ' + rn(i[1])).replace(/\s+/g, '')]).concat(Object.entries(SR).filter(([seq]) => !INFO[seq]).map(([seq, x]) => [seq, (x.n + ' ' + (x.kn || '') + ' ' + (x.umd || '') + ' ' + rn(x.rc)).replace(/\s+/g, '')]));
 let qHits = [];
 function drawSearch() {
   const q = $('#qName').value.replace(/\s+/g, '');
-  qHits = q.length < 2 ? [] : SEARCH.filter(([, t]) => t.includes(q)).map(([seq]) => seq).sort((a, b) => (cxRef(b) || 0) - (cxRef(a) || 0)).slice(0, 15);
+  qHits = q.length < 2 ? [] : SEARCH.filter(([, t]) => t.includes(q)).map(([seq]) => seq).sort((a, b) => (cxRef(b) || (SR[b] && SR[b].lp) || 0) - (cxRef(a) || (SR[a] && SR[a].lp) || 0)).slice(0, 15);
   $('#qList').innerHTML = q.length < 2 ? '' : qHits.map(seq => { const i = INFO[seq] || [], r = main(seq);
+    if (!INFO[seq] && SR[seq]) { const x = SR[seq];   // 기준 시세 없는 단지
+      return `<div class="irow"><span class="open" style="cursor:default"><span class="nm">${srName(x)}</span><span class="sub">${rn(x.rc)} ${x.umd || ''}${x.by ? ' · ' + x.by + '년' : ''}${x.hh ? ' · ' + Number(x.hh).toLocaleString() + '세대' : ''}${x.kn && srName(x) !== x.n ? ' · 옛 이름 ' + x.n : ''}</span><span class="sub">${srNote(x)} · 기준 시세 없음</span></span>
+        <span class="side"><span class="pr muted" style="font-weight:500">–</span><button type="button" class="heart" data-s="${seq}" aria-pressed="${watch.has(seq)}" aria-label="관심 단지">${watch.has(seq) ? '♥' : '♡'}</button></span></div>`; }
     return `<div class="irow"><button type="button" class="open" data-s="${seq}"><span class="nm">${cxName(seq)}</span><span class="sub">${rn(i[1])} ${i[2] || ''}${i[15] ? ' · ' + i[15] + '년' : ''}${i[16] ? ' · ' + Number(i[16]).toLocaleString() + '세대' : ''}${r ? ' · ' + r.ag + '㎡' : ''}</span></button>
-      <span class="side"><span class="pr">${eok(cxRef(seq))}</span><button type="button" class="heart" data-s="${seq}" aria-pressed="${watch.has(seq)}" aria-label="관심 단지">${watch.has(seq) ? '♥' : '♡'}</button></span></div>`; }).join('') || '<p class="muted" style="padding:8px 0">찾는 단지가 없습니다. 기준 시세가 있는(최근 거래가 있는) 단지만 나옵니다.</p>';
+      <span class="side"><span class="pr">${eok(cxRef(seq))}</span><button type="button" class="heart" data-s="${seq}" aria-pressed="${watch.has(seq)}" aria-label="관심 단지">${watch.has(seq) ? '♥' : '♡'}</button></span></div>`; }).join('') || '<p class="muted" style="padding:8px 0">찾는 단지가 없습니다. 수도권 K-apt 등록 단지와 3년 안 거래 3건 이상인 단지가 나옵니다.</p>';
 }
 $('#qName').addEventListener('input', drawSearch);
 $('#qList').addEventListener('click', (e) => { const h = e.target.closest('.heart'); if (h) { toggleWatch(h.dataset.s); return; } const o = e.target.closest('.open'); if (o) openCx(o.dataset.s); });
@@ -982,8 +990,8 @@ function openCx(seq) {
 
 /* ───── ③ 관심 ───── */
 function drawWatch() {
-  const seqs = [...watch].filter(s => CXS[s] || main(s));
-  $('#wCount').textContent = `${seqs.length}곳`;
+  const all = [...watch].filter(s => CXS[s] || main(s) || SR[s]), lights = all.filter(light), seqs = all.filter(s => !light(s));
+  $('#wCount').textContent = `${all.length}곳`;
   const spark = (c) => { const v = (c.ref || []).slice(-24).map(r => r.v).filter(Boolean); if (v.length < 2) return ''; const lo = Math.min(...v), hi = Math.max(...v), W = 64, H = 20;
     return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" aria-hidden="true"><path d="${v.map((a, i) => (i ? 'L' : 'M') + (i * W / (v.length - 1)).toFixed(1) + ',' + (H - 2 - (H - 4) * (a - lo) / ((hi - lo) || 1)).toFixed(1)).join('')}" fill="none" stroke="var(--c1)" stroke-width="1.5"/></svg>`; };
   const qspark = (seq) => { const a = (qser(seq) || []).slice(-8), v = a.filter(x => x != null); if (v.length < 2) return ''; const lo = Math.min(...v), hi = Math.max(...v), W = 64, H = 20;
@@ -995,7 +1003,11 @@ function drawWatch() {
       <span class="sub">${c ? c.region.replace(/^서울 /, '') : rn(r.rc) + ' ' + r.umd}${ch != null ? ` · 1년 <span class="${ch >= 0 ? 'up' : 'dn'}">${sgn(ch)}</span>` : ''} · ${ag}㎡ 90일 거래 ${n90}건</span>
       <span class="tags">${agTag(seq)}${phPill(c && c.rph ? c.rph.phase : r && r.phase)}${TODAY_NEW.has(seq) ? '<span class="pill acc">새 거래</span>' : ''}${c && (c.redev || []).length ? `<span class="pill acc">정비 ${c.redev[0].stage}</span>` : r && r.stage ? `<span class="pill acc">정비 ${r.stage}</span>` : ''}</span></button>
       <span class="side"><span class="pr">${eok(cxRef(seq))}</span>${c ? spark(c) : qspark(seq)}<button type="button" class="heart" data-s="${seq}" aria-pressed="true" aria-label="관심 해제">♥</button></span></div>`;
-  }).join('') || '<p class="muted">찾기 탭 후보 목록에서 ♡를 누르면 여기에 모입니다.</p>';
+  }).join('') + lights.map(seq => { const x = SR[seq], n90 = (DEALS[seq] || []).length;   // 기준 시세 없는 단지: 최근 거래만
+    return `<div class="irow"><span class="open" style="cursor:default"><span class="nm">${srName(x)}</span><span class="sub">${rn(x.rc)} ${x.umd || ''}${x.by ? ' · ' + x.by + '년' : ''} · ${srNote(x)} · 90일 거래 ${n90}건</span>
+      <span class="tags"><span class="pill none">기준 시세 없음</span>${TODAY_NEW.has(seq) ? '<span class="pill acc">새 거래</span>' : ''}</span>${x.lp ? '' : '<span class="sub">신축·재건축은 등기 전까지 입주권·분양권 거래로만 신고돼 아직 안 보일 수 있습니다.</span>'}</span>
+      <span class="side"><span class="pr">–</span><button type="button" class="heart" data-s="${seq}" aria-pressed="true" aria-label="관심 해제">♥</button></span></div>`; }).join('')
+    || '<p class="muted">찾기 탭 후보 목록에서 ♡를 누르면 여기에 모입니다.</p>';
   const rows = seqs.map(seq => { const k = (useFull(seq) ? cxChecks(CXS[seq]) : liteChecks(main(seq))).slice(0, 3); return { seq, k, ok: k.filter(x => x[1] === 'good').length }; })
     .sort((a, b) => b.ok - a.ok || (cxRef(b.seq) || 0) - (cxRef(a.seq) || 0));
   $('#cmpT').innerHTML = `<thead><tr><th>단지</th><th>전세가율</th><th>거래</th><th>하락기</th><th>충족</th></tr></thead><tbody>` +
