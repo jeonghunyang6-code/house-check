@@ -16,6 +16,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from collector import policy_news as P
+from collector import telegram as T
 from collector.db import Db, DbError, connect, lit, select
 from collector.regions import REGIONS
 from collector.sources.naver_news import NewsBlocked, search
@@ -80,6 +81,11 @@ def run(db: Db, days: int, issue_file: str | None) -> int:
     print(f"  기사 {len(arts):,}건(가장 오래된 {min((a['pub'] for a in arts), default=today)}), 후보 {len(cands)}건, 새 알림 {len(new)}건")
     for c in cands:
         print(f"   {c.kind} {c.first} 언론사 {len(c.press)} {'이미 있음: ' + c.known[:40] if c.known else ''}")
+    if new and T.enabled():
+        try:
+            print("  텔레그램:", T.send(db, "<b>새 정책 후보</b>\n" + "\n".join(f"• {c.first} {c.kind} · 언론사 {len(c.press)}곳: {c.titles[0][1][:60]}" for c in new)))
+        except T.TelegramError as e:
+            print(f"  텔레그램 실패: {e}", file=sys.stderr)
     if issue_file:
         with open(issue_file, "w", encoding="utf-8") as f:
             f.write(issue_md(new) if new else "")

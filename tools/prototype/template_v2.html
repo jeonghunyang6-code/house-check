@@ -463,7 +463,7 @@ function chips(id, opts, cur, cb) {
   const box = $(id); box.innerHTML = opts.map(o => `<button type="button" data-v="${o}" aria-pressed="${o === cur}">${o}</button>`).join('');
   box.addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; [...box.children].forEach(x => x.setAttribute('aria-pressed', x === b)); cb(b.dataset.v); });
 }
-const store = { get(k, d) { try { const v = JSON.parse(localStorage.getItem(k)); return v ?? d; } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
+const store = { get(k, d) { try { const v = JSON.parse(localStorage.getItem(k)); return v ?? d; } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} if (window.hcSync) window.hcSync(k, v); } };   // 웹(build_v2.py --web)에서는 서버에도 저장
 const S = D.signals || {};
 const dt = (s) => s ? s.slice(2).replace(/-/g, '.') : '';
 const YEAR = +D.asof.slice(0, 4);
@@ -732,7 +732,7 @@ const PSHORT = { '2026-10-01|세금': '조정지역 일시적 2주택 처분 3�
 
 (function fontCheck() {
   const ok = () => { if (!document.fonts) return false; let y = false; document.fonts.forEach(f => { if (f.family.replace(/"/g, '') === 'IBM Plex Sans KR' && f.status === 'loaded') y = true; }); return y; };
-  const show = () => { $('#fontChk').textContent = ok() ? '글꼴: IBM Plex Sans KR' : '글꼴: IBM Plex Sans KR을 불러오지 못해 기기 기본 글꼴(맑은 고딕 등)로 보입니다'; };
+  const show = () => { $('#fontChk').textContent = (ok() ? '글꼴: IBM Plex Sans KR' : '글꼴: IBM Plex Sans KR을 불러오지 못해 기기 기본 글꼴(맑은 고딕 등)로 보입니다') + (window.HC_WEB ? (HC_WEB.ok ? ' · 기록: 서버 저장(모든 기기)' : HC_WEB.bad ? ' · 기록: 비밀 문구가 달라 이 기기에만' : ' · 기록: 이 기기에만') : ''); };
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(show); setTimeout(show, 2500); show();
 })();
 
