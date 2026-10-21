@@ -1,5 +1,5 @@
 # 정책 발표 감지 (jobs/policy_news.py → policy_news, 0067): 네이버 뉴스 제목·요약문에서 새로 결정된 부동산 정책을 찾는다.
-# 새 후보가 있으면 GitHub 이슈로 올려 알린다(텔레그램 알림 전 임시). 확인 뒤 collector/policy.py 에 넣는 건 사람이 한다.
+# 새 후보가 있으면 GitHub 이슈 + 텔레그램(TELEGRAM_BOT_TOKEN 이 있으면)으로 알린다. 확인 뒤 collector/policy.py 에 넣는 건 사람이 한다.
 # 필요한 시크릿: NAVER_CLIENT_ID·NAVER_CLIENT_SECRET(NAVER API HUB 뉴스), DATABASE_URL
 name: policy_news
 
@@ -33,6 +33,7 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
           NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           HC_DB_BACKEND: psql
           PYTHONUNBUFFERED: "1"
         run: python -m jobs.policy_news --issue-file new_policy.md

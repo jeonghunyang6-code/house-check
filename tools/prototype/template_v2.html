@@ -185,6 +185,22 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
 .proj .o { grid-column: 2; font-size: 12px; color: var(--ink-3); }
 .notes { display: grid; gap: 8px; }
 .note { background: var(--sunk); border-radius: 10px; padding: 10px 12px; font-size: 13.5px; display: grid; gap: 2px; }
+.vsec { display: grid; gap: 6px; padding: 10px 0 4px; border-top: 1px solid var(--line); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; cursor: pointer; }
+.chip input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.chip span { font-size: 13px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-2); background: var(--surface); }
+.chip input:checked + span { color: var(--on-strong); background: var(--ink-2); border-color: var(--ink-2); }
+.chip.g input:checked + span { background: var(--good); border-color: var(--good); }
+.chip.b input:checked + span { background: var(--bad); border-color: var(--bad); }
+.chip input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tri { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 4px 0; font-size: 13.5px; }
+.seg3 { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; flex: none; }
+.seg3 button { font: inherit; font-size: 12.5px; border: 0; background: var(--surface); color: var(--ink-2); padding: 5px 8px; cursor: pointer; }
+.seg3 button + button { border-left: 1px solid var(--line); }
+.seg3 button[aria-pressed="true"][data-v="1"] { background: var(--good); color: var(--on-strong); }
+.seg3 button[aria-pressed="true"][data-v="0"] { background: var(--ink-3); color: var(--on-strong); }
+.seg3 button[aria-pressed="true"][data-v="-1"] { background: var(--bad); color: var(--on-strong); }
 .fontchk { font-size: 11px; color: var(--ink-3); text-align: center; padding-block: 4px 12px; }
 </style>
 
@@ -311,8 +327,16 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
           <label for="v_cx" style="grid-column:1/-1">단지<select id="v_cx"></select></label>
           <label for="v_date">다녀온 날<input id="v_date" type="date"></label>
           <label for="v_score">느낌 (1~5)<select id="v_score"><option>5</option><option>4</option><option selected>3</option><option>2</option><option>1</option></select></label>
-          <div style="grid-column:1/-1;display:grid;gap:4px;font-size:13.5px" id="v_checks"></div>
-          <label for="v_note" style="grid-column:1/-1">메모<input id="v_note" placeholder="예: 역까지 오르막, 105동 남향 좋음, 호가 15.5억" style="text-align:left"></label>
+          <div class="vsec" style="grid-column:1/-1"><b>① 역까지 동선</b>
+            <label for="v_walk">역까지 실제 걸어 본 시간 (분)<input id="v_walk" inputmode="numeric" placeholder="출퇴근 시간대에"></label>
+            <p class="muted" id="v_walkHint" style="margin:2px 0 0;font-size:12.5px"></p>
+            <div class="chips" id="v_route"></div></div>
+          <div class="vsec" style="grid-column:1/-1"><b>② 단지 안</b><div id="v_env"></div></div>
+          <div class="vsec" style="grid-column:1/-1"><b>③ 정리</b>
+            <label for="v_pro">사람들이 찾는 이유 (장점)<input id="v_pro" placeholder="예: 역 평지 5분, 초품아" style="text-align:left"></label>
+            <label for="v_con">단점<input id="v_con" placeholder="예: 이중주차, 104동 조망 막힘" style="text-align:left"></label>
+            <div class="chips" id="v_ok"></div></div>
+          <label for="v_note" style="grid-column:1/-1">메모<input id="v_note" placeholder="예: 105동 남향 좋음, 호가 15.5억" style="text-align:left"></label>
           <button type="submit" class="more" style="grid-column:1/-1">기록 남기기</button>
         </form>
         <div class="notes" id="vList"></div>
@@ -391,6 +415,19 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
         <div class="legend" id="fundLegend"></div>
         <p class="src">쓸 수 있는 돈 = 판 돈 − 매도 중개보수 − 남은 대출 + 현금. 1주택 갈아타기(양도세 비과세 가정), 목표 집 부대비용 포함. 대출 가능 여부는 찾기 탭 규칙과 은행 확인.</p>
       </div>
+      <div class="card">
+        <h2>재개발로 분리하면 <small>지금 집에 살면서</small></h2>
+        <form class="form" id="rdForm" autocomplete="off">
+          <label for="r_price">재개발 물건 매수가 (만원)<input id="r_price" inputmode="numeric" value="70000"></label>
+          <label for="r_dep">그 집 전세·보증금 (만원)<input id="r_dep" inputmode="numeric" value="20000"></label>
+          <label for="r_add">예상 추가분담금 (만원)<input id="r_add" inputmode="numeric" value="30000"></label>
+          <label for="r_tax">취득세율 (%)<input id="r_tax" inputmode="decimal" value="8.4"></label>
+          <label for="r_stage" style="grid-column:1/-1">지금 단계<select id="r_stage"><option value="3">조합설립</option><option value="5" selected>사업시행</option><option value="6">관리처분</option><option value="7">착공</option></select></label>
+          <label for="r_new" style="grid-column:1/-1">입주 뒤 예상 새 아파트 시세 (만원)<input id="r_new" inputmode="numeric" value="150000"></label>
+        </form>
+        <div class="kpis" id="rdKpis"></div>
+        <p class="src">지금 들어갈 현금 = 매수가 − 보증금 + 취득세 + 중개·법무. 취득세 8.4% = 조정지역 2주택 중과(지방교육세 포함) 가정 — 물건 종류(주택·입주권)·지역에 따라 다르니 세무 확인. 기다리는 해 = 서울 재개발 단계 사이 중앙값 합 + 착공 뒤 3년. 이주비 대출·이자는 넣지 않음.</p>
+      </div>
     </div>
   </section>
 
@@ -426,7 +463,7 @@ function chips(id, opts, cur, cb) {
   const box = $(id); box.innerHTML = opts.map(o => `<button type="button" data-v="${o}" aria-pressed="${o === cur}">${o}</button>`).join('');
   box.addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; [...box.children].forEach(x => x.setAttribute('aria-pressed', x === b)); cb(b.dataset.v); });
 }
-const store = { get(k, d) { try { const v = JSON.parse(localStorage.getItem(k)); return v ?? d; } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
+const store = { get(k, d) { try { const v = JSON.parse(localStorage.getItem(k)); return v ?? d; } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} if (window.hcSync) window.hcSync(k, v); } };   // 웹(build_v2.py --web)에서는 서버에도 저장
 const S = D.signals || {};
 const dt = (s) => s ? s.slice(2).replace(/-/g, '.') : '';
 const YEAR = +D.asof.slice(0, 4);
@@ -651,8 +688,8 @@ function myDeals() {
 }
 
 /* 정책·규제: 한 줄 제목 + 발표 전 4주 → 뒤 8주 서울 주간 변동률 */
-const KC = { '대출': 'var(--c1)', '규제지역': 'var(--warn)', '토허': 'var(--bad)', '세금': 'var(--c3)' };
-const PSHORT = { '2026-07-31|세금': '세제개편안: 다주택 양도세 중과 완화', '2026-07-05|토허': '기흥·동탄·구리 토허제', '2026-07-01|규제지역': '기흥·동탄·구리 규제지역',
+const KC = { '대출': 'var(--c1)', '규제지역': 'var(--warn)', '토허': 'var(--bad)', '세금': 'var(--c3)', '공급': 'var(--good)' };
+const PSHORT = { '2026-10-01|세금': '조정지역 일시적 2주택 처분 3→2년', '2026-09-17|토허': '토허 실거주 유예 신청 연장', '2026-08-03|세금': '세제개편안: 다주택 양도세 중과 완화', '2026-01-29|공급': '1·29 수도권 도심 6만호 공급', '2025-09-17|토허': '강남3구·용산 토허 연장', '2025-09-07|공급': '9·7 수도권 135만호 착공 계획', '2026-07-05|토허': '기흥·동탄·구리 토허제', '2026-07-01|규제지역': '기흥·동탄·구리 규제지역',
   '2026-05-12|토허': '토허 실거주 의무 유예 확대', '2026-05-10|세금': '다주택 양도세 중과 재시행', '2025-10-29|대출': '1주택자 전세대출 이자 DSR 반영',
   '2025-10-20|토허': '서울 전역·경기 12곳 토허제', '2025-10-16|규제지역': '서울 전역·경기 12곳 규제지역', '2025-10-16|대출': '10·15 주담대 한도 축소·LTV 40%',
   '2025-09-08|대출': '9·7 규제지역 LTV 40%·전세대출 2억', '2025-07-01|대출': '스트레스 DSR 3단계', '2025-06-28|대출': '6·27 수도권 주담대 6억 한도', '2025-03-24|토허': '강남3구·용산 토허제', '2025-02-13|토허': '잠실·삼성·대치·청담 토허 해제' };
@@ -695,7 +732,7 @@ const PSHORT = { '2026-07-31|세금': '세제개편안: 다주택 양도세 중�
 
 (function fontCheck() {
   const ok = () => { if (!document.fonts) return false; let y = false; document.fonts.forEach(f => { if (f.family.replace(/"/g, '') === 'IBM Plex Sans KR' && f.status === 'loaded') y = true; }); return y; };
-  const show = () => { $('#fontChk').textContent = ok() ? '글꼴: IBM Plex Sans KR' : '글꼴: IBM Plex Sans KR을 불러오지 못해 기기 기본 글꼴(맑은 고딕 등)로 보입니다'; };
+  const show = () => { $('#fontChk').textContent = (ok() ? '글꼴: IBM Plex Sans KR' : '글꼴: IBM Plex Sans KR을 불러오지 못해 기기 기본 글꼴(맑은 고딕 등)로 보입니다') + (window.HC_WEB ? (HC_WEB.ok ? ' · 기록: 서버 저장(모든 기기)' : HC_WEB.bad ? ' · 기록: 비밀 문구가 달라 이 기기에만' : ' · 기록: 이 기기에만') : ''); };
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(show); setTimeout(show, 2500); show();
 })();
 
@@ -811,6 +848,27 @@ const POI = D.v2_poi || { st: [], hosp: [], mart: [], mid: [] };
 const STBY = {}; POI.st.forEach(s => (STBY[s[0]] = STBY[s[0]] || []).push(s));
 const distM = (la1, lo1, la2, lo2) => { const dx = (lo2 - lo1) * 111320 * Math.cos(la1 * Math.PI / 180), dy = (la2 - la1) * 110540; return Math.hypot(dx, dy); };
 const PST = { '개통': 'none', '착공': 'good', '확정': 'acc', '계획': 'none', '예타 탈락': 'bad', '취소': 'bad' };
+/* D8 정비사업 시간: 지금 단계 → 입주까지 남은 해(서울 단계 사이 중앙값 합, 25~75% 범위). 착공 → 입주는 🔧 3년(데이터 없음).
+   📖 재개발은 조합설립인가 뒤 매수, 노후도(30년+) 미충족이면 불가, 가장 큰 위험은 시간 p.368~373 */
+const RDUR = {};
+(D.v2_rdur || []).forEach(r => { RDUR[(r.rd ? 'r' : 'b') + r.seg] = [+r.med, +r.p25, +r.p75]; });
+function redevLeft(z) {
+  const k = /재개발/.test(z.biz_type || '') ? 'r' : 'b', g = (s) => RDUR[k + s] || [0, 0, 0], BUILD = [3, 2.5, 3.5];
+  const st = z.stage_no || 0;
+  if (!st || st >= 8 || !RDUR[k + 'ci']) return null;
+  const segs = [st <= 1 ? g('zc') : st === 2 ? g('cc') : null, st <= 4 ? (st === 4 ? g('ci').map(x => x / 2) : g('ci')) : null, st <= 5 ? g('im') : null, st <= 6 ? g('mk') : null, BUILD].filter(Boolean);
+  const el = z.since ? (new Date(D.asof) - new Date(z.since)) / 3.156e10 : 0;   // 지금 단계에서 지난 해
+  const sum = (i) => Math.max(0.5, segs.reduce((a, s) => a + s[i], 0) - Math.min(el, segs[0][i]));
+  return { med: sum(0), lo: sum(1), hi: sum(2), el };
+}
+function redevNote(z) {
+  const L = redevLeft(z), rd = /재개발/.test(z.biz_type || ''), out = [];
+  if (rd && (z.stage_no || 0) < 3) out.push('<span class="pill warn">조합설립 전: 매수 이르다</span>');
+  if (L) out.push(`입주까지 보통 ${L.med.toFixed(0)}년(${L.lo.toFixed(0)}~${L.hi.toFixed(0)}년)`);
+  const y = (z.old_built || '').match(/(19|20)\d{2}/g);
+  if (y && (z.stage_no || 0) <= 2) { const age = YEAR - Math.max(...y.map(Number)); out.push(`기존 주택 ${z.old_built}년 준공${age >= 30 ? '(모두 30년+)' : `(일부 30년 미만)`}`); }
+  return out.join(' · ');
+}
 function devHtml(seq) {
   const inf = INFO[seq] || [], rc = inf[1] || (main(seq) || {}).rc, umd = inf[2] || (main(seq) || {}).umd, la = inf[3], lo = inf[4];
   let near = (D.v2_proj || []).map(p => {
@@ -831,7 +889,9 @@ function devHtml(seq) {
     + (far.length ? `<p class="muted" style="font-size:12.5px">같은 시군구지만 새 역 위치가 없어 거리를 확인하지 못한 사업: ${far.join(', ')}</p>` : '')
     + `<p style="font-weight:700;font-size:13.5px;margin-top:10px">주변 정비사업 <span class="muted" style="font-weight:400">${rn(rc)} ${zones.length}곳</span></p>`
     + (zones.length ? `<div class="row">${Object.entries(byStage).sort((a, b) => b[1] - a[1]).map(([k, n]) => `<span class="pill none">${k} ${n}</span>`).join('')}</div>` : '')
-    + (sameDong.length ? sameDong.slice(0, 6).map(z => `<div class="proj"><span class="pill ${z.stage_no >= 3 ? 'acc' : 'warn'}">${z.stage}</span><span>${z.zone_nm} <span class="muted">${z.biz_type || ''}</span></span></div>`).join('') : `<p class="muted">${umd || '같은 동'}에는 진행 중인 정비구역이 없습니다.</p>`);
+    + (sameDong.length ? sameDong.slice(0, 6).map(z => `<div class="proj"><span class="pill ${z.stage_no >= 3 ? 'acc' : 'warn'}">${z.stage}</span><span>${z.zone_nm} <span class="muted">${z.biz_type || ''}</span></span><span class="o">${redevNote(z)}</span></div>`).join('')
+        + '<p class="src">입주까지 = 서울 정비구역이 단계 사이에 걸린 해의 중앙값 합(다음 단계까지 간 구역만이라 실제는 더 길 수 있음), 착공 뒤 3년 가정. 재개발은 조합설립 뒤가 매수 시점이고, 가장 큰 위험은 시간입니다.</p>'
+      : `<p class="muted">${umd || '같은 동'}에는 진행 중인 정비구역이 없습니다.</p>`);
 }
 
 /* ───── 단지 상세 ───── */
@@ -946,17 +1006,59 @@ function drawWatch() {
 $('#wList').addEventListener('click', (e) => { const h = e.target.closest('.heart'); if (h) { toggleWatch(h.dataset.s); return; } const o = e.target.closest('.open'); if (o) openCx(o.dataset.s); });
 watchChanged.push(drawWatch);
 
+/* 임장 기록: 동선 → 단지 안 → 정리. 📖 서술형 체크리스트 p.227, 역세권 700m·도보 10분 p.228(H1 p.220), 단점 감내·환금성 p.229 (화면에는 책 표시 안 함) */
 (function visits() {
-  const CH = ['역까지 걸어 봄', '동·층 확인', '호가 물어봄', '전세·급매 분위기'];
-  $('#v_checks').innerHTML = CH.map((c, i) => `<label style="display:flex;gap:8px;align-items:center;font-size:13.5px;color:var(--ink)"><input type="checkbox" id="v_c${i}" style="width:auto"> ${c}</label>`).join('');
+  const ROUTE = [['평지·밝은 길', 1], ['상가·프랜차이즈 많음', 1], ['오르막', -1], ['어두운 골목', -1], ['유흥가 지남', -1], ['큰길 건넘', -1]];
+  const ENV = ['쓰레기·재활용장 위치', '조경·청결', '단지 안 경사', '산책 공간', '인도·차도 분리', '지하주차장·이중주차', '동별 조망 차이'];
+  const OK = ['단점 감내 가능', '고민 필요', '단점이 큼'];
+  const chip = (name, i, lab, cls = '') => `<label class="chip ${cls}"><input type="checkbox" name="${name}" value="${i}"><span>${lab}</span></label>`;
+  $('#v_route').innerHTML = ROUTE.map(([l, g], i) => chip('vr', i, l, g > 0 ? 'g' : 'b')).join('');
+  $('#v_env').innerHTML = ENV.map((l, i) => `<div class="tri"><span>${l}</span><span class="seg3" role="group" aria-label="${l}">${['좋음', '보통', '아쉬움'].map((t, j) => `<button type="button" data-i="${i}" data-v="${1 - j}" aria-pressed="false">${t}</button>`).join('')}</span></div>`).join('');
+  $('#v_ok').innerHTML = OK.map((l, i) => `<label class="chip ${['g', '', 'b'][i]}"><input type="radio" name="vok" value="${i}"><span>${l}</span></label>`).join('');
+  $('#v_env').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; const on = b.getAttribute('aria-pressed') !== 'true'; b.parentNode.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', 'false')); b.setAttribute('aria-pressed', on); });
+  const hint = () => { const inf = INFO[$('#v_cx').value] || [], m = inf[6];
+    $('#v_walkHint').textContent = m ? `지도상 ${inf[5] || '가까운 역'}까지 직선 ${Math.round(m)}m(걸어서 약 ${Math.round(m * 1.3 / 67)}분 추정). 10분 넘으면 역세권 밖으로 봅니다.` : '10분 넘으면 역세권 밖으로 봅니다.'; };
+  $('#v_cx').addEventListener('change', hint);
+  watchChanged.push(hint);
   $('#v_date').value = D.asof;
+  const walkCl = (w) => w == null ? '' : w <= 10 ? 'good' : w <= 15 ? 'warn' : 'bad';
   const draw = () => {
     const L = store.get('v2-visits', []);
-    $('#vList').innerHTML = L.length ? L.slice().reverse().map(v => `<div class="note"><b>${cxName(v.s)} <span class="muted" style="font-weight:400">${dt(v.d)} · 느낌 ${'●'.repeat(v.sc)}${'○'.repeat(5 - v.sc)}</span></b><span>${v.c.map((x, i) => x ? `✓ ${CH[i]}` : '').filter(Boolean).join(' · ') || '체크 없음'}</span>${v.n ? `<span class="muted">${v.n}</span>` : ''}</div>`).join('')
-      : '<p class="muted">아직 기록이 없습니다. 다녀온 날 위에 남겨 보세요.</p>';
+    $('#vList').innerHTML = L.length ? L.slice().reverse().map(v => {
+      if (v.c) return `<div class="note"><b>${cxName(v.s)} <span class="muted" style="font-weight:400">${dt(v.d)}</span></b>${v.n ? `<span class="muted">${v.n}</span>` : ''}</div>`;   // 예전 형식
+      const env = Object.entries(v.env || {}), good = env.filter(([, x]) => x > 0).map(([i]) => ENV[i]), bad = env.filter(([, x]) => x < 0).map(([i]) => ENV[i]);
+      const rt = (v.route || []).map(i => `<span class="pill ${ROUTE[i][1] > 0 ? 'good' : 'bad'}">${ROUTE[i][0]}</span>`).join(' ');
+      return `<div class="note"><b>${cxName(v.s)} <span class="muted" style="font-weight:400">${dt(v.d)} · 느낌 ${'●'.repeat(v.sc)}${'○'.repeat(5 - v.sc)}</span></b>
+        <span>${v.walk != null ? `<span class="pill ${walkCl(v.walk)}">역 걸어서 ${v.walk}분</span> ` : ''}${rt}</span>
+        ${good.length ? `<span>좋음: ${good.join(', ')}</span>` : ''}${bad.length ? `<span style="color:var(--bad)">아쉬움: ${bad.join(', ')}</span>` : ''}
+        ${v.pro ? `<span>＋ ${v.pro}</span>` : ''}${v.con ? `<span>－ ${v.con}</span>` : ''}${v.ok != null ? `<span class="pill ${['good', 'warn', 'bad'][v.ok]}">${OK[v.ok]}</span>` : ''}
+        ${v.n ? `<span class="muted">${v.n}</span>` : ''}</div>`; }).join('')
+      : '<p class="muted">아직 기록이 없습니다. 다녀온 날 위에 남겨 보세요. 모든 조건을 갖춘 집은 없으니, 장점과 감내할 단점을 함께 적어 두세요.</p>';
   };
-  $('#visitForm').addEventListener('submit', (e) => { e.preventDefault(); const L = store.get('v2-visits', []); L.push({ s: $('#v_cx').value, d: $('#v_date').value, sc: +$('#v_score').value, c: CH.map((_, i) => $('#v_c' + i).checked), n: $('#v_note').value }); store.set('v2-visits', L); $('#v_note').value = ''; draw(); });
-  draw();
+  $('#visitForm').addEventListener('submit', (e) => { e.preventDefault();
+    const env = {}; $('#v_env').querySelectorAll('button[aria-pressed="true"]').forEach(b => env[b.dataset.i] = +b.dataset.v);
+    const w = parseFloat($('#v_walk').value), ok = document.querySelector('input[name="vok"]:checked');
+    const L = store.get('v2-visits', []);
+    L.push({ s: $('#v_cx').value, d: $('#v_date').value, sc: +$('#v_score').value, walk: isFinite(w) ? w : null, route: [...document.querySelectorAll('input[name="vr"]:checked')].map(x => +x.value),
+      env, pro: $('#v_pro').value.trim(), con: $('#v_con').value.trim(), ok: ok ? +ok.value : null, n: $('#v_note').value.trim() });
+    store.set('v2-visits', L); $('#visitForm').reset(); $('#v_date').value = D.asof; $('#v_env').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', 'false')); hint(); draw(); });
+  hint(); draw();
+})();
+
+/* I3 재개발 분리 시나리오: 지금 집 실거주 유지 + 재개발 물건(갭). 📖 갈아타기 시나리오 p.441, 시간 위험 p.368~373 */
+(function redevPlan() {
+  const v = (id) => parseFloat(String($(id).value).replace(/,/g, '')) || 0;
+  function draw() {
+    const pr = v('#r_price'), dep = v('#r_dep'), add = v('#r_add'), tax = pr * v('#r_tax') / 100, st = +$('#r_stage').value;
+    const cash = pr - dep + tax + Calc.brokerFee(pr) + Calc.legal(pr), L = redevLeft({ biz_type: '재개발', stage_no: st, since: null });
+    const total = cash + add, nw = v('#r_new'), gain = nw - pr - add - tax;
+    $('#rdKpis').innerHTML = `
+      <div class="kpi"><span class="k">지금 들어갈 현금</span><span class="v">${man(cash)}</span><span class="d">취득세 ${man(tax)} 포함</span></div>
+      <div class="kpi"><span class="k">입주 때 더 낼 돈</span><span class="v">${man(add)}</span><span class="d">합계 ${man(total)}</span></div>
+      <div class="kpi"><span class="k">기다리는 시간</span><span class="v">${L ? '약 ' + L.med.toFixed(0) + '년' : '–'}</span><span class="d">${L ? `짧으면 ${L.lo.toFixed(0)}년, 길면 ${L.hi.toFixed(0)}년` : ''}</span></div>
+      <div class="kpi"><span class="k">입주 뒤 남는 몫</span><span class="v ${gain >= 0 ? 'up' : 'dn'}">${man(gain)}</span><span class="d">새 시세 − 매수가 − 분담금 − 취득세${L ? ` · 해마다 ${man(gain / L.med)}` : ''}</span></div>`;
+  }
+  $('#rdForm').addEventListener('input', draw); draw();
 })();
 
 /* ───── ④ 상세: 관심 단지 매일 보기 ───── */

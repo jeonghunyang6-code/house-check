@@ -33,6 +33,8 @@ FRESH = re.compile(rf"({ACT})\s?(한다|된다|하기로|키로|했다|됐다|�
 STALE = re.compile(r"앞서|지난해|작년|지난\s?\d+월|올해\s?\d+월|지난달|이후|이래|당시|지났|검토|가능성|요구|촉구|전망|관측|거론|기로|여부|충족|"
                    r"우려|논의|할지|할까|될까|될지|듯|만약|주장|제안|요청|건의|촉각|했지만|됐지만|에도")
 SOON = re.compile(r"오늘|내일|이날|부터")
+# 아파트 실수요와 먼 토허(외국인·그린벨트·산단 개발 예정지)는 문장째 뺀다
+OFF = re.compile(r"외국인|그린벨트|자연녹지|산단|산업단지|사업지구|개발\s?예정지|개발사업|경제자유구역|국방")
 SPLIT = re.compile(r"(?<=[.!?])\s+|\.\.\.|…")
 MIN_PRESS = 3        # 🔧 서로 다른 언론사 수
 NEAR_KNOWN = 10      # 이미 아는 사건(EVENTS)과 같은 종류로 ±10일 안이면 '이미 있음'
@@ -75,7 +77,7 @@ def decisions(text: str, pub: date) -> dict[str, set[str]]:
     day_re = re.compile(r"(?<!\d)(" + "|".join(str(d) for d in days) + r")일")
     out: dict[str, set[str]] = {}
     for s in SPLIT.split(text):
-        if STALE.search(s) or not FRESH.search(s) or not (day_re.search(s) or SOON.search(s)):
+        if STALE.search(s) or OFF.search(s) or not FRESH.search(s) or not (day_re.search(s) or SOON.search(s)):
             continue
         if any(int(m) not in months for m in re.findall(r"(\d{1,2})월\s?\d{1,2}일", s)):   # '7월 1일부터 지정했다'(10월 기사) = 지난 일
             continue
@@ -124,6 +126,8 @@ def candidates(articles: list[dict], today: date, days: int = 3) -> list[Cand]:
     out = []
     for c in by.values():
         if len(c.press) < MIN_PRESS:
+            continue
+        if c.kind in ("토허", "규제지역") and not c.region_hits:   # 지역 규제는 수도권 시군구가 나와야(대전·세종 등 지방 토허 제외)
             continue
         for d, k, t, _ in EVENTS:
             if k == c.kind and abs((d - c.first).days) <= NEAR_KNOWN:
