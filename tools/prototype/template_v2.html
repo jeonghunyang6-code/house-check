@@ -415,6 +415,19 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
         <div class="legend" id="fundLegend"></div>
         <p class="src">쓸 수 있는 돈 = 판 돈 − 매도 중개보수 − 남은 대출 + 현금. 1주택 갈아타기(양도세 비과세 가정), 목표 집 부대비용 포함. 대출 가능 여부는 찾기 탭 규칙과 은행 확인.</p>
       </div>
+      <div class="card">
+        <h2>재개발로 분리하면 <small>지금 집에 살면서</small></h2>
+        <form class="form" id="rdForm" autocomplete="off">
+          <label for="r_price">재개발 물건 매수가 (만원)<input id="r_price" inputmode="numeric" value="70000"></label>
+          <label for="r_dep">그 집 전세·보증금 (만원)<input id="r_dep" inputmode="numeric" value="20000"></label>
+          <label for="r_add">예상 추가분담금 (만원)<input id="r_add" inputmode="numeric" value="30000"></label>
+          <label for="r_tax">취득세율 (%)<input id="r_tax" inputmode="decimal" value="8.4"></label>
+          <label for="r_stage" style="grid-column:1/-1">지금 단계<select id="r_stage"><option value="3">조합설립</option><option value="5" selected>사업시행</option><option value="6">관리처분</option><option value="7">착공</option></select></label>
+          <label for="r_new" style="grid-column:1/-1">입주 뒤 예상 새 아파트 시세 (만원)<input id="r_new" inputmode="numeric" value="150000"></label>
+        </form>
+        <div class="kpis" id="rdKpis"></div>
+        <p class="src">지금 들어갈 현금 = 매수가 − 보증금 + 취득세 + 중개·법무. 취득세 8.4% = 조정지역 2주택 중과(지방교육세 포함) 가정 — 물건 종류(주택·입주권)·지역에 따라 다르니 세무 확인. 기다리는 해 = 서울 재개발 단계 사이 중앙값 합 + 착공 뒤 3년. 이주비 대출·이자는 넣지 않음.</p>
+      </div>
     </div>
   </section>
 
@@ -835,6 +848,27 @@ const POI = D.v2_poi || { st: [], hosp: [], mart: [], mid: [] };
 const STBY = {}; POI.st.forEach(s => (STBY[s[0]] = STBY[s[0]] || []).push(s));
 const distM = (la1, lo1, la2, lo2) => { const dx = (lo2 - lo1) * 111320 * Math.cos(la1 * Math.PI / 180), dy = (la2 - la1) * 110540; return Math.hypot(dx, dy); };
 const PST = { '개통': 'none', '착공': 'good', '확정': 'acc', '계획': 'none', '예타 탈락': 'bad', '취소': 'bad' };
+/* D8 정비사업 시간: 지금 단계 → 입주까지 남은 해(서울 단계 사이 중앙값 합, 25~75% 범위). 착공 → 입주는 🔧 3년(데이터 없음).
+   📖 재개발은 조합설립인가 뒤 매수, 노후도(30년+) 미충족이면 불가, 가장 큰 위험은 시간 p.368~373 */
+const RDUR = {};
+(D.v2_rdur || []).forEach(r => { RDUR[(r.rd ? 'r' : 'b') + r.seg] = [+r.med, +r.p25, +r.p75]; });
+function redevLeft(z) {
+  const k = /재개발/.test(z.biz_type || '') ? 'r' : 'b', g = (s) => RDUR[k + s] || [0, 0, 0], BUILD = [3, 2.5, 3.5];
+  const st = z.stage_no || 0;
+  if (!st || st >= 8 || !RDUR[k + 'ci']) return null;
+  const segs = [st <= 1 ? g('zc') : st === 2 ? g('cc') : null, st <= 4 ? (st === 4 ? g('ci').map(x => x / 2) : g('ci')) : null, st <= 5 ? g('im') : null, st <= 6 ? g('mk') : null, BUILD].filter(Boolean);
+  const el = z.since ? (new Date(D.asof) - new Date(z.since)) / 3.156e10 : 0;   // 지금 단계에서 지난 해
+  const sum = (i) => Math.max(0.5, segs.reduce((a, s) => a + s[i], 0) - Math.min(el, segs[0][i]));
+  return { med: sum(0), lo: sum(1), hi: sum(2), el };
+}
+function redevNote(z) {
+  const L = redevLeft(z), rd = /재개발/.test(z.biz_type || ''), out = [];
+  if (rd && (z.stage_no || 0) < 3) out.push('<span class="pill warn">조합설립 전: 매수 이르다</span>');
+  if (L) out.push(`입주까지 보통 ${L.med.toFixed(0)}년(${L.lo.toFixed(0)}~${L.hi.toFixed(0)}년)`);
+  const y = (z.old_built || '').match(/(19|20)\d{2}/g);
+  if (y && (z.stage_no || 0) <= 2) { const age = YEAR - Math.max(...y.map(Number)); out.push(`기존 주택 ${z.old_built}년 준공${age >= 30 ? '(모두 30년+)' : `(일부 30년 미만)`}`); }
+  return out.join(' · ');
+}
 function devHtml(seq) {
   const inf = INFO[seq] || [], rc = inf[1] || (main(seq) || {}).rc, umd = inf[2] || (main(seq) || {}).umd, la = inf[3], lo = inf[4];
   let near = (D.v2_proj || []).map(p => {
@@ -855,7 +889,9 @@ function devHtml(seq) {
     + (far.length ? `<p class="muted" style="font-size:12.5px">같은 시군구지만 새 역 위치가 없어 거리를 확인하지 못한 사업: ${far.join(', ')}</p>` : '')
     + `<p style="font-weight:700;font-size:13.5px;margin-top:10px">주변 정비사업 <span class="muted" style="font-weight:400">${rn(rc)} ${zones.length}곳</span></p>`
     + (zones.length ? `<div class="row">${Object.entries(byStage).sort((a, b) => b[1] - a[1]).map(([k, n]) => `<span class="pill none">${k} ${n}</span>`).join('')}</div>` : '')
-    + (sameDong.length ? sameDong.slice(0, 6).map(z => `<div class="proj"><span class="pill ${z.stage_no >= 3 ? 'acc' : 'warn'}">${z.stage}</span><span>${z.zone_nm} <span class="muted">${z.biz_type || ''}</span></span></div>`).join('') : `<p class="muted">${umd || '같은 동'}에는 진행 중인 정비구역이 없습니다.</p>`);
+    + (sameDong.length ? sameDong.slice(0, 6).map(z => `<div class="proj"><span class="pill ${z.stage_no >= 3 ? 'acc' : 'warn'}">${z.stage}</span><span>${z.zone_nm} <span class="muted">${z.biz_type || ''}</span></span><span class="o">${redevNote(z)}</span></div>`).join('')
+        + '<p class="src">입주까지 = 서울 정비구역이 단계 사이에 걸린 해의 중앙값 합(다음 단계까지 간 구역만이라 실제는 더 길 수 있음), 착공 뒤 3년 가정. 재개발은 조합설립 뒤가 매수 시점이고, 가장 큰 위험은 시간입니다.</p>'
+      : `<p class="muted">${umd || '같은 동'}에는 진행 중인 정비구역이 없습니다.</p>`);
 }
 
 /* ───── 단지 상세 ───── */
@@ -1007,6 +1043,22 @@ watchChanged.push(drawWatch);
       env, pro: $('#v_pro').value.trim(), con: $('#v_con').value.trim(), ok: ok ? +ok.value : null, n: $('#v_note').value.trim() });
     store.set('v2-visits', L); $('#visitForm').reset(); $('#v_date').value = D.asof; $('#v_env').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', 'false')); hint(); draw(); });
   hint(); draw();
+})();
+
+/* I3 재개발 분리 시나리오: 지금 집 실거주 유지 + 재개발 물건(갭). 📖 갈아타기 시나리오 p.441, 시간 위험 p.368~373 */
+(function redevPlan() {
+  const v = (id) => parseFloat(String($(id).value).replace(/,/g, '')) || 0;
+  function draw() {
+    const pr = v('#r_price'), dep = v('#r_dep'), add = v('#r_add'), tax = pr * v('#r_tax') / 100, st = +$('#r_stage').value;
+    const cash = pr - dep + tax + Calc.brokerFee(pr) + Calc.legal(pr), L = redevLeft({ biz_type: '재개발', stage_no: st, since: null });
+    const total = cash + add, nw = v('#r_new'), gain = nw - pr - add - tax;
+    $('#rdKpis').innerHTML = `
+      <div class="kpi"><span class="k">지금 들어갈 현금</span><span class="v">${man(cash)}</span><span class="d">취득세 ${man(tax)} 포함</span></div>
+      <div class="kpi"><span class="k">입주 때 더 낼 돈</span><span class="v">${man(add)}</span><span class="d">합계 ${man(total)}</span></div>
+      <div class="kpi"><span class="k">기다리는 시간</span><span class="v">${L ? '약 ' + L.med.toFixed(0) + '년' : '–'}</span><span class="d">${L ? `짧으면 ${L.lo.toFixed(0)}년, 길면 ${L.hi.toFixed(0)}년` : ''}</span></div>
+      <div class="kpi"><span class="k">입주 뒤 남는 몫</span><span class="v ${gain >= 0 ? 'up' : 'dn'}">${man(gain)}</span><span class="d">새 시세 − 매수가 − 분담금 − 취득세${L ? ` · 해마다 ${man(gain / L.med)}` : ''}</span></div>`;
+  }
+  $('#rdForm').addEventListener('input', draw); draw();
 })();
 
 /* ───── ④ 상세: 관심 단지 매일 보기 ───── */

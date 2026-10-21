@@ -226,7 +226,19 @@ out['v2_poi'] = {
   'hosp': [[r['name'], r['kind'], round(float(r['lat']), 5), round(float(r['lng']), 5)] for r in select(db, "SELECT name, kind, lat, lng FROM hospital WHERE lat IS NOT NULL")],
   'mart': [[r['name'], r['brand'], round(float(r['lat']), 5), round(float(r['lng']), 5)] for r in select(db, "SELECT name, brand, lat, lng FROM mart WHERE lat IS NOT NULL")],
   'mid': [[r['name'], round(float(r['lat']), 5), round(float(r['lng']), 5)] for r in select(db, "SELECT name, lat, lng FROM mid_school WHERE lat IS NOT NULL")]}
-out['v2_redev'] = select(db, "SELECT src, region_code rc, umd_name umd, zone_nm, biz_type, stage, stage_no FROM redev_zone WHERE region_code IS NOT NULL AND coalesce(stage_no, 0) < 8")
+# since = 지금 단계에 들어간 날(단계별 날짜 열). old_built = 기존 주택 준공연도(경기만)
+out['v2_redev'] = select(db, """SELECT src, region_code rc, umd_name umd, zone_nm, biz_type, stage, stage_no, old_built,
+  (CASE stage_no WHEN 1 THEN zone_ymd WHEN 2 THEN committee_ymd WHEN 3 THEN assoc_ymd WHEN 4 THEN assoc_ymd WHEN 5 THEN impl_ymd
+     WHEN 6 THEN mgmt_ymd WHEN 7 THEN construction_ymd END)::text since
+  FROM redev_zone WHERE region_code IS NOT NULL AND coalesce(stage_no, 0) < 8""")
+# D8 시간 위험: 서울 정비사업 단계 사이 걸린 해(다음 단계에 간 구역만 → 실제보다 짧게 나옴). rd = 재개발 여부
+_seg = {"zc": ("zone_ymd", "assoc_ymd"), "cc": ("committee_ymd", "assoc_ymd"), "ci": ("assoc_ymd", "impl_ymd"),
+        "im": ("impl_ymd", "mgmt_ymd"), "mk": ("mgmt_ymd", "construction_ymd")}
+out['v2_rdur'] = [r | {"seg": k} for k, (a, b) in _seg.items() for r in select(db, f"""SELECT biz_type LIKE '%재개발%' rd, count(*) n,
+  round((percentile_cont(0.5) WITHIN GROUP (ORDER BY ({b} - {a}) / 365.0))::numeric, 1) med,
+  round((percentile_cont(0.25) WITHIN GROUP (ORDER BY ({b} - {a}) / 365.0))::numeric, 1) p25,
+  round((percentile_cont(0.75) WITHIN GROUP (ORDER BY ({b} - {a}) / 365.0))::numeric, 1) p75
+  FROM redev_zone WHERE src = 'seoul' AND {a} IS NOT NULL AND {b} > {a} GROUP BY 1""")]
 out['v2_e6t'] = [[r['apt_seq'], r['target_seq'], float(r['ratio_now']), float(r['gap_pct']), r['dist_m'], r['tname']] for r in select(db,
   "SELECT e.apt_seq, e.target_seq, e.ratio_now, e.gap_pct, e.dist_m, c.apt_name tname FROM e6_targets e JOIN complexes c ON c.apt_seq = e.target_seq ORDER BY e.apt_seq, e.rank")]
 out['v2_drive'] = {}
