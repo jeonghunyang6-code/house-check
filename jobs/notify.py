@@ -121,7 +121,7 @@ def main(argv: list[str] | None = None) -> int:
         if a.dry:
             print(text)
             return 0
-        print(f"  {a.mode}: {T.send(db, text)} ({len(text)}자)")
+        print(f"  {a.mode}: {T.send(db, text, force=a.mode == 'test')} ({len(text)}자)")
     except (DbError, T.TelegramError) as e:
         print(f"[notify] 실패: {e}", file=sys.stderr)
         return 1
