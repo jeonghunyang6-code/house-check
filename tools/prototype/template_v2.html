@@ -185,6 +185,22 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
 .proj .o { grid-column: 2; font-size: 12px; color: var(--ink-3); }
 .notes { display: grid; gap: 8px; }
 .note { background: var(--sunk); border-radius: 10px; padding: 10px 12px; font-size: 13.5px; display: grid; gap: 2px; }
+.vsec { display: grid; gap: 6px; padding: 10px 0 4px; border-top: 1px solid var(--line); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; cursor: pointer; }
+.chip input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.chip span { font-size: 13px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-2); background: var(--surface); }
+.chip input:checked + span { color: var(--on-strong); background: var(--ink-2); border-color: var(--ink-2); }
+.chip.g input:checked + span { background: var(--good); border-color: var(--good); }
+.chip.b input:checked + span { background: var(--bad); border-color: var(--bad); }
+.chip input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tri { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 4px 0; font-size: 13.5px; }
+.seg3 { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; flex: none; }
+.seg3 button { font: inherit; font-size: 12.5px; border: 0; background: var(--surface); color: var(--ink-2); padding: 5px 8px; cursor: pointer; }
+.seg3 button + button { border-left: 1px solid var(--line); }
+.seg3 button[aria-pressed="true"][data-v="1"] { background: var(--good); color: var(--on-strong); }
+.seg3 button[aria-pressed="true"][data-v="0"] { background: var(--ink-3); color: var(--on-strong); }
+.seg3 button[aria-pressed="true"][data-v="-1"] { background: var(--bad); color: var(--on-strong); }
 .fontchk { font-size: 11px; color: var(--ink-3); text-align: center; padding-block: 4px 12px; }
 </style>
 
@@ -311,8 +327,16 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
           <label for="v_cx" style="grid-column:1/-1">단지<select id="v_cx"></select></label>
           <label for="v_date">다녀온 날<input id="v_date" type="date"></label>
           <label for="v_score">느낌 (1~5)<select id="v_score"><option>5</option><option>4</option><option selected>3</option><option>2</option><option>1</option></select></label>
-          <div style="grid-column:1/-1;display:grid;gap:4px;font-size:13.5px" id="v_checks"></div>
-          <label for="v_note" style="grid-column:1/-1">메모<input id="v_note" placeholder="예: 역까지 오르막, 105동 남향 좋음, 호가 15.5억" style="text-align:left"></label>
+          <div class="vsec" style="grid-column:1/-1"><b>① 역까지 동선</b>
+            <label for="v_walk">역까지 실제 걸어 본 시간 (분)<input id="v_walk" inputmode="numeric" placeholder="출퇴근 시간대에"></label>
+            <p class="muted" id="v_walkHint" style="margin:2px 0 0;font-size:12.5px"></p>
+            <div class="chips" id="v_route"></div></div>
+          <div class="vsec" style="grid-column:1/-1"><b>② 단지 안</b><div id="v_env"></div></div>
+          <div class="vsec" style="grid-column:1/-1"><b>③ 정리</b>
+            <label for="v_pro">사람들이 찾는 이유 (장점)<input id="v_pro" placeholder="예: 역 평지 5분, 초품아" style="text-align:left"></label>
+            <label for="v_con">단점<input id="v_con" placeholder="예: 이중주차, 104동 조망 막힘" style="text-align:left"></label>
+            <div class="chips" id="v_ok"></div></div>
+          <label for="v_note" style="grid-column:1/-1">메모<input id="v_note" placeholder="예: 105동 남향 좋음, 호가 15.5억" style="text-align:left"></label>
           <button type="submit" class="more" style="grid-column:1/-1">기록 남기기</button>
         </form>
         <div class="notes" id="vList"></div>
@@ -946,17 +970,43 @@ function drawWatch() {
 $('#wList').addEventListener('click', (e) => { const h = e.target.closest('.heart'); if (h) { toggleWatch(h.dataset.s); return; } const o = e.target.closest('.open'); if (o) openCx(o.dataset.s); });
 watchChanged.push(drawWatch);
 
+/* 임장 기록: 동선 → 단지 안 → 정리. 📖 서술형 체크리스트 p.227, 역세권 700m·도보 10분 p.228(H1 p.220), 단점 감내·환금성 p.229 (화면에는 책 표시 안 함) */
 (function visits() {
-  const CH = ['역까지 걸어 봄', '동·층 확인', '호가 물어봄', '전세·급매 분위기'];
-  $('#v_checks').innerHTML = CH.map((c, i) => `<label style="display:flex;gap:8px;align-items:center;font-size:13.5px;color:var(--ink)"><input type="checkbox" id="v_c${i}" style="width:auto"> ${c}</label>`).join('');
+  const ROUTE = [['평지·밝은 길', 1], ['상가·프랜차이즈 많음', 1], ['오르막', -1], ['어두운 골목', -1], ['유흥가 지남', -1], ['큰길 건넘', -1]];
+  const ENV = ['쓰레기·재활용장 위치', '조경·청결', '단지 안 경사', '산책 공간', '인도·차도 분리', '지하주차장·이중주차', '동별 조망 차이'];
+  const OK = ['단점 감내 가능', '고민 필요', '단점이 큼'];
+  const chip = (name, i, lab, cls = '') => `<label class="chip ${cls}"><input type="checkbox" name="${name}" value="${i}"><span>${lab}</span></label>`;
+  $('#v_route').innerHTML = ROUTE.map(([l, g], i) => chip('vr', i, l, g > 0 ? 'g' : 'b')).join('');
+  $('#v_env').innerHTML = ENV.map((l, i) => `<div class="tri"><span>${l}</span><span class="seg3" role="group" aria-label="${l}">${['좋음', '보통', '아쉬움'].map((t, j) => `<button type="button" data-i="${i}" data-v="${1 - j}" aria-pressed="false">${t}</button>`).join('')}</span></div>`).join('');
+  $('#v_ok').innerHTML = OK.map((l, i) => `<label class="chip ${['g', '', 'b'][i]}"><input type="radio" name="vok" value="${i}"><span>${l}</span></label>`).join('');
+  $('#v_env').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; const on = b.getAttribute('aria-pressed') !== 'true'; b.parentNode.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', 'false')); b.setAttribute('aria-pressed', on); });
+  const hint = () => { const inf = INFO[$('#v_cx').value] || [], m = inf[6];
+    $('#v_walkHint').textContent = m ? `지도상 ${inf[5] || '가까운 역'}까지 직선 ${Math.round(m)}m(걸어서 약 ${Math.round(m * 1.3 / 67)}분 추정). 10분 넘으면 역세권 밖으로 봅니다.` : '10분 넘으면 역세권 밖으로 봅니다.'; };
+  $('#v_cx').addEventListener('change', hint);
+  watchChanged.push(hint);
   $('#v_date').value = D.asof;
+  const walkCl = (w) => w == null ? '' : w <= 10 ? 'good' : w <= 15 ? 'warn' : 'bad';
   const draw = () => {
     const L = store.get('v2-visits', []);
-    $('#vList').innerHTML = L.length ? L.slice().reverse().map(v => `<div class="note"><b>${cxName(v.s)} <span class="muted" style="font-weight:400">${dt(v.d)} · 느낌 ${'●'.repeat(v.sc)}${'○'.repeat(5 - v.sc)}</span></b><span>${v.c.map((x, i) => x ? `✓ ${CH[i]}` : '').filter(Boolean).join(' · ') || '체크 없음'}</span>${v.n ? `<span class="muted">${v.n}</span>` : ''}</div>`).join('')
-      : '<p class="muted">아직 기록이 없습니다. 다녀온 날 위에 남겨 보세요.</p>';
+    $('#vList').innerHTML = L.length ? L.slice().reverse().map(v => {
+      if (v.c) return `<div class="note"><b>${cxName(v.s)} <span class="muted" style="font-weight:400">${dt(v.d)}</span></b>${v.n ? `<span class="muted">${v.n}</span>` : ''}</div>`;   // 예전 형식
+      const env = Object.entries(v.env || {}), good = env.filter(([, x]) => x > 0).map(([i]) => ENV[i]), bad = env.filter(([, x]) => x < 0).map(([i]) => ENV[i]);
+      const rt = (v.route || []).map(i => `<span class="pill ${ROUTE[i][1] > 0 ? 'good' : 'bad'}">${ROUTE[i][0]}</span>`).join(' ');
+      return `<div class="note"><b>${cxName(v.s)} <span class="muted" style="font-weight:400">${dt(v.d)} · 느낌 ${'●'.repeat(v.sc)}${'○'.repeat(5 - v.sc)}</span></b>
+        <span>${v.walk != null ? `<span class="pill ${walkCl(v.walk)}">역 걸어서 ${v.walk}분</span> ` : ''}${rt}</span>
+        ${good.length ? `<span>좋음: ${good.join(', ')}</span>` : ''}${bad.length ? `<span style="color:var(--bad)">아쉬움: ${bad.join(', ')}</span>` : ''}
+        ${v.pro ? `<span>＋ ${v.pro}</span>` : ''}${v.con ? `<span>－ ${v.con}</span>` : ''}${v.ok != null ? `<span class="pill ${['good', 'warn', 'bad'][v.ok]}">${OK[v.ok]}</span>` : ''}
+        ${v.n ? `<span class="muted">${v.n}</span>` : ''}</div>`; }).join('')
+      : '<p class="muted">아직 기록이 없습니다. 다녀온 날 위에 남겨 보세요. 모든 조건을 갖춘 집은 없으니, 장점과 감내할 단점을 함께 적어 두세요.</p>';
   };
-  $('#visitForm').addEventListener('submit', (e) => { e.preventDefault(); const L = store.get('v2-visits', []); L.push({ s: $('#v_cx').value, d: $('#v_date').value, sc: +$('#v_score').value, c: CH.map((_, i) => $('#v_c' + i).checked), n: $('#v_note').value }); store.set('v2-visits', L); $('#v_note').value = ''; draw(); });
-  draw();
+  $('#visitForm').addEventListener('submit', (e) => { e.preventDefault();
+    const env = {}; $('#v_env').querySelectorAll('button[aria-pressed="true"]').forEach(b => env[b.dataset.i] = +b.dataset.v);
+    const w = parseFloat($('#v_walk').value), ok = document.querySelector('input[name="vok"]:checked');
+    const L = store.get('v2-visits', []);
+    L.push({ s: $('#v_cx').value, d: $('#v_date').value, sc: +$('#v_score').value, walk: isFinite(w) ? w : null, route: [...document.querySelectorAll('input[name="vr"]:checked')].map(x => +x.value),
+      env, pro: $('#v_pro').value.trim(), con: $('#v_con').value.trim(), ok: ok ? +ok.value : null, n: $('#v_note').value.trim() });
+    store.set('v2-visits', L); $('#visitForm').reset(); $('#v_date').value = D.asof; $('#v_env').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', 'false')); hint(); draw(); });
+  hint(); draw();
 })();
 
 /* ───── ④ 상세: 관심 단지 매일 보기 ───── */
