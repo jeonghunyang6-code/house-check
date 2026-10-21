@@ -6,7 +6,7 @@ sys.path.insert(0, str(ROOT))
 OUT = ROOT / 'tools/prototype/out'; OUT.mkdir(exist_ok=True)
 from collector.db import connect, select
 from collector.regions import REGIONS
-db = connect('api')
+db = connect()   # HC_DB_BACKEND(기본 api). Actions(site.yml)는 psql
 out = {}
 # A. 서울 월별 거래량(해제 제외)과 84㎡ 중위 가격
 #    DB 에 없는 옛 달(저장 구조 C: 2년 이전은 보관 파일)은 deal_region_month 의 서울 합계('11')로 채운다
