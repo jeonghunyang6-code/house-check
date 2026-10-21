@@ -9,7 +9,7 @@ on:
     types: [completed]
   push:   # 임시: 화면 만들기 시험(합치기 전에 뺀다)
     branches: [claude/busy-meitner-ojizbi]
-    paths: [.github/workflows/site.yml]
+    paths: [.github/workflows/site.yml, tools/prototype/**, web/**]
   workflow_dispatch:
 
 permissions:
