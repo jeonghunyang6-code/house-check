@@ -1,0 +1,43 @@
+# 분양권·입주권 거래 (jobs/right_deals.py → right_deals, 0069). 신축·재건축은 등기 전까지 매매 자료에 없고 여기로만 신고된다.
+# 매일 새벽 최근 3개월을 다시 받아(늦은 신고·해제 반영) 아침 알림(notify)·화면(site) 전에 들어가게 한다. 필요한 시크릿: DATA_GO_KR_SERVICE_KEY, DATABASE_URL
+name: rights
+
+on:
+  schedule:
+    - cron: "17 19 * * *"   # 04:17 KST
+  workflow_dispatch:
+    inputs:
+      months:
+        description: "다시 받을 개월 수"
+        default: "3"
+      backfill:
+        description: "처음 채우기(새 거래 알림 안 함)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rights
+  cancel-in-progress: false
+
+jobs:
+  rights:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: psql 확인
+        run: command -v psql || (sudo apt-get update -q && sudo apt-get install -y -q postgresql-client)
+      - name: 분양권·입주권
+        env:
+          DATA_GO_KR_SERVICE_KEY: ${{ secrets.DATA_GO_KR_SERVICE_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          HC_DB_BACKEND: psql
+          HC_PAGE_SIZE: "1000"
+          PYTHONUNBUFFERED: "1"
+        run: python -m jobs.right_deals --months "${{ inputs.months || '3' }}" ${{ inputs.backfill && '--backfill' || '' }}

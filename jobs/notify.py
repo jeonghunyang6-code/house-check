@@ -53,16 +53,22 @@ def tag(d: dict) -> str:
 def deals(db: Db, seqs: list[str], days: int) -> list[dict]:
     if not seqs:
         return []
-    return select(db, f"""SELECT d.apt_seq, d.apt_name, d.area_m2, d.floor, d.price_10k, d.contract_date::text cd, d.deal_type, d.prev_high_10k, m.ref_10k
+    ins, since = ", ".join(lit(s) for s in seqs), f"(now() AT TIME ZONE 'Asia/Seoul')::date - {int(days)}"
+    # 매매 + 분양권·입주권(0069, 신축·재건축은 등기 전까지 여기만). kind 가 있으면 권리 거래
+    return select(db, f"""SELECT * FROM (
+SELECT d.apt_seq, d.apt_name, d.area_m2, d.floor, d.price_10k, d.contract_date::text cd, d.deal_type, d.prev_high_10k, m.ref_10k, NULL::text kind
 FROM deals d LEFT JOIN complex_metrics m ON m.apt_seq = d.apt_seq AND m.area_group = d.area_group
-WHERE NOT d.is_cancelled AND d.apt_seq IN ({', '.join(lit(s) for s in seqs)})
-  AND d.first_seen_date > (now() AT TIME ZONE 'Asia/Seoul')::date - {int(days)}
-ORDER BY d.apt_name, d.contract_date""")
+WHERE NOT d.is_cancelled AND d.apt_seq IN ({ins}) AND d.first_seen_date > {since}
+UNION ALL
+SELECT r.apt_seq, coalesce(k.kapt_name, r.apt_name), r.area_m2, r.floor, r.price_10k, r.contract_date::text, r.deal_type, NULL, NULL, r.kind
+FROM right_deals r LEFT JOIN complexes c ON c.apt_seq = r.apt_seq LEFT JOIN kapt_complexes k ON k.kapt_code = c.kapt_code
+WHERE NOT r.is_cancelled AND r.apt_seq IN ({ins}) AND r.first_seen_date > {since}) x
+ORDER BY apt_name, cd""")
 
 
 def deal_lines(rows: list[dict]) -> list[str]:
     return [f"• {html.escape(r['apt_name'])} {float(r['area_m2']):.0f}㎡ {r['floor']}층 <b>{eok(r['price_10k'])}</b>{tag(r)} · {r['cd'][5:]} 계약"
-            + (" · 직거래" if r["deal_type"] == "직거래" else "") for r in rows]
+            + (" · 직거래" if r["deal_type"] == "직거래" else "") + (f" · {r['kind']}" if r.get("kind") else "") for r in rows]
 
 
 def site(db: Db) -> str:
