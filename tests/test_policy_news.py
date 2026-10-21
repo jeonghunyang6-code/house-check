@@ -35,3 +35,12 @@ def test_candidates_threshold_and_known():
     assert new and new[0].known is None
     md = issue_md(new)
     assert "규제지역 · 2027-03-03 · 언론사 3곳" in md and "경기 구리시" in md
+
+
+def test_off_topic_and_non_capital():
+    # 외국인·그린벨트 토허, 수도권 지역이 안 나오는 토허는 후보가 아니다
+    assert decisions("포천시 전역을 외국인 토지거래허가구역으로 26일부터 지정한다고 밝혔다.", date(2025, 8, 26)) == {}
+    d = date(2023, 5, 24)
+    t = "세종시는 금남면 일원을 31일부터 토지거래허가구역으로 재지정한다고 24일 밝혔다."
+    assert decisions(t, d) == {"토허": set()}
+    assert candidates([{"id": f"https://{p}/a", "pub": d, "text": t} for p in ("a.kr", "b.kr", "c.kr")], d) == []
