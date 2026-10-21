@@ -57,7 +57,7 @@ def chat_id(db: Db, opener=urllib.request.urlopen) -> str | None:
         v = got[0]["v"]
         return str(json.loads(v) if isinstance(v, str) else v)
     ups = _call("getUpdates", {"limit": 20}, opener).get("result", [])
-    chats = [u["message"]["chat"]["id"] for u in ups if "message" in u]
+    chats = [u[k]["chat"]["id"] for u in ups for k in ("message", "edited_message", "my_chat_member") if k in u and "chat" in u[k]]
     if not chats:
         return None
     cid = str(chats[-1])
