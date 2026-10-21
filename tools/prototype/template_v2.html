@@ -509,7 +509,8 @@ function bandFor(p) {   // D1 가격대별 전세가율 정상 범위(compute.py
   return [30, 50];
 }
 /* 기준 시세가 없는 단지(검색·관심만): [seq, 이름, K-apt 이름(다르면), 시군구, 동, 준공, 세대, 최근 거래가, 날짜 YYMMDD, 평형, 3년 거래 수] */
-const SR = {}; (D.v2_srch || []).forEach(r => { SR[r[0]] = { n: r[1], kn: r[2], rc: r[3], umd: r[4], by: r[5], hh: r[6], lp: r[7], ld: r[8], la: r[9], n3: r[10], lat: r[11], lng: r[12], st: r[13], stm: r[14] }; });
+const SR = {}; (D.v2_srch || []).forEach(r => { SR[r[0]] = { n: r[1], kn: r[2], rc: r[3], umd: r[4], by: r[5], hh: r[6], lp: r[7], ld: r[8], la: r[9], n3: r[10], lat: r[11], lng: r[12], st: r[13], stm: r[14], pre: r[15] || null }; });
+const preNote = (x) => x.pre ? (x.pre === '?' ? '분양 단지(입주 전)' : `분양 단지 · 입주 ${x.pre.slice(0, 4)}.${x.pre.slice(4)}${x.pre <= D.asof.slice(0, 7).replace('-', '') ? '(등기 전)' : ' 예정'}`) : '';
 /* 분양권·입주권 거래(1년): 단지 → [[단지, YYMMDD, 평형, 층, 가격, 0, '입주권'|'분양권']] (매매 DEALS 와 같은 모양 + 7번째 칸) */
 const RG = {}; (D.v2_rights || []).forEach(r => (RG[r[0]] = RG[r[0]] || []).push([r[0], r[1], r[2], r[3], r[4], 0, r[5] ? '입주권' : '분양권']));
 const srInfo = (seq) => { const x = SR[seq]; return x ? [srName(x), x.rc, x.umd, x.lat, x.lng, x.st, x.stm] : []; };
@@ -519,8 +520,12 @@ function lastPx(seq) {
   const band = AREA === '84' ? [75, 99] : [50, 74], x = SR[seq];
   const all = [...(DEALS[seq] || []).filter(d => !d[5]).map(d => [d[1], d[2], d[4], '매매']), ...(RG[seq] || []).map(d => [d[1], d[2], d[4], d[6]])];
   if (x && x.lp) all.push([x.ld, x.la, x.lp, '매매']);
-  const pick = (a) => a.sort((p, q) => p[0] < q[0] ? 1 : -1)[0];
-  const b = pick(all.filter(d => d[1] >= band[0] && d[1] <= band[1])) || pick(all);
+  const pick = (a) => a.sort((p, q) => p[0] < q[0] ? 1 : -1)[0], inB = all.filter(d => d[1] >= band[0] && d[1] <= band[1]);
+  // 최근 3개월 평형대 거래가 3건 이상이면 중간값(한 건에 흔들리지 않게), 아니면 가장 최근 1건
+  const t1 = new Date(D.asof).getTime(), d3 = inB.filter(d => t1 - new Date(`20${d[0].slice(0, 2)}-${d[0].slice(2, 4)}-${d[0].slice(4)}`).getTime() <= 92 * 864e5);
+  if (d3.length >= 3) { const v = d3.map(d => d[2]).sort((a, b) => a - b), n = v.length, top = pick(d3), kinds = [...new Set(d3.map(d => d[3]))].join('·');
+    return { d: top[0], ag: top[1], p: (v[(n - 1) >> 1] + v[n >> 1]) / 2, k: `3개월 ${n}건 중간값(${kinds})`, n }; }
+  const b = pick(inB) || pick(all);
   return b ? { d: b[0], ag: b[1], p: b[2], k: b[3] } : null;
 }
 const pxOf = (seq) => cxRef(seq) || (lastPx(seq) || {}).p || null;
@@ -541,6 +546,11 @@ const TODAY_NEW = new Set((D.today || []).map(t => t.apt_seq));
 
 let watch = new Set(store.get('v2-watch2', CX.map(c => c.seq)));
 const watchChanged = [];
+(function movePresale() {   // 분양 단지가 단지 목록에 생겨 연결되면 ♡ 를 실제 단지로 옮김
+  const PM = D.v2_pmap || {}; let moved = false;
+  [...watch].forEach(s => { if (PM[s]) { watch.delete(s); watch.add(PM[s]); moved = true; } });
+  if (moved) store.set('v2-watch2', [...watch]);
+})();
 function toggleWatch(seq) { watch.has(seq) ? watch.delete(seq) : watch.add(seq); store.set('v2-watch2', [...watch]); watchChanged.forEach(f => f()); }
 
 /* 평형 선택 버튼(관심·상세·계획) */
@@ -857,7 +867,7 @@ function drawSearch() {
   qHits = q.length < 2 ? [] : SEARCH.filter(([, t]) => t.includes(q)).map(([seq]) => seq).sort((a, b) => (cxRef(b) || (SR[b] && SR[b].lp) || 0) - (cxRef(a) || (SR[a] && SR[a].lp) || 0)).slice(0, 15);
   $('#qList').innerHTML = q.length < 2 ? '' : qHits.map(seq => { const i = INFO[seq] || [], r = main(seq);
     if (!INFO[seq] && SR[seq]) { const x = SR[seq];   // 기준 시세 없는 단지
-      return `<div class="irow"><span class="open" style="cursor:default"><span class="nm">${srName(x)}</span><span class="sub">${rn(x.rc)} ${x.umd || ''}${x.by ? ' · ' + x.by + '년' : ''}${x.hh ? ' · ' + Number(x.hh).toLocaleString() + '세대' : ''}${x.kn && srName(x) !== x.n ? ' · 옛 이름 ' + x.n : ''}</span><span class="sub">${srNote(x, seq)} · 기준 시세 없음</span></span>
+      return `<div class="irow"><span class="open" style="cursor:default"><span class="nm">${srName(x)}</span><span class="sub">${rn(x.rc)} ${x.umd || ''}${x.pre ? ' · ' + preNote(x) : x.by ? ' · ' + x.by + '년' : ''}${x.hh ? ' · ' + Number(x.hh).toLocaleString() + '세대' : ''}${x.kn && srName(x) !== x.n ? ' · 옛 이름 ' + x.n : ''}</span><span class="sub">${srNote(x, seq)} · 기준 시세 없음</span></span>
         <span class="side"><span class="pr muted" style="font-weight:500">–</span><button type="button" class="heart" data-s="${seq}" aria-pressed="${watch.has(seq)}" aria-label="관심 단지">${watch.has(seq) ? '♥' : '♡'}</button></span></div>`; }
     return `<div class="irow"><button type="button" class="open" data-s="${seq}"><span class="nm">${cxName(seq)}</span><span class="sub">${rn(i[1])} ${i[2] || ''}${i[15] ? ' · ' + i[15] + '년' : ''}${i[16] ? ' · ' + Number(i[16]).toLocaleString() + '세대' : ''}${r ? ' · ' + r.ag + '㎡' : ''}</span></button>
       <span class="side"><span class="pr">${eok(cxRef(seq))}</span><button type="button" class="heart" data-s="${seq}" aria-pressed="${watch.has(seq)}" aria-label="관심 단지">${watch.has(seq) ? '♥' : '♡'}</button></span></div>`; }).join('') || '<p class="muted" style="padding:8px 0">찾는 단지가 없습니다. 수도권 K-apt 등록 단지와 3년 안 거래 3건 이상인 단지가 나옵니다.</p>';
@@ -1020,7 +1030,7 @@ function drawWatch() {
       <span class="tags">${agTag(seq)}${phPill(c && c.rph ? c.rph.phase : r && r.phase)}${TODAY_NEW.has(seq) ? '<span class="pill acc">새 거래</span>' : ''}${c && (c.redev || []).length ? `<span class="pill acc">정비 ${c.redev[0].stage}</span>` : r && r.stage ? `<span class="pill acc">정비 ${r.stage}</span>` : ''}</span></button>
       <span class="side"><span class="pr">${eok(cxRef(seq))}</span>${c ? spark(c) : qspark(seq)}<button type="button" class="heart" data-s="${seq}" aria-pressed="true" aria-label="관심 해제">♥</button></span></div>`;
   }).join('') + lights.map(seq => { const x = SR[seq], n90 = (DEALS[seq] || []).length + (RG[seq] || []).length;   // 기준 시세 없는 단지: 최근 거래만
-    return `<div class="irow"><span class="open" style="cursor:default"><span class="nm">${srName(x)}</span><span class="sub">${rn(x.rc)} ${x.umd || ''}${x.by ? ' · ' + x.by + '년' : ''} · ${srNote(x, seq)} · 거래 ${n90}건(매매 90일·분양권·입주권 1년)</span>
+    return `<div class="irow"><span class="open" style="cursor:default"><span class="nm">${srName(x)}</span><span class="sub">${rn(x.rc)} ${x.umd || ''}${x.pre ? ' · ' + preNote(x) : x.by ? ' · ' + x.by + '년' : ''} · ${srNote(x, seq)} · 거래 ${n90}건(매매 90일·분양권·입주권 1년)</span>
       <span class="tags"><span class="pill none">기준 시세 없음</span>${TODAY_NEW.has(seq) ? '<span class="pill acc">새 거래</span>' : ''}</span>${lastPx(seq) ? '' : '<span class="sub">아직 매매·분양권·입주권 거래가 없습니다.</span>'}</span>
       <span class="side"><span class="pr">${lastPx(seq) ? eok(lastPx(seq).p) : '–'}</span><button type="button" class="heart" data-s="${seq}" aria-pressed="true" aria-label="관심 해제">♥</button></span></div>`; }).join('')
     || '<p class="muted">찾기 탭 후보 목록에서 ♡를 누르면 여기에 모입니다.</p>';
@@ -1104,7 +1114,7 @@ function drawDaily() {
   const same = deals.filter(x => Math.abs(x[2] - mainAg) <= 1 && !x[5]);
   const d2 = (s) => `20${s.slice(0, 2)}-${s.slice(2, 4)}-${s.slice(4)}`;
   const lp = lastPx(seq), sx = SR[seq];
-  $('#dHead').innerHTML = `<div class="row" style="justify-content:space-between"><b style="font-size:17px">${cxName(seq)} ${lite ? '<span class="pill none">기준 시세 없음</span>' : agTag(seq)}</b>${lite ? '' : '<button type="button" class="icon-btn" id="dOpen">단지 상세 →</button>'}</div><span class="muted">${D.asof.slice(5).replace('-', '월 ')}일 아침 갱신${lite && sx ? ` · ${rn(sx.rc)} ${sx.umd || ''}${sx.by ? ' · ' + sx.by + '년' : ''}${sx.hh ? ' · ' + Number(sx.hh).toLocaleString() + '세대' : ''}` : ''}</span>
+  $('#dHead').innerHTML = `<div class="row" style="justify-content:space-between"><b style="font-size:17px">${cxName(seq)} ${lite ? '<span class="pill none">기준 시세 없음</span>' : agTag(seq)}</b>${lite ? '' : '<button type="button" class="icon-btn" id="dOpen">단지 상세 →</button>'}</div><span class="muted">${D.asof.slice(5).replace('-', '월 ')}일 아침 갱신${lite && sx ? ` · ${rn(sx.rc)} ${sx.umd || ''}${sx.pre ? ' · ' + preNote(sx) : sx.by ? ' · ' + sx.by + '년' : ''}${sx.hh ? ' · ' + Number(sx.hh).toLocaleString() + '세대' : ''}` : ''}</span>
     <div class="kpis"><div class="kpi"><span class="k">${lite ? '최근 거래가' : mainAg + '㎡ 기준 시세'}</span><span class="v">${lite ? eok(lp && lp.p) : eok(ref)}</span>${lite && lp ? `<span class="d">${lp.k} · ${lp.d.slice(0, 2)}.${lp.d.slice(2, 4)}.${lp.d.slice(4)} · ${lp.ag}㎡</span>` : ''}</div><div class="kpi"><span class="k">최근 ${lite ? '1년' : '90일'} 거래</span><span class="v">${deals.length}건</span><span class="d">${mainAg}㎡ ${same.length}건${(RG[seq] || []).length ? ' · 분양권·입주권 포함' : ''}${TODAY_NEW.has(seq) ? ' · 오늘 새로 등록' : ''}</span></div></div>
     ${lite ? '<p class="src" style="margin:0">거래가 적거나 등기 전(입주권·분양권만 신고)이라 기준 시세를 정하지 못했습니다. 입주권 가격은 추가분담금이 빠져 실제 집값보다 낮게 보일 수 있습니다.</p>' : ''}`;
   if (!lite) $('#dOpen').addEventListener('click', () => openCx(seq));
