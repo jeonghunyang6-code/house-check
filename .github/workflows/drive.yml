@@ -4,7 +4,7 @@ name: drive
 
 on:
   schedule:
-    - cron: "47 21 * * 1-5"   # 평일 06:47 KST (GitHub 지연으로 실제 7~8시대). 받은 단지는 120일 동안 건너뜀
+    - cron: "37 20 * * 1-5"   # 평일 05:37 KST. 2026-10-22 06:47 예약이 실제로는 09:15 에 시작(GitHub 지연 2.5시간) → 당겨서 출근 시간대에 맞춤. 받은 단지는 120일 동안 건너뜀
   workflow_dispatch:
     inputs:
       limit:
@@ -21,7 +21,7 @@ concurrency:
 jobs:
   drive:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 150   # 2026-10-22 첫 실행이 60분에 끊김(1,900단지 × 2곳, 1초에 약 1번)
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
