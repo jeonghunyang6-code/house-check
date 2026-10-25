@@ -15,7 +15,7 @@ import html
 import json
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from collector import telegram as T
@@ -68,7 +68,7 @@ ORDER BY apt_name, cd""")
 
 
 def deal_lines(rows: list[dict]) -> list[str]:
-    return [f"• {html.escape(r['apt_name'])} {float(r['area_m2']):.0f}㎡ {r['floor']}층 <b>{eok(r['price_10k'])}</b>{tag(r)} · {r['cd'][5:]} 계약"
+    return [f"🏠 {html.escape(r['apt_name'])} {float(r['area_m2']):.0f}㎡ {r['floor']}층 <b>{eok(r['price_10k'])}</b>{tag(r)} · {r['cd'][5:]} 계약"
             + (" · 직거래" if r["deal_type"] == "직거래" else "") + (f" · {r['kind']}" if r.get("kind") else "") for r in rows]
 
 
@@ -93,14 +93,14 @@ def daily(db: Db) -> str | None:
     if not rows and not warn:
         return None
     url = site(db)
-    head = [f"<b>관심 단지 새 실거래 {len(rows)}건</b>", *deal_lines(rows)] if rows else []
+    head = [f"🔔 <b>관심 단지 새 거래 {len(rows)}건</b>", *deal_lines(rows)] if rows else []
     return "\n".join(warn + head + ([f"\n{url}"] if url and rows else []))
 
 
-def watch_lines(db: Db, seqs: list[str], week: list[dict]) -> list[str]:
-    """관심 단지마다 한 줄: 84㎡(없으면 대표 평형) 기준 시세 또는 최근 거래가 · 이번 주 신고 · 웹에서 저장한 호가(최근 저장, 지난 저장 대비 매물 수)."""
+def watch_info(db: Db, seqs: list[str]) -> dict[str, dict]:
+    """관심 단지별 이름·가격(84㎡ 기준 시세, 없으면 최근 거래가)·저장 호가(84㎡대, 최근 두 번)."""
     if not seqs:
-        return []
+        return {}
     ins = ", ".join(lit(s) for s in seqs)
     names = {r["s"]: r["n"] for r in select(db, f"""SELECT c.apt_seq s, coalesce(CASE WHEN extract(year FROM k.use_date) > c.build_year + 10 THEN k.kapt_name END, c.apt_name) n
       FROM complexes c LEFT JOIN kapt_complexes k USING (kapt_code) WHERE c.apt_seq IN ({ins})
@@ -114,59 +114,78 @@ def watch_lines(db: Db, seqs: list[str], week: list[dict]) -> list[str]:
         WHERE (apt_seq IN ({ins}) OR pc_seq IN ({ins})) AND NOT is_cancelled AND area_group BETWEEN 75 AND 99) x ORDER BY s, d DESC""")}
     got = select(db, "SELECT v FROM user_state WHERE k = 'v2-naver'")
     asks = got[0]["v"] if got else {}
-    asks = json.loads(asks) if isinstance(asks, str) else asks
-    out = []
+    asks = (json.loads(asks) if isinstance(asks, str) else asks) or {}
+    week_ago = (datetime.now(KST).date() - timedelta(days=7)).isoformat()
+    out = {}
     for s in seqs:
-        n = sum(1 for r in week if r["apt_seq"] == s)
         if s in refs:
             px = f"{refs[s][0]}㎡ 기준 {eok(refs[s][1])}"
         elif s in last:
-            r = last[s]
-            px = f"최근 {r['k']} {eok(r['p'])}({str(r['d'])[5:]})"
+            px = f"최근 {last[s]['k']} {eok(last[s]['p'])}"
         else:
             px = "거래 없음"
-        a = ""
-        dates = sorted((asks or {}).get(s, {}))
+        ask, moved = "", False
+        dates = sorted(asks.get(s, {}))
         if dates:
-            cnt = lambda d: [x["p"] for x in asks[s][d] if x.get("t") == "매매" and x.get("ex") and 75 <= float(x["ex"]) < 100]
-            now = sorted(cnt(dates[-1]))
+            cnt = lambda d: sorted(x["p"] for x in asks[s][d] if x.get("t") == "매매" and x.get("ex") and 75 <= float(x["ex"]) < 100)
+            now = cnt(dates[-1])
             if now:
-                diff = f", 지난 저장 대비 {len(now) - len(cnt(dates[-2])):+d}개" if len(dates) > 1 else ""
-                a = f" · 호가(84㎡대) {len(now)}개 중간 {eok(now[(len(now) - 1) // 2])}({dates[-1][5:]}{diff})"
-        out.append(f"• {html.escape(names.get(s, s))}: {px} · 이번 주 {n}건{a}")
+                diff = len(now) - len(cnt(dates[-2])) if len(dates) > 1 else 0
+                ask = f"🏷️ 호가 {len(now)}개 · 중간 {eok(now[(len(now) - 1) // 2])}" + (f" ({'+' if diff > 0 else ''}{diff}개)" if diff else "") + f" · {dates[-1][5:].replace('-', '/')} 저장"
+                moved = diff != 0 and dates[-1] >= week_ago
+        out[s] = {"name": names.get(s, s), "px": px, "ask": ask, "ask_moved": moved}
     return out
 
 
+def short_deal(r: dict) -> str:
+    return (f"   🧾 {float(r['area_m2']):.0f}㎡ {r['floor']}층 <b>{eok(r['price_10k'])}</b>{tag(r)} · {r['cd'][5:].replace('-', '/')}"
+            + (" · 직거래" if r["deal_type"] == "직거래" else "") + (f" · {r['kind']}" if r.get("kind") else ""))
+
+
 def weekly(db: Db) -> str:
-    out = [f"<b>주간 요약</b> ({datetime.now(KST):%m월 %d일})"]
+    """금요일 주간 요약. 관심 단지는 이번 주 신고가 있거나 저장 호가 매물 수가 바뀐 곳만(2026-10-25 사용자 요청: 줄이고 이모지)."""
+    today = datetime.now(KST).date()
+    out = [f"📊 <b>주간 요약</b> · {today:%m/%d}"]
     wk = select(db, """SELECT cls_id, week_date::text d, value v FROM rone_weekly WHERE stat = 'sale' AND cls_id IN (50008, 50016, 50002)
       AND week_date >= (SELECT max(week_date) FROM rone_weekly WHERE stat = 'sale') - 7 ORDER BY cls_id, week_date""")
     names = {50008: "서울", 50016: "경기", 50002: "수도권"}
     by: dict[int, list] = {}
     for r in wk:
         by.setdefault(int(r["cls_id"]), []).append(float(r["v"]))
-    parts = [f"{names[c]} {(v[-1] / v[0] - 1) * 100:+.2f}%" for c, v in by.items() if len(v) >= 2]
+    parts = []
+    for c in (50008, 50016, 50002):
+        v = by.get(c, [])
+        if len(v) >= 2:
+            ch = (v[-1] / v[0] - 1) * 100
+            parts.append(f"{'📈' if ch > 0 else '📉' if ch < 0 else '➖'} {names[c]} {ch:+.2f}%")
     if parts:
-        out.append(f"아파트 매매 주간(부동산원 {wk[-1]['d'][5:]} 주): " + " · ".join(parts))
+        out.append("  ".join(parts) + f"\n<i>부동산원 {wk[-1]['d'][5:].replace('-', '/')} 주</i>")
     seqs = watch(db)
     rows = deals(db, seqs, 7)
-    out.append(f"\n<b>관심 단지 {len(seqs)}곳</b>" + ("" if seqs else " (웹에서 ♡)"))
-    out += watch_lines(db, seqs, rows)
-    if rows:
-        out.append(f"\n<b>이번 주 신고 {len(rows)}건</b>")
-        out += deal_lines(rows[:15]) + ([f"… 외 {len(rows) - 15}건"] if len(rows) > 15 else [])
-    up = upcoming(datetime.now(KST).date())
-    if up:
-        out.append("\n<b>다가오는 정책 일정</b>")
-        out += [f"• {d:%m/%d} (D-{(d - datetime.now(KST).date()).days}) {html.escape(t)}" for d, _, t, _ in up]
+    info = watch_info(db, seqs)
+    moved = [s for s in seqs if any(r["apt_seq"] == s for r in rows) or info[s]["ask_moved"]]
+    if not seqs:
+        out.append("\n🏠 관심 단지가 없습니다(웹에서 ♡)")
+    else:
+        out.append(f"\n🏠 <b>관심 단지 움직임</b> · {len(seqs)}곳 중 {len(moved)}곳")
+        for s in moved:
+            i, mine = info[s], [r for r in rows if r["apt_seq"] == s]
+            out.append(f"\n▪️ <b>{html.escape(i['name'])}</b> · {i['px']}")
+            out += [short_deal(r) for r in mine[:5]] + ([f"   … 외 {len(mine) - 5}건"] if len(mine) > 5 else [])
+            if i["ask"]:
+                out.append("   " + i["ask"])
+        quiet = len(seqs) - len(moved)
+        if quiet:
+            out.append(f"\n😴 나머지 {quiet}곳: 이번 주 신고·호가 변동 없음")
+    up = upcoming(today)
     pn = select(db, "SELECT kind, first_date::text d, n_press n FROM policy_news WHERE detected_at > now() - interval '7 days' AND known IS NULL ORDER BY first_date")
-    if pn:
-        out.append("\n<b>정책 발표 후보(확인 전)</b>")
-        out += [f"• {r['d'][5:]} {r['kind']} · 언론사 {r['n']}곳" for r in pn]
-    out.append(f"\nDB {db_mb(db)}MB / 500MB")
+    if up or pn:
+        out.append("\n📅 <b>정책</b>")
+        out += [f"⏳ {d:%m/%d} (D-{(d - today).days}) {html.escape(t)}" for d, _, t, _ in up]
+        out += [f"🆕 {r['d'][5:].replace('-', '/')} {r['kind']} 발표 후보 · 언론사 {r['n']}곳(확인 전)" for r in pn]
+    mb = db_mb(db)
     url = site(db)
-    if url:
-        out.append(f"\n{url}")
+    out.append(f"\n{'⚠️' if mb >= DB_WARN_MB else '💾'} DB {mb}MB/500MB" + (f"  🔗 {url}" if url else ""))
     return "\n".join(out)
 
 
