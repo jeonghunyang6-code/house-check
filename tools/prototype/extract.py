@@ -269,7 +269,12 @@ out['v2_poi'] = {
   'st': [[r['name'], r['lines'], round(float(r['lat']), 5), round(float(r['lng']), 5)] for r in select(db, "SELECT name, lines, lat, lng FROM station WHERE lat IS NOT NULL")],
   'hosp': [[r['name'], r['kind'], round(float(r['lat']), 5), round(float(r['lng']), 5)] for r in select(db, "SELECT name, kind, lat, lng FROM hospital WHERE lat IS NOT NULL")],
   'mart': [[r['name'], r['brand'], round(float(r['lat']), 5), round(float(r['lng']), 5)] for r in select(db, "SELECT name, brand, lat, lng FROM mart WHERE lat IS NOT NULL")],
-  'mid': [[r['name'], round(float(r['lat']), 5), round(float(r['lng']), 5)] for r in select(db, "SELECT name, lat, lng FROM mid_school WHERE lat IS NOT NULL")]}
+  'mid': [[r['name'], round(float(r['lat']), 5), round(float(r['lng']), 5)] for r in select(db, "SELECT name, lat, lng FROM mid_school WHERE lat IS NOT NULL")],
+  'elem': [[r['name'], round(float(r['lat']), 5), round(float(r['lng']), 5)] for r in select(db, "SELECT name, lat, lng FROM elem_school ORDER BY school_id")]}
+# 단지 → 통학구역 배정 초등학교(가장 가까운 1곳)의 v2_poi.elem 순번 (jobs/infra.py elem, 0075)
+_eix = {r['school_id']: i for i, r in enumerate(select(db, "SELECT school_id FROM elem_school ORDER BY school_id"))}
+out['v2_elemz'] = {r['apt_seq']: _eix[r['sid']] for r in select(db, "SELECT apt_seq, elem_assigned->0->>'id' sid FROM complexes WHERE elem_assigned IS NOT NULL")
+                   if r['sid'] in _eix}
 # since = 지금 단계에 들어간 날(단계별 날짜 열). old_built = 기존 주택 준공연도(경기만)
 out['v2_redev'] = select(db, """SELECT src, region_code rc, umd_name umd, zone_nm, biz_type, stage, stage_no, old_built, lat::float lat, lng::float lng,
   (CASE stage_no WHEN 1 THEN zone_ymd WHEN 2 THEN committee_ymd WHEN 3 THEN assoc_ymd WHEN 4 THEN assoc_ymd WHEN 5 THEN impl_ymd

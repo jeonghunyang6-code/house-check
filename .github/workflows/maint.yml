@@ -1,0 +1,53 @@
+# DB 용량 손보기(필요할 때 손으로 실행). 무료 한도 500MB.
+#   rone_archive: R-ONE 주간 지수 2020 전·서울·수도권 밖 지역 → Releases raw-data `rone_weekly_hist.csv.gz` (jobs/rone_archive.py), 뒤에 VACUUM FULL
+# 필요한 시크릿: DATABASE_URL
+name: maint
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: "rone_archive"
+        default: rone_archive
+      dry:
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: maint
+  cancel-in-progress: false
+
+jobs:
+  maint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: psql 확인
+        run: command -v psql || (sudo apt-get update -q && sudo apt-get install -y -q postgresql-client)
+      - name: 크기(전)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: psql "$DATABASE_URL" -XAtc "SELECT pg_size_pretty(pg_database_size(current_database())), pg_size_pretty(pg_total_relation_size('rone_weekly'))"
+      - name: R-ONE 옛 구간 보관
+        if: ${{ inputs.task == 'rone_archive' }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GH_TOKEN: ${{ github.token }}
+          HC_ARCHIVE: gh
+          HC_DB_BACKEND: psql
+          PYTHONUNBUFFERED: "1"
+        run: python -m jobs.rone_archive ${{ inputs.dry && '--dry' || '' }}
+      - name: 빈 공간 정리
+        if: ${{ !inputs.dry }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "VACUUM FULL rone_weekly"
+          psql "$DATABASE_URL" -XAtc "SELECT pg_size_pretty(pg_database_size(current_database())), pg_size_pretty(pg_total_relation_size('rone_weekly'))"

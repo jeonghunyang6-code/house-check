@@ -2,6 +2,7 @@
 
     python -m jobs.infra stations [--dir 내려받은_파일_폴더]   # 역 위치 → station, 단지별 가장 가까운 역
     python -m jobs.infra schoolzone                           # 초등학교 통학구역(SHP) → 단지별 배정 통학구역 (pyshp·pyproj·shapely)
+    python -m jobs.infra elem                                 # 초등학교 위치 → elem_school, 통학구역 → 배정 초등학교 (schoolzone 뒤에)
     python -m jobs.infra access [--dir 역간거리_파일_폴더]      # 업무지구 접근 H2 → station_access, complexes.h2_* (stations 뒤에)
 
 좌표가 있는 단지(complexes.lat, jobs/geo.py)만 연결한다. 사이트가 자주 끊겨 파일마다 재시도하고, 보안문자를 요구하면 멈춘다.
@@ -333,6 +334,56 @@ def run_midzone(db: Db) -> int:
     return 0
 
 
+CAPITAL_OFFICES = ("서울특별시교육청", "인천광역시교육청", "경기도교육청")
+ELEM_NEAR = 3   # 통학구역에 학교가 여럿(공동통학구역 등)이면 가까운 순으로 이만큼
+
+
+def elem_rows(pos: list[dict]) -> dict[str, dict]:
+    out = {}
+    for r in pos:
+        if r.get("학교급구분") != "초등학교" or r.get("운영상태") != "운영" or r.get("시도교육청명") not in CAPITAL_OFFICES:
+            continue
+        try:
+            out[r["학교ID"]] = {"id": r["학교ID"], "name": r["학교명"], "type": r.get("설립형태"), "lat": float(r["위도"]), "lng": float(r["경도"])}
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def run_elem(db: Db) -> int:
+    """초등학교 위치 → elem_school, 단지 통학구역(school_zone_id) → 배정 초등학교(complexes.elem_assigned). schoolzone 뒤에."""
+    try:
+        pos, links = _csv_file(SCHOOL_POS_FILE), _csv_file(ZONE_SCHOOL_FILE)
+    except CaptchaRequired as e:
+        print(f"  {e}", file=sys.stderr)
+        return 2
+    schools = elem_rows(pos)
+    in_zone: dict[str, list[dict]] = {}
+    for r in links:
+        if r.get("학교급구분") == "초등학교" and r.get("학교ID") in schools:
+            in_zone.setdefault(r["학구ID"], []).append(schools[r["학교ID"]])
+    cx = select(db, "SELECT apt_seq, lat, lng, school_zone_id FROM complexes WHERE lat IS NOT NULL AND school_zone_id IS NOT NULL")
+    vals = []
+    for c in cx:
+        la, lo = float(c["lat"]), float(c["lng"])
+        ranked = sorted(in_zone.get(c["school_zone_id"], []), key=lambda s: dist_m(la, lo, s["lat"], s["lng"]))[:ELEM_NEAR]
+        if ranked:
+            near = [{"id": s["id"], "name": s["name"], "m": round(dist_m(la, lo, s["lat"], s["lng"]))} for s in ranked]
+            vals.append(f"({lit(c['apt_seq'])}, {lit(json.dumps(near, ensure_ascii=False))}::jsonb)")
+    rows = list(schools.values())
+    stmts = ["BEGIN;", "DELETE FROM elem_school;"]
+    for i in range(0, len(rows), 500):
+        stmts.append("INSERT INTO elem_school (school_id, name, est_type, lat, lng) VALUES "
+                     + ", ".join(f"({lit(s['id'])}, {lit(s['name'])}, {lit(s['type'])}, {s['lat']}, {s['lng']})" for s in rows[i:i + 500]) + ";")
+    stmts.append("UPDATE complexes SET elem_assigned = NULL WHERE elem_assigned IS NOT NULL;")
+    for i in range(0, len(vals), 1000):
+        stmts.append(f"UPDATE complexes AS c SET elem_assigned = v.e FROM (VALUES {', '.join(vals[i:i + 1000])}) AS v(a, e) WHERE c.apt_seq = v.a;")
+    stmts.append("COMMIT;")
+    db.query("\n".join(stmts))
+    print(f"  수도권 초등학교 {len(rows)}곳, 통학구역 있는 단지 {len(cx)}개 중 배정 학교 연결 {len(vals)}개")
+    return 0
+
+
 def run_academy(db: Db) -> int:
     rows = []
     for office, name in OFFICES.items():
@@ -457,7 +508,7 @@ def run_mart(db: Db, path: str | None) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("mode", choices=["stations", "schoolzone", "midzone", "academy", "hospital", "mart", "access"])
+    ap.add_argument("mode", choices=["stations", "schoolzone", "midzone", "elem", "academy", "hospital", "mart", "access"])
     ap.add_argument("--dir", help="stations: 미리 받아 둔 st_<번호>.csv 폴더, access: <번호>.bin 역간거리 파일 폴더")
     ap.add_argument("--file", help="mart: 대형마트 TSV")
     ap.add_argument("--db", choices=["api", "psql"])
@@ -466,7 +517,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         db = connect(a.db)
         rc = {"stations": lambda: run_stations(db, a.dir), "schoolzone": lambda: run_schoolzone(db),
-              "midzone": lambda: run_midzone(db),
+              "midzone": lambda: run_midzone(db), "elem": lambda: run_elem(db),
               "academy": lambda: run_academy(db), "hospital": lambda: run_hospital(db), "mart": lambda: run_mart(db, a.file),
               "access": lambda: run_access(db, a.dir)}[a.mode]()
     except DbError as e:
