@@ -25,3 +25,9 @@ def test_keyed_and_months():
     assert keys[0].endswith("#1") and keys[1].endswith("#2") and keys[0][:-2] == keys[1][:-2]   # 같은 값 두 건은 순번으로
     assert "더샵강동센트럴시티" in keys[0]                                                        # 이름 띄어쓰기 무시
     assert months_back(date(2026, 2, 5), 3) == ["202602", "202601", "202512"]
+
+
+def test_nums_guard():
+    from jobs.right_deals import _norm, _nums
+    assert _nums(_norm("제일풍경채 검단Ⅰ")) != _nums(_norm("제일풍경채 검단Ⅲ 본청약"))      # lower() 뒤에도 로마 숫자 구분
+    assert _nums(_norm("브레인시티2BL로제비앙")) == _nums(_norm("평택 브레인시티 2BL 대광로제비앙"))

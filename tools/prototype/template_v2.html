@@ -354,6 +354,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
       <div class="card">
         <h2>호가 매물 <small id="askAsof"></small></h2>
         <div class="kpis" id="askSum"></div>
+        <svg class="chart" id="askTrend" viewBox="0 0 340 120" role="img" aria-label="매매 매물 수와 중간 호가 추이" hidden></svg>
         <div id="askList"></div>
         <details class="more-f" id="askPasteBox"><summary>네이버 부동산에서 붙여넣기</summary><div class="body">
           <textarea id="askPaste" rows="3" placeholder="'호가 저장' 버튼으로 복사한 내용을 붙여넣기" style="font:inherit;font-size:14px;width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:10px;padding:8px;background:var(--surface);color:var(--ink)"></textarea>
@@ -744,8 +745,9 @@ const PSHORT = { '2026-10-01|세금': '조정지역 일시적 2주택 처분 3�
     $('#polMore').hidden = shown >= P.length;
   }
   const PN = D.v2_pnews || [];   // 뉴스 감지 후보(확인 전): 정책 이력에 넣기 전까지 따로
-  $('#polNew').innerHTML = PN.length ? PN.map(n => `<div class="pol" style="border-left-color:${KC[n.kind] || 'var(--c3)'};border-left-style:dashed"><div class="pt"><b>${n.kind} 새 발표? <span class="pill warn">확인 전</span></b><span class="muted num">${dt(n.d)} · 언론사 ${n.n}곳</span></div>${n.a ? `<div class="pe"><a href="${n.a.u}" target="_blank" rel="noopener">${n.a.t.slice(0, 60)}</a></div>` : ''}</div>`).join('')
-    : '<p class="muted" style="font-size:12.5px;margin:0 0 4px">뉴스 감지(하루 두 번): 최근 30일 새 정책 후보 없음</p>';
+  const UP = (D.v2_upcoming || []).map(([d, k, t]) => `<div class="pol" style="border-left-color:${KC[k] || 'var(--c3)'};border-left-style:dotted"><div class="pt"><b>${t}</b><span class="muted num">${dt(d)} · D-${Math.round((new Date(d) - new Date(D.asof)) / 864e5)}</span></div></div>`).join('');
+  $('#polNew').innerHTML = UP + (PN.length ? PN.map(n => `<div class="pol" style="border-left-color:${KC[n.kind] || 'var(--c3)'};border-left-style:dashed"><div class="pt"><b>${n.kind} 새 발표? <span class="pill warn">확인 전</span></b><span class="muted num">${dt(n.d)} · 언론사 ${n.n}곳</span></div>${n.a ? `<div class="pe"><a href="${n.a.u}" target="_blank" rel="noopener">${n.a.t.slice(0, 60)}</a></div>` : ''}</div>`).join('')
+    : '<p class="muted" style="font-size:12.5px;margin:0 0 4px">뉴스 감지(하루 두 번): 최근 30일 새 정책 후보 없음</p>');
   $('#polMore').addEventListener('click', () => { shown = P.length; draw(); });
   draw();
 })();
@@ -1174,6 +1176,22 @@ function drawAsks() {
   const med = (a) => { const n = a.length; return n ? (a[(n - 1) >> 1].p + a[n >> 1].p) / 2 : null; }, gap = (p) => ref && p ? (p / ref - 1) * 100 : null;
   const cl = (g) => g == null ? 'none' : g <= -5 ? 'acc' : g <= 3 ? 'good' : g <= 5 ? 'warn' : 'bad';
   $('#askAsof').textContent = last ? `${dt(last)} 기록 · ${ag}㎡` : '';
+  // 저장이 2번 이상이면 추이: 막대 = 매매 매물 수, 선 = 중간 호가(평형대), 점선 = 기준 시세
+  const tr = dates.map(d => { const v = snap(d).filter(x => x.t === '매매').map(x => x.p).sort((a, b) => a - b), n = v.length; return [d, n, n ? (v[(n - 1) >> 1] + v[n >> 1]) / 2 : null]; });
+  const tsvg = $('#askTrend'); tsvg.innerHTML = ''; tsvg.hidden = tr.length < 2;
+  if (tr.length >= 2) {
+    const W = 340, H = 120, L = 34, R = 30, T = 10, B = 18, k = tr.length, xs = (i) => L + (W - L - R) * (k === 1 ? 0.5 : i / (k - 1));
+    const nmax = Math.max(...tr.map(t => t[1]), 1), ps = tr.map(t => t[2]).filter(Boolean).concat(ref ? [ref] : []);
+    const lo = Math.min(...ps) * 0.98, hi = Math.max(...ps) * 1.02, y = (v) => T + (H - T - B) * (1 - (v - lo) / ((hi - lo) || 1)), bw = Math.min(18, (W - L - R) / k * 0.5);
+    tr.forEach((t, i) => { const h = (H - T - B) * t[1] / nmax; el('rect', { x: xs(i) - bw / 2, y: H - B - h, width: bw, height: h, fill: 'var(--c3)', 'fill-opacity': .45, rx: 2 }, tsvg); txt(tsvg, xs(i), H - B - h - 3, String(t[1]), 'middle', { style: 'font-size:9px;fill:var(--ink-3)' }); });
+    if (ref) el('line', { x1: L, x2: W - R, y1: y(ref), y2: y(ref), stroke: 'var(--c1)', 'stroke-dasharray': '4 3' }, tsvg);
+    const pts = tr.map((t, i) => t[2] ? [xs(i), y(t[2])] : null).filter(Boolean);
+    if (pts.length > 1) el('path', { d: pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(''), fill: 'none', stroke: 'var(--c1)', 'stroke-width': 2 }, tsvg);
+    tr.forEach((t, i) => { if (t[2]) { const c = el('circle', { cx: xs(i), cy: y(t[2]), r: 3.6, fill: 'var(--surface)', stroke: 'var(--c1)', 'stroke-width': 1.8 }, tsvg); hover(c, `${dt(t[0])} · 매물 ${t[1]}개 · 중간 ${eok(t[2])}`); } });
+    [lo, hi].forEach(v => txt(tsvg, L - 4, y(v) + 3, eok(v), 'end'));
+    txt(tsvg, xs(0), H - 4, dt(tr[0][0]).slice(3), 'start'); txt(tsvg, xs(k - 1), H - 4, dt(tr[k - 1][0]).slice(3), 'end');
+    txt(tsvg, W - R + 4, y(ref || lo) + 3, ref ? '기준' : '', 'start', { style: 'font-size:9px;fill:var(--c1)' });
+  }
   const pn = prevD ? snap(prevD).filter(x => x.t === '매매').length : null, gm = gap(med(sale));
   $('#askSum').innerHTML = !now.length ? '' : `
     <div class="kpi"><span class="k">매매 매물</span><span class="v">${sale.length}개</span><span class="d">${pn == null ? '지난 기록 없음' : `${dt(prevD)} 대비 ${sale.length - pn >= 0 ? '+' : ''}${sale.length - pn}개`}</span></div>

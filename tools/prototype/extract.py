@@ -167,6 +167,8 @@ out['region_monthly'] = select(db, f"""SELECT series, region, period, value FROM
 out['balloon'] = select(db, """SELECT event_date::text e, region_code rc, grp, chg_13w, chg_26w, weeks_now, chg_now, outsider_before ob, outsider_after oa,
   seoul_before sb, seoul_after sa FROM balloon ORDER BY event_date, grp, chg_now DESC""")
 out['balloon_path'] = select(db, "SELECT event_date::text e, grp, week, median_chg m, n FROM balloon_path ORDER BY event_date, grp, week")
+from collector.policy import upcoming as _upcoming   # 다가오는 정책 일정(만료·마감)
+out['v2_upcoming'] = [[d.isoformat(), k, t] for d, k, t, _ in _upcoming(__import__('datetime').date.today(), 400)]
 out['policy_events'] = select(db, "SELECT event_date::text d, kind, title, source FROM policy_events ORDER BY event_date")
 # 정책 발표 감지(0067): 확인 대기 후보(정책 이력에 없는 것)
 out['v2_pnews'] = select(db, "SELECT kind, first_date::text d, n_press n, regions, articles->0 a FROM policy_news "
