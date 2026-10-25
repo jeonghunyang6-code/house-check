@@ -496,7 +496,7 @@ const Calc = {
 };
 
 /* ───── 공통: 단지 모델 ───── */
-const CAND = (D.cand || []).map(r => ({ name: r[0], rc: r[1], umd: r[2], ag: r[3], ref: r[4], conf: r[5], phase: r[6], grade: r[7], newbig: r[10], hh: r[11], by: r[12], tv: r[13], dr: r[14], est: r[15], vl: r[17], stage: r[19], sno: r[20], seq: r[23],
+const CAND = (D.cand || []).map(r => ({ name: r[0] ?? (INFO[r[23]] || [])[0], rc: r[1], umd: r[2] ?? (INFO[r[23]] || [])[2], ag: r[3], ref: r[4], conf: r[5], phase: r[6], grade: r[7], newbig: r[10], hh: r[11], by: r[12], tv: r[13], dr: r[14], est: r[15], vl: r[17], stage: r[19], sno: r[20], seq: r[23],
   js: r[24], jn: r[25], rr: r[26], j24: r[27], uz: r[28] }));
 /* 용적률 옆 용도지역: 400%가 넘는 곳은 대부분 상업지역 주상복합·준주거·준공업이라 오류가 아님(2026-10-25 점검 414곳 중 405곳) */
 const zoneTag = (z, vl) => !z ? (vl > 400 ? ' · 용도지역 미확인' : '') : /상업/.test(z) ? ' · 상업지역(주상복합)' : ' · ' + z.replace('일반주거지역', '일반').replace('지역', '');

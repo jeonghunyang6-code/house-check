@@ -1,0 +1,47 @@
+# 개인 기록 백업: user_state(관심 단지·임장·호가·네이버 번호·텔레그램 대화 번호 등)를 매주 암호화해 Releases 'backup' 에 올린다.
+# 저장소가 공개라 반드시 HC_KEY(사용자 비밀 문구)로 AES-256 암호화. 12주치만 남김. 되살리기: python -m jobs.user_state_restore 파일.enc (HC_KEY 필요)
+# 필요한 시크릿: DATABASE_URL, HC_KEY
+name: backup
+
+on:
+  schedule:
+    - cron: "17 18 * * 6"   # 일 03:17 KST
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: psql 확인
+        run: command -v psql || (sudo apt-get update -q && sudo apt-get install -y -q postgresql-client)
+      - name: 내보내기·암호화
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          HC_KEY: ${{ secrets.HC_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$HC_KEY" ]; then echo "HC_KEY 없음 → 암호화 못 해 멈춤"; exit 1; fi
+          F="user_state_$(TZ=Asia/Seoul date +%Y%m%d).json.gz.enc"
+          psql "$DATABASE_URL" -XAtq -c "SELECT coalesce(jsonb_object_agg(k, v), '{}'::jsonb)::text FROM user_state" | gzip -9 \
+            | openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:HC_KEY -out "$F"
+          ls -la "$F"
+          echo "F=$F" >> "$GITHUB_ENV"
+      - name: Releases 에 올리기(12주치만)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          R="$GITHUB_REPOSITORY"
+          gh release view backup --repo "$R" >/dev/null 2>&1 || gh release create backup --repo "$R" --prerelease --title "개인 기록 백업(암호화)" \
+            --notes "user_state 주간 백업. AES-256(HC_KEY)로 암호화돼 있어 문구 없이는 열 수 없음. 되살리기: python -m jobs.user_state_restore 파일.enc"
+          gh release upload backup "$F" --repo "$R" --clobber
+          gh release view backup --repo "$R" --json assets --jq '.assets | sort_by(.name) | reverse | .[12:] | .[].name' | while read -r old; do
+            gh release delete-asset backup "$old" --repo "$R" --yes; echo "지움: $old"; done
