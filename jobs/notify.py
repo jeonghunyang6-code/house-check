@@ -37,7 +37,10 @@ def watch(db: Db) -> list[str]:
         return []
     v = got[0]["v"]
     v = json.loads(v) if isinstance(v, str) else v
-    return [str(s) for s in v if s]
+    seqs = [str(s) for s in v if s]
+    # 단지 번호가 바뀐 곳(재건축 새 단지 0072, 분양 단지가 실제 단지로 0070)은 새 번호로. 화면을 열면 서버 기록도 같은 규칙으로 바뀐다
+    mp = {r["o"]: r["n"] for r in select(db, "SELECT old_seq o, new_seq n FROM complex_successor UNION ALL SELECT pc_seq, apt_seq FROM presale_complexes WHERE apt_seq IS NOT NULL")}
+    return list(dict.fromkeys(mp.get(s, s) for s in seqs))
 
 
 def tag(d: dict) -> str:

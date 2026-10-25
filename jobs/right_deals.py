@@ -69,6 +69,8 @@ UPDATE right_deals r SET apt_seq = x.apt_seq FROM (
   JOIN complexes c ON c.region_code = r2.region_code AND c.umd_name = r2.umd_name AND c.jibun = r2.jibun
   WHERE r2.apt_seq IS NULL AND r2.jibun <> '' ORDER BY r2.deal_key, c.build_year DESC NULLS LAST) x
 WHERE r.deal_key = x.deal_key;""")
+    # 재건축 뒤 새 단지 번호가 생겼으면 옛 단지에 붙은 거래를 새 단지로(0072 complex_successor)
+    db.query("UPDATE right_deals r SET apt_seq = s.new_seq FROM complex_successor s WHERE r.apt_seq = s.old_seq;")
     # 단지 목록에 없는 거래 → 분양 단지(0070). 시군구 + 정규화 이름으로 묶고, 이름은 가장 최근 표기
     db.query(f"""INSERT INTO presale_complexes (pc_seq, region_code, nkey, apt_name, umd_name, jibun)
 SELECT DISTINCT ON (region_code, nk) 'P' || region_code || '-' || substr(md5(nk), 1, 6), region_code, nk, apt_name, umd_name, jibun
