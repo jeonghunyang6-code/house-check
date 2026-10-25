@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import argparse
 import sys
+import difflib
+import re
 from collections import Counter
 from datetime import date
 
@@ -80,6 +82,45 @@ UPDATE presale_complexes p SET apt_seq = x.apt_seq FROM (
 WHERE p.pc_seq = x.pc_seq AND p.apt_seq IS DISTINCT FROM x.apt_seq;""")
 
 
+def _norm(x: str | None) -> str:
+    return re.sub(r"[\s()·.\-]", "", (x or "").lower())
+
+
+def _nums(x: str) -> set[str]:
+    """단지 번호(숫자·로마 숫자). 제일풍경채 검단Ⅰ/Ⅲ, A-3/A-4블록 처럼 번호만 다른 단지를 붙이지 않으려고."""
+    return set(re.findall(r"\d+|[ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩ]", x.upper()))   # lower() 가 Ⅰ→ⅰ 로 바꾸므로 다시 대문자로
+
+
+def match_presale(db: Db) -> int:
+    """분양 단지(house_no 없는 것) ↔ 청약홈 분양정보. ① 같은 시군구, 이름 포함 ② 같은 시도·주소에 동 이름, 이름 유사도 🔧0.6+, 번호 같음."""
+    pcs = select(db, "SELECT pc_seq, apt_name, region_code, umd_name FROM presale_complexes WHERE house_no IS NULL")
+    ps = [s for s in select(db, "SELECT house_no, name, address, region_code, notice_date::text nd FROM presale WHERE region_code IS NOT NULL")]
+    got = []
+    for p in pcs:
+        nk = _norm(p["apt_name"])
+        exact = [s for s in ps if s["region_code"] == p["region_code"] and (_norm(s["name"]) in nk or nk in _norm(s["name"])) and _norm(s["name"])]
+        if exact:
+            got.append((p["pc_seq"], max(exact, key=lambda s: s["nd"] or "")["house_no"], "name"))
+            continue
+        dong = re.sub(r"\d+가$", "", (p["umd_name"] or "").split()[-1] if p["umd_name"] else "")
+        best = None
+        for s in ps:
+            if s["region_code"][:2] != p["region_code"][:2] or (dong and dong[:-1] not in (s["address"] or "")):
+                continue
+            a, b = _norm(re.sub(r"\(.*?\)", "", p["apt_name"])), _norm(re.sub(r"\(.*?\)", "", s["name"]))
+            if _nums(a) != _nums(b):
+                continue
+            r = difflib.SequenceMatcher(None, a, b).ratio()
+            if r >= 0.6 and (not best or r > best[0]):
+                best = (r, s)
+        if best:
+            got.append((p["pc_seq"], best[1]["house_no"], f"fuzzy:{best[0]:.2f}"))
+    if got:
+        db.query("UPDATE presale_complexes p SET house_no = x.h, house_match = x.m FROM (VALUES "
+                 + ", ".join(f"({lit(pc)}, {lit(h)}, {lit(m)})" for pc, h, m in got) + ") AS x (pc, h, m) WHERE p.pc_seq = x.pc;")
+    return len(got)
+
+
 def run(db: Db, regions: list[str], months: int, backfill: bool = False) -> int:
     yms = months_back(date.today(), months)
     total = 0
@@ -97,6 +138,7 @@ def run(db: Db, regions: list[str], months: int, backfill: bool = False) -> int:
         link(db)
         return 2
     link(db)
+    print(f"  분양 단지 ↔ 청약홈: 새로 {match_presale(db)}곳")
     s = select(db, "SELECT count(*) n, count(apt_seq) linked, count(*) FILTER (WHERE kind = '입주권') ip FROM right_deals")[0]
     print(f"  분양권·입주권: 이번 {total:,}건(시군구 {len(regions)} × {len(yms)}달), 전체 {s['n']:,}건 · 단지 연결 {s['linked']:,} · 입주권 {s['ip']:,}")
     return 0

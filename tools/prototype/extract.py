@@ -112,7 +112,7 @@ out['cx_rphase'] = select(db, f"SELECT apt_seq, region_name, phase, chg_12m, aso
 # D3. 후보 단지 찾기 (⑦): 기준 시세가 있는 단지·면적 전체 + 급지·표시
 out['cand'] = select(db, f"""SELECT m.apt_seq, m.area_group, coalesce(m.ref_10k, m.a5_est_10k) AS ref_10k, m.ref_10k IS NULL AS est, m.confidence, rp.phase, m.pattern, m.turnover_pct, c.apt_name, c.region_code, c.umd_name,
   c.build_year, k.households, g.grade, g.flag_rebuild, g.flag_gap, g.new_big_name, l.down_rank,
-  rb.vl_rat, rb.land_per_hh, rz.stage, rz.stage_no, rz.gen_pct, rz.src AS zsrc, m.jeonse_10k, m.jeonse_n, m.reverse_risk, m.jeonse_24m_10k
+  rb.vl_rat, rb.land_per_hh, rb.use_zone, rz.stage, rz.stage_no, rz.gen_pct, rz.src AS zsrc, m.jeonse_10k, m.jeonse_n, m.reverse_risk, m.jeonse_24m_10k
  FROM complex_metrics m JOIN complexes c USING (apt_seq)
  LEFT JOIN kapt_complexes k ON k.kapt_code = c.kapt_code
  LEFT JOIN complex_liquidity l ON l.apt_seq = m.apt_seq
@@ -167,6 +167,8 @@ out['region_monthly'] = select(db, f"""SELECT series, region, period, value FROM
 out['balloon'] = select(db, """SELECT event_date::text e, region_code rc, grp, chg_13w, chg_26w, weeks_now, chg_now, outsider_before ob, outsider_after oa,
   seoul_before sb, seoul_after sa FROM balloon ORDER BY event_date, grp, chg_now DESC""")
 out['balloon_path'] = select(db, "SELECT event_date::text e, grp, week, median_chg m, n FROM balloon_path ORDER BY event_date, grp, week")
+from collector.policy import upcoming as _upcoming   # 다가오는 정책 일정(만료·마감)
+out['v2_upcoming'] = [[d.isoformat(), k, t] for d, k, t, _ in _upcoming(__import__('datetime').date.today(), 400)]
 out['policy_events'] = select(db, "SELECT event_date::text d, kind, title, source FROM policy_events ORDER BY event_date")
 # 정책 발표 감지(0067): 확인 대기 후보(정책 이력에 없는 것)
 out['v2_pnews'] = select(db, "SELECT kind, first_date::text d, n_press n, regions, articles->0 a FROM policy_news "
@@ -204,6 +206,16 @@ for r in select(db, """SELECT apt_seq, substr(contract_month,1,4)||'Q'||((substr
   percentile_cont(0.5) WITHIN GROUP (ORDER BY price_10k) p FROM deals
   WHERE NOT is_cancelled AND deal_type = '중개' AND floor IS DISTINCT FROM 1 AND area_group IN (59, 60) GROUP BY 1, 2"""):
     _e59.setdefault(r['apt_seq'], {})[r['q']] = float(r['p'])
+# 등기 전 신축·분양 단지: 매매가 없는 분기만 분양권·입주권 거래(중개·1층 제외) 중앙가로 채운다. 입주권은 추가분담금이 빠진 값이라 낮게 나올 수 있다
+_qr: dict = {}
+for r in select(db, """SELECT coalesce(apt_seq, pc_seq) s, to_char(contract_date, 'YYYY') || 'Q' || extract(quarter FROM contract_date) q,
+  CASE WHEN area_group IN (84, 85) THEN 84 ELSE 59 END ag, percentile_cont(0.5) WITHIN GROUP (ORDER BY price_10k) p FROM right_deals
+  WHERE NOT is_cancelled AND deal_type = '중개' AND floor IS DISTINCT FROM 1 AND area_group IN (84, 85, 59, 60) AND coalesce(apt_seq, pc_seq) IS NOT NULL GROUP BY 1, 2, 3"""):
+    tgt = e6 if r['ag'] == 84 else _e59
+    if r['q'] not in tgt.setdefault(r['s'], {}):
+        tgt[r['s']][r['q']] = float(r['p'])
+        _qr.setdefault(r['s'], set()).add(r['q'])
+out['v2_qr'] = {k: sorted(v) for k, v in _qr.items()}   # 단지 → 분양권·입주권으로 채운 분기
 out['v2_q84'] = e6
 out['v2_q59'] = _e59
 out['e6_names'] = select(db, "SELECT apt_seq, apt_name, region_code, umd_name FROM complexes")
@@ -233,13 +245,14 @@ out['v2_srch'] = [[r['apt_seq'], r['apt_name'], r['kname'] if r['kname'] and r['
    AND c.apt_seq NOT IN (SELECT apt_seq FROM complex_metrics WHERE ref_10k IS NOT NULL OR a5_est_10k IS NOT NULL)""")]
 # 분양 단지(0070, 입주·등기 전이라 단지 목록에 없음): 분양권·입주권 거래로만 안다. 청약홈 분양정보(presale)와 이름이 맞으면 세대·입주 예정·좌표.
 # 16번째 칸 = 입주 예정 YYYYMM(모르면 '?') → 화면은 '분양 단지'로 표시
-_N = "regexp_replace(lower({}), '[[:space:]()·.-]', '', 'g')"
 out['v2_srch'] += [[r['pc_seq'], r['apt_name'], None, r['region_code'], r['umd_name'], None, r['hh'], None, None, None, r['n'],
                     r['lat'] and round(float(r['lat']), 5), r['lng'] and round(float(r['lng']), 5), None, None, r['mi'] or '?']
-                   for r in select(db, f"""SELECT p.pc_seq, p.apt_name, p.region_code, p.umd_name, s.total_hh hh, s.move_in_ym mi, s.lat, s.lng,
+                   for r in select(db, """SELECT p.pc_seq, p.apt_name, p.region_code, p.umd_name, s.total_hh hh, s.move_in_ym mi,
+  coalesce(s.lat, g.lat) lat, coalesce(s.lng, g.lng) lng,
   (SELECT count(*) FROM right_deals r WHERE r.pc_seq = p.pc_seq AND NOT r.is_cancelled) n
- FROM presale_complexes p LEFT JOIN LATERAL (SELECT total_hh, move_in_ym, lat, lng FROM presale s WHERE s.region_code = p.region_code
-   AND ({_N.format('s.name')} LIKE '%' || p.nkey || '%' OR p.nkey LIKE '%' || {_N.format('s.name')} || '%') ORDER BY s.notice_date DESC NULLS LAST LIMIT 1) s ON true
+ FROM presale_complexes p LEFT JOIN presale s USING (house_no)   -- 연결은 jobs/right_deals.py match_presale(0071)
+ LEFT JOIN LATERAL (SELECT avg(c.lat) lat, avg(c.lng) lng FROM complexes c      -- 청약홈에 없으면 같은 동 단지들의 가운데(근사)
+   WHERE c.region_code = p.region_code AND c.umd_name = p.umd_name AND c.lat IS NOT NULL) g ON s.lat IS NULL
  WHERE p.apt_seq IS NULL""")]
 # 분양 단지가 나중에 단지 목록에 생겨 연결되면 화면의 관심 ♡ 를 옮긴다
 out['v2_pmap'] = {r['pc_seq']: r['apt_seq'] for r in select(db, "SELECT pc_seq, apt_seq FROM presale_complexes WHERE apt_seq IS NOT NULL")}

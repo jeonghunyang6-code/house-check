@@ -354,6 +354,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
       <div class="card">
         <h2>호가 매물 <small id="askAsof"></small></h2>
         <div class="kpis" id="askSum"></div>
+        <svg class="chart" id="askTrend" viewBox="0 0 340 120" role="img" aria-label="매매 매물 수와 중간 호가 추이" hidden></svg>
         <div id="askList"></div>
         <details class="more-f" id="askPasteBox"><summary>네이버 부동산에서 붙여넣기</summary><div class="body">
           <textarea id="askPaste" rows="3" placeholder="'호가 저장' 버튼으로 복사한 내용을 붙여넣기" style="font:inherit;font-size:14px;width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:10px;padding:8px;background:var(--surface);color:var(--ink)"></textarea>
@@ -492,7 +493,9 @@ const Calc = {
 
 /* ───── 공통: 단지 모델 ───── */
 const CAND = (D.cand || []).map(r => ({ name: r[0], rc: r[1], umd: r[2], ag: r[3], ref: r[4], conf: r[5], phase: r[6], grade: r[7], newbig: r[10], hh: r[11], by: r[12], tv: r[13], dr: r[14], est: r[15], vl: r[17], stage: r[19], sno: r[20], seq: r[23],
-  js: r[24], jn: r[25], rr: r[26], j24: r[27] }));
+  js: r[24], jn: r[25], rr: r[26], j24: r[27], uz: r[28] }));
+/* 용적률 옆 용도지역: 400%가 넘는 곳은 대부분 상업지역 주상복합·준주거·준공업이라 오류가 아님(2026-10-25 점검 414곳 중 405곳) */
+const zoneTag = (z, vl) => !z ? (vl > 400 ? ' · 용도지역 미확인' : '') : /상업/.test(z) ? ' · 상업지역(주상복합)' : ' · ' + z.replace('일반주거지역', '일반').replace('지역', '');
 const CANDBY = {}; CAND.forEach(r => (CANDBY[r.seq] = CANDBY[r.seq] || []).push(r));
 /* 평형 선택(관심·상세·계획 공통): 84 = 84·85㎡, 없으면 75~99㎡ 중 가장 가까운 것 / 59 = 59·60㎡, 없으면 50~74㎡ */
 let AREA = store.get('v2-area', '84');
@@ -742,8 +745,9 @@ const PSHORT = { '2026-10-01|세금': '조정지역 일시적 2주택 처분 3�
     $('#polMore').hidden = shown >= P.length;
   }
   const PN = D.v2_pnews || [];   // 뉴스 감지 후보(확인 전): 정책 이력에 넣기 전까지 따로
-  $('#polNew').innerHTML = PN.length ? PN.map(n => `<div class="pol" style="border-left-color:${KC[n.kind] || 'var(--c3)'};border-left-style:dashed"><div class="pt"><b>${n.kind} 새 발표? <span class="pill warn">확인 전</span></b><span class="muted num">${dt(n.d)} · 언론사 ${n.n}곳</span></div>${n.a ? `<div class="pe"><a href="${n.a.u}" target="_blank" rel="noopener">${n.a.t.slice(0, 60)}</a></div>` : ''}</div>`).join('')
-    : '<p class="muted" style="font-size:12.5px;margin:0 0 4px">뉴스 감지(하루 두 번): 최근 30일 새 정책 후보 없음</p>';
+  const UP = (D.v2_upcoming || []).map(([d, k, t]) => `<div class="pol" style="border-left-color:${KC[k] || 'var(--c3)'};border-left-style:dotted"><div class="pt"><b>${t}</b><span class="muted num">${dt(d)} · D-${Math.round((new Date(d) - new Date(D.asof)) / 864e5)}</span></div></div>`).join('');
+  $('#polNew').innerHTML = UP + (PN.length ? PN.map(n => `<div class="pol" style="border-left-color:${KC[n.kind] || 'var(--c3)'};border-left-style:dashed"><div class="pt"><b>${n.kind} 새 발표? <span class="pill warn">확인 전</span></b><span class="muted num">${dt(n.d)} · 언론사 ${n.n}곳</span></div>${n.a ? `<div class="pe"><a href="${n.a.u}" target="_blank" rel="noopener">${n.a.t.slice(0, 60)}</a></div>` : ''}</div>`).join('')
+    : '<p class="muted" style="font-size:12.5px;margin:0 0 4px">뉴스 감지(하루 두 번): 최근 30일 새 정책 후보 없음</p>');
   $('#polMore').addEventListener('click', () => { shown = P.length; draw(); });
   draw();
 })();
@@ -1006,7 +1010,7 @@ function openCx(seq) {
       ${sec('위치·급지', `<dl class="kv">${grade ? `<dt>급지</dt><dd>${c ? g.umd_name : r.umd} ${grade}급지</dd>` : ''}${st ? `<dt>가까운 역</dt><dd>${st}역 ${stm}m · 걸어서 ${Math.round(stm / 70)}분</dd>` : ''}
         ${mins.length ? `<dt>${mins.map(x => x[0]).join(' · ')}</dt><dd>${mins.map(x => x[1]).join(' · ')}분</dd>` : ''}${z.name ? `<dt>생활권</dt><dd>${z.name}</dd>` : ''}${inf[10] ? `<dt>대형마트</dt><dd>${inf[10]} ${inf[11]}m</dd>` : ''}${inf[12] ? `<dt>큰 병원</dt><dd>${inf[12]} ${(inf[13] / 1000).toFixed(1)}km</dd>` : ''}${inf[14] ? `<dt>중학교군</dt><dd>${inf[14]}</dd>` : ''}</dl>`)}
       ${sec('개발 호재', devHtml(seq))}
-      ${redev || (b && b.vl_rat) || (r && r.vl) ? sec('재건축', `<dl class="kv">${redev ? `<dt>정비사업</dt><dd>${redev.zone_nm} · <b>${redev.stage}</b></dd>` : ''}${b && b.vl_rat ? `<dt>용적률</dt><dd>${Math.round(+b.vl_rat)}%</dd>` : r && r.vl ? `<dt>용적률</dt><dd>${Math.round(r.vl)}%</dd>` : ''}${b && b.land_per_hh ? `<dt>세대당 대지</dt><dd>${(+b.land_per_hh).toFixed(0)}㎡</dd>` : ''}</dl>`) : ''}
+      ${redev || (b && b.vl_rat) || (r && r.vl) ? sec('재건축', `<dl class="kv">${redev ? `<dt>정비사업</dt><dd>${redev.zone_nm} · <b>${redev.stage}</b></dd>` : ''}${b && b.vl_rat ? `<dt>용적률</dt><dd>${Math.round(+b.vl_rat)}%${zoneTag(b.use_zone || (r && r.uz), +b.vl_rat)}</dd>` : r && r.vl ? `<dt>용적률</dt><dd>${Math.round(r.vl)}%${zoneTag(r.uz, r.vl)}</dd>` : ''}${b && b.land_per_hh ? `<dt>세대당 대지</dt><dd>${(+b.land_per_hh).toFixed(0)}㎡</dd>` : ''}</dl>`) : ''}
       ${sec('현장에서 확인할 것', `<ul style="margin:0;padding-left:18px;display:grid;gap:4px"><li>역까지 실제로 걸어 보기: 평지인지, 밝은 상권길인지</li><li>동·층 차이: 저층은 중고층보다 약 10%, 로얄동과 기피동 5~10%</li><li>호가가 최근 실거래보다 5% 넘게 높으면 이유 물어보기</li><li>부동산 여러 곳에서 급매·전세 매물 분위기</li></ul>`)}
     </div>${c ? '' : '<p class="src">시안에서는 예시 9개 단지의 84㎡만 가격 차트·전고점이 있습니다. 실제 서비스는 모든 단지·평형이 같은 화면입니다.</p>'}</div>`;
   detail.hidden = false; detail.scrollTop = 0;
@@ -1172,6 +1176,22 @@ function drawAsks() {
   const med = (a) => { const n = a.length; return n ? (a[(n - 1) >> 1].p + a[n >> 1].p) / 2 : null; }, gap = (p) => ref && p ? (p / ref - 1) * 100 : null;
   const cl = (g) => g == null ? 'none' : g <= -5 ? 'acc' : g <= 3 ? 'good' : g <= 5 ? 'warn' : 'bad';
   $('#askAsof').textContent = last ? `${dt(last)} 기록 · ${ag}㎡` : '';
+  // 저장이 2번 이상이면 추이: 막대 = 매매 매물 수, 선 = 중간 호가(평형대), 점선 = 기준 시세
+  const tr = dates.map(d => { const v = snap(d).filter(x => x.t === '매매').map(x => x.p).sort((a, b) => a - b), n = v.length; return [d, n, n ? (v[(n - 1) >> 1] + v[n >> 1]) / 2 : null]; });
+  const tsvg = $('#askTrend'); tsvg.innerHTML = ''; tsvg.hidden = tr.length < 2;
+  if (tr.length >= 2) {
+    const W = 340, H = 120, L = 34, R = 30, T = 10, B = 18, k = tr.length, xs = (i) => L + (W - L - R) * (k === 1 ? 0.5 : i / (k - 1));
+    const nmax = Math.max(...tr.map(t => t[1]), 1), ps = tr.map(t => t[2]).filter(Boolean).concat(ref ? [ref] : []);
+    const lo = Math.min(...ps) * 0.98, hi = Math.max(...ps) * 1.02, y = (v) => T + (H - T - B) * (1 - (v - lo) / ((hi - lo) || 1)), bw = Math.min(18, (W - L - R) / k * 0.5);
+    tr.forEach((t, i) => { const h = (H - T - B) * t[1] / nmax; el('rect', { x: xs(i) - bw / 2, y: H - B - h, width: bw, height: h, fill: 'var(--c3)', 'fill-opacity': .45, rx: 2 }, tsvg); txt(tsvg, xs(i), H - B - h - 3, String(t[1]), 'middle', { style: 'font-size:9px;fill:var(--ink-3)' }); });
+    if (ref) el('line', { x1: L, x2: W - R, y1: y(ref), y2: y(ref), stroke: 'var(--c1)', 'stroke-dasharray': '4 3' }, tsvg);
+    const pts = tr.map((t, i) => t[2] ? [xs(i), y(t[2])] : null).filter(Boolean);
+    if (pts.length > 1) el('path', { d: pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(''), fill: 'none', stroke: 'var(--c1)', 'stroke-width': 2 }, tsvg);
+    tr.forEach((t, i) => { if (t[2]) { const c = el('circle', { cx: xs(i), cy: y(t[2]), r: 3.6, fill: 'var(--surface)', stroke: 'var(--c1)', 'stroke-width': 1.8 }, tsvg); hover(c, `${dt(t[0])} · 매물 ${t[1]}개 · 중간 ${eok(t[2])}`); } });
+    [lo, hi].forEach(v => txt(tsvg, L - 4, y(v) + 3, eok(v), 'end'));
+    txt(tsvg, xs(0), H - 4, dt(tr[0][0]).slice(3), 'start'); txt(tsvg, xs(k - 1), H - 4, dt(tr[k - 1][0]).slice(3), 'end');
+    txt(tsvg, W - R + 4, y(ref || lo) + 3, ref ? '기준' : '', 'start', { style: 'font-size:9px;fill:var(--c1)' });
+  }
   const pn = prevD ? snap(prevD).filter(x => x.t === '매매').length : null, gm = gap(med(sale));
   $('#askSum').innerHTML = !now.length ? '' : `
     <div class="kpi"><span class="k">매매 매물</span><span class="v">${sale.length}개</span><span class="d">${pn == null ? '지난 기록 없음' : `${dt(prevD)} 대비 ${sale.length - pn >= 0 ? '+' : ''}${sale.length - pn}개`}</span></div>
@@ -1282,8 +1302,8 @@ function drawMove() {
   const cmp = [['지역', rn(im[1]), rn(it[1])], ['지역 국면', rm.phase || '–', rt.phase || '–'], ['지역 1년 매매', sgn(yr(my), 1), sgn(yr(myTarget), 1)], ['급지', rm.grade ? rm.grade + '급지' : '–', rt.grade ? rt.grade + '급지' : '–'],
     ['역까지', im[6] != null ? im[6] + 'm' : '–', it[6] != null ? it[6] + 'm' : '–']].concat(WORK[cst.work] != null ? [[`${cst.work}까지`, (workMin(my) ?? '–') + '분', (workMin(myTarget) ?? '–') + '분']] : []);
   $('#moveMain').innerHTML = `<div class="row"><span class="pill ${ratio >= 1.5 ? 'good' : 'warn'}">${ratio ? ratio.toFixed(2) + '배' : '–'} ${ratio >= 1.5 ? '(1.5배 이상)' : '(1.5배 미만)'}</span>${st ? `<span class="pill ${st.pct <= 20 ? 'good' : 'none'}">격차 하위 ${st.pct}%</span>` : ''}${dist ? `<span class="pill none">${(dist / 1000).toFixed(1)}km</span>` : ''}</div>
-    <p style="font-size:14px">${st ? `지금 차이 <b>${eok(st.cur)}</b>은 지난 ${st.n}분기 중 <b>하위 ${st.pct}%</b> 위치입니다. ${st.pct <= 20 ? '<b>좁혀진 때</b>라 갈아타기 좋은 구간입니다.' : `${eok(st.p20)} 이하(하위 20%)로 좁혀지면 갈아타기 좋은 때입니다. 지금보다 ${eok(st.cur - st.p20)} 더 좁혀져야 합니다.`}` : (light(my) || light(myTarget) ? `${[my, myTarget].filter(light).map(cxName).join('·')}은(는) 기준 시세가 없어 최근 거래가(${[my, myTarget].filter(light).map(pxNote).join(', ')})로 배율만 계산했습니다. 분기 거래가 쌓이면 격차 추이가 나옵니다.` : `두 단지의 ${AREA}㎡ 분기 거래가 겹치는 분기가 6개 미만이라 격차 추이를 그리지 못했습니다. 다른 평형으로 바꿔 보세요.`)}</p>
-    ${st ? gapChart(st) : ''}
+    <p style="font-size:14px">${st ? `지금 차이 <b>${eok(st.cur)}</b>은 지난 ${st.n}분기 중 <b>하위 ${st.pct}%</b> 위치입니다. ${st.pct <= 20 ? '<b>좁혀진 때</b>라 갈아타기 좋은 구간입니다.' : `${eok(st.p20)} 이하(하위 20%)로 좁혀지면 갈아타기 좋은 때입니다. 지금보다 ${eok(st.cur - st.p20)} 더 좁혀져야 합니다.`}` : (light(my) || light(myTarget) ? `${[my, myTarget].filter(light).map(cxName).join('·')}은(는) 기준 시세가 없어 최근 거래가(${[my, myTarget].filter(light).map(pxNote).join(', ')})로 배율만 계산했습니다. 겹치는 분기 거래가 6개 이상 쌓이면 격차 추이가 나옵니다.` : `두 단지의 ${AREA}㎡ 분기 거래가 겹치는 분기가 6개 미만이라 격차 추이를 그리지 못했습니다. 다른 평형으로 바꿔 보세요.`)}</p>
+    ${st ? gapChart(st) : ''}${st && [my, myTarget].some(x => (D.v2_qr || {})[x]) ? `<p class="src">${[my, myTarget].filter(x => (D.v2_qr || {})[x]).map(cxName).join('·')}: 매매가 없던 분기(등기 전)는 분양권·입주권 거래 중앙가로 채웠습니다. 입주권은 추가분담금이 빠져 실제보다 낮게 보일 수 있습니다.</p>` : ''}
     <table class="cmp"><thead><tr><th></th><th>${cxName(my).slice(0, 8)}</th><th>${cxName(myTarget).slice(0, 8)}</th></tr></thead><tbody>${cmp.map(r => `<tr><td class="muted">${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join('')}</tbody></table>`;
   $('#moveAuto').innerHTML = auto.length ? auto.map(([, ts, r, pos, d]) => `<div class="deal" style="grid-template-columns:1fr auto auto"><span>${cxName(ts)} <span class="muted">${(d / 1000).toFixed(1)}km</span></span><span class="num">${r.toFixed(2)}배</span><span class="pill ${pos <= 20 ? 'good' : 'none'}">하위 ${Math.round(pos)}%</span></div>`).join('') : '<p class="muted">조건에 맞는 자동 추천이 없습니다.</p>';
   drawFund();

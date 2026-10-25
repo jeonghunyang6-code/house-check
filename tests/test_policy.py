@@ -43,3 +43,11 @@ def test_projects():
     assert len({p.name for p in PROJECTS}) == len(PROJECTS)
     st = [p.status for p in projects_for("11680")]
     assert st == sorted(st, key=STATUS_ORDER.index) and "확정" in st      # 강남: GTX-A·C, 위례신사선
+
+
+def test_upcoming():
+    from collector.policy import UPCOMING, upcoming
+    assert all(u[3].startswith("https://") for u in UPCOMING)
+    got = upcoming(date(2026, 10, 25))
+    assert [u[0] for u in got] == [date(2026, 12, 31), date(2026, 12, 31)]   # 120일 안만
+    assert upcoming(date(2027, 1, 1)) == []

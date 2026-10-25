@@ -127,6 +127,19 @@ EVENTS: tuple[tuple[date, str, str, str], ...] = (
 )
 
 
+# 다가오는 정책 일정(만료·마감). 텔레그램 주간 요약·화면 정책 목록에 D-day 로. 발표가 나면 ZONES·EVENTS 를 고치고 여기서 뺀다(2026-10-25 추가)
+UPCOMING: tuple[tuple[date, str, str, str], ...] = (
+    (date(2026, 12, 31), "토허", "서울 전역·경기 12곳 아파트 토허 고시 기간 끝(연장·해제 발표 대기)", S_2025_10_TOH),
+    (date(2026, 12, 31), "토허", "강남3구·용산 아파트 토허 기간 끝(2025-09 연장분)", S_2025_09_GN),
+    (date(2027, 12, 31), "토허", "토허 실거주 의무 유예(세입자 있는 주택) 신청 마감", S_2026_09_TOH),
+    (date(2027, 12, 31), "토허", "용인 기흥·화성 동탄·구리 토허 기간 끝", S_2026_06_DTN),
+)
+
+
+def upcoming(today: date, days: int = 120) -> list[tuple[date, str, str, str]]:
+    return [u for u in UPCOMING if 0 <= (u[0] - today).days <= days]
+
+
 def zones_for(region_code: str, umd_name: str | None, start: date, end: date, kind: str | None = None) -> list[Zone]:
     """[start, end] 기간에 이 단지(시군구·법정동)에 걸린 구역들. 'part' 구역은 같은 동이면 넣는다(단지가 들어가는지는 확인 필요)."""
     out = []
