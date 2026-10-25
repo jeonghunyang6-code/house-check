@@ -256,6 +256,8 @@ out['v2_srch'] += [[r['pc_seq'], r['apt_name'], None, r['region_code'], r['umd_n
  WHERE p.apt_seq IS NULL""")]
 # 분양 단지가 나중에 단지 목록에 생겨 연결되면 화면의 관심 ♡ 를 옮긴다
 out['v2_pmap'] = {r['pc_seq']: r['apt_seq'] for r in select(db, "SELECT pc_seq, apt_seq FROM presale_complexes WHERE apt_seq IS NOT NULL")}
+# 재건축 뒤 새 단지 번호(0072): 옛 번호 → 새 번호. 화면은 관심·호가·임장 기록을 옮기고 옛 번호는 검색에서 뺀다
+out['v2_pmap'].update({r['old_seq']: r['new_seq'] for r in select(db, "SELECT old_seq, new_seq FROM complex_successor")})
 # 분양권·입주권 거래(0069, 단지 연결된 것, 해제 뺌) 1년: [단지, YYMMDD, 평형, 층, 가격, 1=입주권 0=분양권]. 신축·재건축은 등기 전까지 여기만 있다
 out['v2_rights'] = [[r['s'], r['d'], r['ag'], r['fl'], r['p'], r['k']] for r in select(db, """SELECT coalesce(apt_seq, pc_seq) s, to_char(contract_date, 'YYMMDD') d, area_group ag,
  floor fl, price_10k p, CASE WHEN kind = '입주권' THEN 1 ELSE 0 END k FROM right_deals WHERE coalesce(apt_seq, pc_seq) IS NOT NULL AND NOT is_cancelled
