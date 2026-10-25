@@ -201,6 +201,8 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
 .seg3 button[aria-pressed="true"][data-v="1"] { background: var(--good); color: var(--on-strong); }
 .seg3 button[aria-pressed="true"][data-v="0"] { background: var(--ink-3); color: var(--on-strong); }
 .seg3 button[aria-pressed="true"][data-v="-1"] { background: var(--bad); color: var(--on-strong); }
+.toast { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); max-width: 400px; width: calc(100% - 40px); background: var(--ink); color: var(--surface); padding: 10px 14px; border-radius: 12px; font-size: 14px; z-index: 50; box-shadow: 0 6px 20px rgba(0,0,0,.2); }
+#askPick[hidden], .toast[hidden] { display: none !important; }
 .fontchk { font-size: 11px; color: var(--ink-3); text-align: center; padding-block: 4px 12px; }
 </style>
 
@@ -348,6 +350,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
   <section class="tab-page" id="daily" aria-label="상세" hidden>
     <div class="top wrap"><h1>관심 단지 매일 보기</h1><div class="seg areaSeg" role="group" aria-label="평형"><button type="button" data-v="84" aria-pressed="true">84㎡</button><button type="button" data-v="59" aria-pressed="false">59㎡</button></div></div>
     <div class="tab wrap">
+      <div class="card" id="askPick" hidden style="display:grid;gap:8px;border:1.5px solid var(--accent)"></div>
       <label class="muted" for="dSel" style="display:grid;gap:4px">단지<select id="dSel" class="icon-btn" style="width:100%;text-align:left;font-size:15px"></select></label>
       <div class="card" id="dHead"></div>
       <div class="card"><h2>최근 실거래 <small>최근 90일</small></h2><svg class="chart" id="dChart" viewBox="0 0 340 130" role="img" aria-label="최근 90일 실거래"></svg><div id="dDeals"></div></div>
@@ -442,6 +445,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
 </div>
 <div class="detail" id="detail" hidden><div class="inner" id="detailInner"></div></div>
 <div class="tip" id="tip" hidden></div>
+<div class="toast" id="toast" role="status" hidden></div>
 
 <script>
 const D = /*DATA*/null;
@@ -1156,18 +1160,31 @@ function parseLines(text) {   // 북마크와 같은 규칙. 화면 글자를 �
   }
   return { src: 'text', no: null, at: D.asof, items };
 }
+/* 호가 저장: 붙여넣기·북마크 바로 열기(#ask=) 공통. seq 를 모르면 null 을 돌려줌 */
+function askItems(d) { return (d.items || []).map(x => ({ t: x.type, p: manOf(x.price), ...specOf(x.spec), dong: x.dong || '', conf: x.conf || '' })).filter(x => x.p); }
+function saveAsk(d, seq) {
+  const items = askItems(d), no = d.no ? String(d.no) : null;
+  if (!items.length || !seq) return null;
+  if (no && NMAP[no] !== seq) { NMAP[no] = seq; store.set('v2-nmap', NMAP); }   // 네이버 단지 번호 → 우리 단지 기억
+  const at = d.at || D.asof, A = store.get('v2-naver', {}); (A[seq] = A[seq] || {})[at] = items; store.set('v2-naver', A);   // 같은 날 다시 저장하면 덮어씀
+  const c = (t) => items.filter(x => x.t === t).length;
+  if (!watch.has(seq)) toggleWatch(seq);
+  return `${cxName(seq)}: 매매 ${c('매매')} · 전세 ${c('전세')} · 월세 ${c('월세')}건 저장 (${dt(at)})`;
+}
 $('#askSave').addEventListener('click', () => {
   const raw = $('#askPaste').value.trim(); if (!raw) return;
   let d; try { d = JSON.parse(raw); } catch (e) { d = parseLines(raw); }
-  const items = (d.items || []).map(x => ({ t: x.type, p: manOf(x.price), ...specOf(x.spec), dong: x.dong || '', conf: x.conf || '' })).filter(x => x.p);
-  if (!items.length) { $('#askMsg').textContent = '매물을 찾지 못했습니다. 네이버 부동산 단지 화면에서 버튼을 다시 눌러 주세요.'; return; }
-  const no = d.no ? String(d.no) : null, seq = (no && NMAP[no]) || dSeq; if (!seq) return;
-  if (no && !NMAP[no]) { NMAP[no] = seq; store.set('v2-nmap', NMAP); }   // 처음 보는 단지 번호는 지금 고른 단지로 연결
-  const at = d.at || D.asof, A = store.get('v2-naver', {}); (A[seq] = A[seq] || {})[at] = items; store.set('v2-naver', A);   // 같은 날 다시 저장하면 덮어씀
-  const c = (t) => items.filter(x => x.t === t).length;
-  $('#askMsg').textContent = `${cxName(seq)}: 매매 ${c('매매')} · 전세 ${c('전세')} · 월세 ${c('월세')}건 저장 (${dt(at)})`; $('#askPaste').value = '';
-  if (seq !== dSeq) { if (!watch.has(seq)) toggleWatch(seq); dSeq = seq; drawDaily(); } else drawAsks();
+  if (!askItems(d).length) { $('#askMsg').textContent = '매물을 찾지 못했습니다. 네이버 부동산 단지 화면에서 버튼을 다시 눌러 주세요.'; return; }
+  const seq = (d.no && NMAP[String(d.no)]) || nameSeq(d.nm) || dSeq, msg = saveAsk(d, seq); if (!msg) return;   // 처음 보는 단지 번호는 이름으로, 안 되면 지금 고른 단지로
+  $('#askMsg').textContent = msg; $('#askPaste').value = '';
+  if (seq !== dSeq) { dSeq = seq; drawDaily(); } else drawAsks();
 });
+/* 네이버 단지 이름 → 우리 단지(이름·K-apt 이름 띄어쓰기 무시, 관심 단지 먼저, 하나로 정해질 때만) */
+function nameSeq(nm) {
+  const q = (nm || '').replace(/[\s()·.\-]/g, '').toLowerCase(); if (q.length < 3) return null;
+  const hit = SEARCH.filter(([seq]) => { const n = (cxName(seq) + ' ' + ((SR[seq] || {}).n || '')).replace(/[\s()·.\-]/g, '').toLowerCase(); return n.includes(q) || q.includes(cxName(seq).replace(/[\s()·.\-]/g, '').toLowerCase()); }).map(x => x[0]);
+  const w = hit.filter(s => watch.has(s)); return w.length === 1 ? w[0] : hit.length === 1 ? hit[0] : null;
+}
 function drawAsks() {
   const A = store.get('v2-naver', {})[dSeq] || {}, dates = Object.keys(A).sort(), ref = cxRef(dSeq), r = areaRow(dSeq), ag = r ? r.ag : +AREA;
   const inArea = (x) => x.ex != null && Math.abs(Math.floor(x.ex) - ag) <= 1;
@@ -1235,6 +1252,24 @@ function drawMap(seq) {
     + '<span style="flex-basis:100%">시안: 지도 그림 없이 위치만 표시. 실제 서비스는 카카오맵 위에 같은 정보를 올립니다.</span>';
 }
 $('#dSel').addEventListener('change', () => { dSeq = $('#dSel').value; drawDaily(); });
+/* 북마크 '호가 저장'이 사이트를 #ask=… 로 열면 바로 저장. 단지를 못 정하면 상세 탭에서 고르게 */
+function importAskHash() {
+  if (!location.hash.startsWith('#ask=')) return;
+  let d; try { d = JSON.parse(decodeURIComponent(location.hash.slice(5))); } catch (e) { return; }
+  history.replaceState(null, '', location.pathname + location.search);
+  go('daily');
+  const seq = (d.no && NMAP[String(d.no)]) || nameSeq(d.nm);
+  if (seq) { const msg = saveAsk(d, seq); dSeq = seq; drawDaily(); $('#askMsg').textContent = msg || ''; toast(msg ? '✅ ' + msg : '매물을 읽지 못했습니다'); return; }
+  // 처음 보는 단지: 이름이 비슷한 단지 + 관심 단지 중에서 고르기
+  const q = (d.nm || '').replace(/\s+/g, ''), cands = [...new Set([...SEARCH.filter(([, t]) => q && (t.includes(q.slice(0, 4)))).map(x => x[0]).slice(0, 8), ...watch])];
+  const box = $('#askPick'); box.hidden = false;
+  box.innerHTML = `<b>이 호가는 어느 단지인가요?</b><span class="muted">네이버: ${d.nm || '이름 없음'}${d.no ? ' (' + d.no + ')' : ''} · 매물 ${askItems(d).length}개</span>
+    <select id="askPickSel" class="icon-btn" style="width:100%;text-align:left">${cands.map(s => `<option value="${s}">${cxName(s)}</option>`).join('')}</select>
+    <button type="button" class="more" id="askPickGo">이 단지로 저장</button>`;
+  $('#askPickGo').addEventListener('click', () => { const s = $('#askPickSel').value, msg = saveAsk(d, s); box.hidden = true; dSeq = s; drawDaily(); $('#askMsg').textContent = msg || ''; toast(msg ? '✅ ' + msg : '저장 실패'); });
+}
+function toast(t) { const el2 = $('#toast'); el2.textContent = t; el2.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { el2.hidden = true; }, 4000); }
+addEventListener('hashchange', importAskHash);
 watchChanged.push(drawDaily);
 
 /* ───── ⑤ 계획 ───── */
@@ -1337,5 +1372,5 @@ watchChanged.push(drawMove);
 
 /* 처음 열 때 */
 syncArea(); drawWatch(); window.runBudget(); drawDaily(); drawMove();
-go((location.hash || '').slice(1) || store.get('v2-tab', 'home'));
+if (location.hash.startsWith('#ask=')) importAskHash(); else go((location.hash || '').slice(1) || store.get('v2-tab', 'home'));
 </script>
