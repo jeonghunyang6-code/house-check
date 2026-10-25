@@ -79,12 +79,21 @@ def site(db: Db) -> str:
     return json.loads(v) if isinstance(v, str) and v.startswith('"') else (v or "")
 
 
+DB_WARN_MB = 450   # Supabase 무료 한도 500MB. 넘으면 매일 알림에 경고(정리 방법은 HANDOFF 'DB 용량')
+
+
+def db_mb(db: Db) -> int:
+    return int(select(db, "SELECT pg_database_size(current_database()) / 1048576 AS mb")[0]["mb"])
+
+
 def daily(db: Db) -> str | None:
-    rows = deals(db, watch(db), 1)
-    if not rows:
+    rows, mb = deals(db, watch(db), 1), db_mb(db)
+    warn = [f"⚠️ DB {mb}MB / 500MB — 정리가 필요합니다(Claude 에게 'DB 정리')"] if mb >= DB_WARN_MB else []
+    if not rows and not warn:
         return None
     url = site(db)
-    return "\n".join([f"<b>관심 단지 새 실거래 {len(rows)}건</b>", *deal_lines(rows)] + ([f"\n{url}"] if url else []))
+    head = [f"<b>관심 단지 새 실거래 {len(rows)}건</b>", *deal_lines(rows)] if rows else []
+    return "\n".join(warn + head + ([f"\n{url}"] if url and rows else []))
 
 
 def weekly(db: Db) -> str:
@@ -106,6 +115,7 @@ def weekly(db: Db) -> str:
     if pn:
         out.append("\n<b>정책 발표 후보(확인 전)</b>")
         out += [f"• {r['d'][5:]} {r['kind']} · 언론사 {r['n']}곳" for r in pn]
+    out.append(f"\nDB {db_mb(db)}MB / 500MB")
     url = site(db)
     if url:
         out.append(f"\n{url}")
