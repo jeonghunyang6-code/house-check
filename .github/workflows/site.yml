@@ -37,6 +37,7 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           HC_DB_BACKEND: psql
           HC_ARCHIVE: dir:hist
+          HC_MAPKEY: ${{ secrets.NCP_MAPS_KEY_ID }}   # 네이버 지도(Dynamic Map) Client ID: 원래 페이지에 공개되는 값, 콘솔에 등록한 사이트 주소에서만 작동
           PYTHONUNBUFFERED: "1"
         run: |
           python tools/prototype/extract.py > /dev/null
