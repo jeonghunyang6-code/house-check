@@ -71,6 +71,7 @@ svg.chart:not(.map) text { fill: var(--ink-3); font-size: 10px; font-family: var
 .map text { font-family: var(--font); text-anchor: middle; pointer-events: none; paint-order: stroke; }
 .grid line { stroke: var(--line); }
 .legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--ink-3); align-items: center; }
+.legend .chk { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; color: var(--ink-2); }
 .legend i { display: inline-block; width: 12px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
 .scale { display: flex; align-items: center; gap: 2px; font-size: 11px; color: var(--ink-3); white-space: nowrap; flex-wrap: wrap; }
 .scale .sw { width: 22px; height: 10px; border-radius: 2px; }
@@ -208,6 +209,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
 .nm-pin { display: flex; align-items: center; gap: 4px; white-space: nowrap; font-family: var(--font); }
 .nm-dot { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; color: #fff; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.35); }
 .nm-zone { font-size: 11px; font-weight: 700; color: #fff; padding: 2px 6px; border-radius: 6px; border: 1.5px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.3); }
+.nm-emo { font-size: 20px; line-height: 1; filter: drop-shadow(0 1px 2px rgba(0,0,0,.35)); }
 .nm-lb { font-size: 12px; font-weight: 600; color: #15212b; background: rgba(255,255,255,.92); padding: 1px 5px; border-radius: 5px; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
 .nm-iw { background: #fff; color: #15212b; font-family: var(--font); font-size: 13px; line-height: 1.5; padding: 9px 11px; border-radius: 10px; box-shadow: 0 3px 12px rgba(0,0,0,.25); max-width: 240px; white-space: normal; }
 .fontchk { font-size: 11px; color: var(--ink-3); text-align: center; padding-block: 4px 12px; }
@@ -380,7 +382,8 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
           </form></div></details>
         <p class="src">호가 ÷ 최근 실거래 기준 시세: 3% 이내 초록, 3~5% 노랑, 5% 넘으면 빨강, 5% 이상 싸면 파랑. 시안에서는 이 기기에만 저장됩니다.</p>
       </div>
-      <div class="card"><h2>주변 지도 <small id="dMapSub">반경 1.5km</small><button type="button" class="icon-btn" id="dMapType" hidden style="margin-left:auto;font-size:12.5px">위성</button></h2><div class="nmap" id="dNmap" hidden></div><svg class="lmap" id="dMap" viewBox="-1600 -1600 3200 3200" role="img" aria-label="단지 주변 역·병원·마트·중학교"></svg><div class="legend" id="dMapLg"></div></div>
+      <div class="card"><h2>주변 지도 <small id="dMapSub">반경 1.5km</small><button type="button" class="icon-btn" id="dMapType" hidden style="margin-left:auto;font-size:12.5px">위성</button></h2><div class="nmap" id="dNmap" hidden></div><svg class="lmap" id="dMap" viewBox="-1600 -1600 3200 3200" role="img" aria-label="단지 주변 역·병원·마트·중학교"></svg><div class="legend" id="dMapLg"></div>
+        <div class="legend" id="dMapZ" hidden style="margin-top:6px">정비구역 <label class="chk"><input type="checkbox" data-z="after"> 조합설립 뒤</label><label class="chk"><input type="checkbox" data-z="before"> 그 전(추진위·예정)</label></div></div>
       <div class="card"><h2>개발 호재 · 주변 정비사업</h2><div id="dDev"></div></div>
     </div>
   </section>
@@ -457,6 +460,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
 <script>
 const D = /*DATA*/null;
 const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const eok = (v) => v == null ? '–' : (v / 10000).toFixed(v >= 100000 ? 1 : 2).replace(/\.?0+$/, '') + '억';
 const man = (v) => Math.abs(v) >= 10000 ? (v / 10000).toFixed(2).replace(/\.?0+$/, '') + '억' : Math.round(v).toLocaleString() + '만';
 const sgn = (v, d = 1) => v == null || isNaN(v) ? '–' : (v > 0 ? '+' : '') + Number(v).toFixed(d) + '%';
@@ -1278,7 +1282,8 @@ $('#askForm').addEventListener('submit', (e) => { e.preventDefault(); const p = 
   store.set('v2-naver', A); $('#a_price').value = ''; drawAsks(); });
 /* 실제 지도(네이버 지도 Dynamic Map). 웹 배포(build_v2 --web)에서 HC_MAPKEY 가 있을 때만, 상세 탭을 처음 그릴 때 스크립트를 받는다.
    실패·인증 거부면 아래 그림 지도(drawMap SVG) 그대로. 정비구역은 대표 지번 한 점(jobs/redev_geo.py) */
-const NMAPS = { p: null, fail: false, map: null, ov: [], center: null, sat: false };
+const NMAPS = { p: null, fail: false, map: null, ov: [], zv: [], center: null, sat: false, seq: null };
+const svgShow = (on) => $('#dMap').toggleAttribute('hidden', !on);   // svg 는 .hidden 이 안 먹는다(HTMLElement 아님)
 function nmapLoad() {
   if (NMAPS.p) return NMAPS.p;
   NMAPS.p = new Promise((ok, no) => {
@@ -1288,15 +1293,15 @@ function nmapLoad() {
   });
   return NMAPS.p;
 }
-function nmapOff(msg) { $('#dNmap').hidden = true; $('#dMap').hidden = false; $('#dMapType').hidden = true; if (msg) $('#dMapSub').textContent = msg; }
+function nmapOff(msg) { $('#dNmap').hidden = true; $('#dMapType').hidden = true; $('#dMapZ').hidden = true; svgShow(true); if (NMAPS.seq) drawSvg(NMAPS.seq); if (msg) $('#dMapSub').textContent = msg; }
 function nmapFit() { const M = window.naver && naver.maps, b = $('#dNmap'); if (!M || !NMAPS.map || b.hidden) return; NMAPS.map.setSize(new M.Size(b.clientWidth, b.clientHeight)); if (NMAPS.center) NMAPS.map.setCenter(NMAPS.center); }
 function nmapDraw(seq, M) {
   const inf = infoOf(seq), la = inf[3], lo = inf[4]; if (!la) { nmapOff(); return; }
-  const box = $('#dNmap'); box.hidden = false; $('#dMap').hidden = true; $('#dMapType').hidden = false; $('#dMapSub').textContent = '확대·이동 가능 · 핀을 누르면 정보';
+  const box = $('#dNmap'); box.hidden = false; svgShow(false); $('#dMapType').hidden = false; $('#dMapZ').hidden = false; $('#dMapSub').textContent = '확대·이동 가능 · 핀을 누르면 정보';
   const C = new M.LatLng(la, lo); NMAPS.center = C;
   if (!NMAPS.map) NMAPS.map = new M.Map(box, { center: C, zoom: 15, scaleControl: true, mapDataControl: false, zoomControl: true, zoomControlOptions: { position: M.Position.TOP_RIGHT } });
   else NMAPS.map.setCenter(C);
-  NMAPS.ov.forEach(o => o.setMap(null)); NMAPS.ov = [];
+  NMAPS.ov.forEach(o => o.setMap(null)); NMAPS.ov = []; NMAPS.zv = [];
   const map = NMAPS.map, add = (o) => { NMAPS.ov.push(o); return o; };
   let iw = null;
   const pin = (a, b, html, z, info) => { const m = add(new M.Marker({ map, position: new M.LatLng(a, b), zIndex: z, icon: { content: html, anchor: new M.Point(12, 12) } }));
@@ -1306,19 +1311,36 @@ function nmapDraw(seq, M) {
   [500, 1000].forEach(r => add(new M.Circle({ map, center: C, radius: r, strokeColor: '#0f6a64', strokeOpacity: 0.55, strokeWeight: 1.5, strokeStyle: 'shortdash', fillOpacity: 0 })));
   const near = (list, ia, io, km) => list.map(x => [x, distM(la, lo, x[ia], x[io])]).filter(([, d]) => d <= km * 1000).sort((a, b) => a[1] - b[1]);
   near(POI.st, 2, 3, 2).slice(0, 6).forEach(([x, d]) => pin(x[2], x[3], dot('#2b6cb0', x[0] + '역', '🚇'), 30, `<b>${x[0]}역</b><br>${Math.round(d)}m · 걸어서 ${Math.round(d * 1.3 / 67)}분(직선 기준 추정)`));
-  [[POI.mart, '#c07a00', '🛒', '대형마트'], [POI.hosp, '#c0392b', '🏥', '큰 병원'], [POI.mid, '#6b7785', '🏫', '중학교']].forEach(([list, col, sym, kind]) =>
+  [[POI.mart, '#c07a00', '🛒', '대형마트'], [POI.hosp, '#c0392b', '🏥', '큰 병원']].forEach(([list, col, sym, kind]) =>
     near(list, 2, 3, 2).slice(0, 3).forEach(([x, d]) => pin(x[2], x[3], dot(col, '', sym), 20, `<b>${x[0]}</b><br>${kind} · ${Math.round(d)}m`)));
+  near(POI.mid, 1, 2, 2).slice(0, 4).forEach(([x, d]) => pin(x[1], x[2], `<div class="nm-pin"><span class="nm-emo">🏫</span><span class="nm-lb">${x[0].replace(/중학교$/, '중')}</span></div>`, 22,
+    `<b>${x[0]}</b><br>중학교 · ${Math.round(d)}m · 걸어서 ${Math.round(d * 1.3 / 67)}분(직선 기준 추정)`));
   (D.v2_redev || []).filter(z => z.lat && distM(la, lo, z.lat, z.lng) <= 2000).forEach(z => {
     const after = (z.stage_no || 0) >= 3, nm = z.zone_nm.length > 9 ? z.zone_nm.slice(0, 9) + '…' : z.zone_nm;
-    pin(z.lat, z.lng, `<div class="nm-pin"><span class="nm-zone" style="background:${after ? '#0f6a64' : '#c07a00'}">${z.stage}</span><span class="nm-lb">${nm}</span></div>`, 25,
-      `<b>${z.zone_nm}</b><br>${z.biz_type || ''} · <b>${z.stage}</b><br>${redevNote(z) || ''}<br><span style="color:#7c8893">대표 지번 위치(구역 경계 아님)</span>`); });
+    const m = pin(z.lat, z.lng, `<div class="nm-pin"><span class="nm-zone" style="background:${after ? '#0f6a64' : '#c07a00'}">${z.stage}</span><span class="nm-lb">${nm}</span></div>`, 25,
+      `<b>${z.zone_nm}</b><br>${z.biz_type || ''} · <b>${z.stage}</b><br>${redevNote(z) || ''}<br><span style="color:#7c8893">대표 지번 위치(구역 경계 아님)</span>`);
+    NMAPS.zv.push([after ? 'after' : 'before', m]); });
+  nmapZones();
   [...watch].filter(s2 => s2 !== seq).forEach(s2 => { const i2 = infoOf(s2); if (i2[3] && distM(la, lo, i2[3], i2[4]) <= 3000) pin(i2[3], i2[4], dot('#0f6a64', cxName(s2), '♥'), 40, `<b>${cxName(s2)}</b><br>${eok(pxOf(s2))}`); });
   pin(la, lo, `<div class="nm-pin nm-me"><span class="nm-dot" style="background:#0f6a64;width:30px;height:30px;font-size:16px">🏠</span><span class="nm-lb" style="font-weight:700">${cxName(seq)}</span></div>`, 50, `<b>${cxName(seq)}</b><br>${eok(pxOf(seq))}`);
-  $('#dMapLg').innerHTML = '<span>🏠 이 단지</span><span>♥ 관심</span><span>🚇 역</span><span>🛒 마트</span><span>🏥 병원</span><span>🏫 중학교</span><span><i style="background:#0f6a64;height:8px"></i>정비 조합설립 뒤</span><span><i style="background:#c07a00;height:8px"></i>그 전</span><span>점선 원 500m·1km</span>';
+  $('#dMapLg').innerHTML = '<span>🏠 이 단지</span><span>♥ 관심</span><span>🚇 역</span><span>🛒 마트</span><span>🏥 병원</span><span>🏫 중학교</span><span>점선 원 500m·1km</span>';
+  const n = { after: 0, before: 0 }; NMAPS.zv.forEach(([k]) => n[k]++);
+  $$('#dMapZ input').forEach(c => { c.nextSibling.textContent = ` ${c.dataset.z === 'after' ? '조합설립 뒤' : '그 전(추진위·예정)'} ${n[c.dataset.z]}곳`; });
   setTimeout(nmapFit, 0);
 }
+/* 정비구역 표시는 기본 끔(복잡해서). 체크한 단계만, 기기에 기억 */
+function nmapZones() { const on = store.get('v2-mapz', {}), map = NMAPS.map; NMAPS.zv.forEach(([k, m]) => m.setMap(on[k] ? map : null)); $$('#dMapZ input').forEach(c => { c.checked = !!on[c.dataset.z]; }); }
+$$('#dMapZ input').forEach(c => c.addEventListener('change', () => { store.set('v2-mapz', { ...store.get('v2-mapz', {}), [c.dataset.z]: c.checked }); nmapZones(); }));
 function drawMap(seq) {
-  if (window.HC_MAPKEY && !NMAPS.fail) nmapLoad().then(M => nmapDraw(seq, M)).catch(() => nmapOff());
+  NMAPS.seq = seq;
+  if (window.HC_MAPKEY && !NMAPS.fail) {   // 실제 지도를 쓸 수 있으면 그림 지도는 안 그린다. 못 불러오면 nmapOff 가 그림 지도로
+    $('#dNmap').hidden = false; svgShow(false);
+    nmapLoad().then(M => nmapDraw(seq, M)).catch(() => nmapOff());
+    return;
+  }
+  drawSvg(seq);
+}
+function drawSvg(seq) {
   const inf = infoOf(seq), la = inf[3], lo = inf[4], svg = $('#dMap'); svg.innerHTML = '';
   if (!la) { txt(svg, 0, 0, '좌표 없음', 'middle'); return; }
   const P = (a, b) => [(b - lo) * 111320 * Math.cos(la * Math.PI / 180), (la - a) * 110540];
