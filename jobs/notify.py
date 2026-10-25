@@ -145,7 +145,47 @@ def short_deal(r: dict) -> str:
             + (" · 직거래" if r["deal_type"] == "직거래" else "") + (f" · {r['kind']}" if r.get("kind") else ""))
 
 
-def weekly(db: Db) -> str:
+RATIO_MOVE = 3.0   # 🔧 4주 전세가율 변화 알림 기준(%p). 책에 수치 없음
+
+
+def jeonse_lines(db: Db, seqs: list[str], names: dict[str, str], today, save: bool = True) -> list[str]:
+    """관심 단지 전세 신호만: 📖 전세가율 정상 범위 밖·80% 초과(p.152), 역전세(지금 전세 < 2년 전, 대비금 10%, p.153), 🔧 4주 전세가율 ±3%p.
+    84㎡(없으면 59㎡)대 한 평형. 이번 값을 metric_snap 에 쌓는다."""
+    if not seqs:
+        return []
+    ins = ", ".join(lit(s) for s in seqs)
+    rows = {}
+    for r in select(db, f"""SELECT apt_seq s, area_group ag, ref_10k, jeonse_10k, jeonse_ratio::float ratio, band_lo::float lo, band_hi::float hi, reverse_risk rr,
+      jeonse_24m_10k j24, reserve_10k rs FROM complex_metrics WHERE apt_seq IN ({ins}) AND area_group IN (84, 85, 59, 60) AND jeonse_10k IS NOT NULL
+      ORDER BY apt_seq, CASE WHEN area_group IN (84, 85) THEN 0 ELSE 1 END, jeonse_n DESC NULLS LAST"""):
+        rows.setdefault(r["s"], r)
+    if rows and save:
+        db.query("INSERT INTO metric_snap (apt_seq, area_group, asof, ref_10k, jeonse_10k, jeonse_ratio) VALUES "
+                 + ", ".join(f"({lit(r['s'])}, {r['ag']}, {lit(today)}, {lit(r['ref_10k'])}, {lit(r['jeonse_10k'])}, {lit(r['ratio'])})" for r in rows.values())
+                 + " ON CONFLICT (apt_seq, area_group, asof) DO UPDATE SET ref_10k = EXCLUDED.ref_10k, jeonse_10k = EXCLUDED.jeonse_10k, jeonse_ratio = EXCLUDED.jeonse_ratio;")
+    old = {(r["s"], r["ag"]): r["ratio"] for r in select(db, f"""SELECT DISTINCT ON (apt_seq, area_group) apt_seq s, area_group ag, jeonse_ratio::float ratio
+      FROM metric_snap WHERE apt_seq IN ({ins}) AND asof <= {lit(today)}::date - 28 ORDER BY apt_seq, area_group, asof DESC""")}
+    out = []
+    for s in seqs:
+        r = rows.get(s)
+        if not r:
+            continue
+        sig = []
+        if r["ratio"] is not None and r["ratio"] > 80:
+            sig.append(f"⚠️ 전세가율 {r['ratio']:.0f}%(80% 초과)")
+        elif r["ratio"] is not None and r["lo"] is not None and not (r["lo"] <= r["ratio"] <= r["hi"]):
+            sig.append(f"전세가율 {r['ratio']:.0f}% · 정상 {r['lo']:.0f}~{r['hi']:.0f}%보다 {'높음' if r['ratio'] > r['hi'] else '낮음'}")
+        o = old.get((s, r["ag"]))
+        if o is not None and r["ratio"] is not None and abs(r["ratio"] - o) >= RATIO_MOVE:
+            sig.append(f"{'📈' if r['ratio'] > o else '📉'} 4주 전 {o:.0f}% → {r['ratio']:.0f}%")
+        if r["rr"]:
+            sig.append(f"🚨 역전세: 지금 {eok(r['jeonse_10k'])} < 2년 전 {eok(r['j24'])} · 대비금 {eok(r['rs'])}")
+        if sig:
+            out.append(f"▪️ <b>{html.escape(names.get(s, s))}</b> {r['ag']}㎡ · " + " · ".join(sig))
+    return out
+
+
+def weekly(db: Db, save: bool = True) -> str:
     """금요일 주간 요약. 관심 단지는 이번 주 신고가 있거나 저장 호가 매물 수가 바뀐 곳만(2026-10-25 사용자 요청: 줄이고 이모지)."""
     today = datetime.now(KST).date()
     out = [f"📊 <b>주간 요약</b> · {today:%m/%d}"]
@@ -180,6 +220,10 @@ def weekly(db: Db) -> str:
         quiet = len(seqs) - len(moved)
         if quiet:
             out.append(f"\n😴 나머지 {quiet}곳: 이번 주 신고·호가 변동 없음")
+    js = jeonse_lines(db, seqs, {k: v["name"] for k, v in info.items()}, today, save)
+    if js:
+        out.append("\n🔑 <b>전세 신호</b>")
+        out += js
     up = upcoming(today)
     pn = select(db, "SELECT kind, first_date::text d, n_press n FROM policy_news WHERE detected_at > now() - interval '7 days' AND known IS NULL ORDER BY first_date")
     if up or pn:
@@ -200,7 +244,7 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     try:
         db = connect(a.db)
-        text = {"daily": daily, "weekly": weekly, "test": lambda _db: "house-check 알림 연결 확인 ✅"}[a.mode](db)
+        text = {"daily": daily, "weekly": lambda d: weekly(d, save=not a.dry), "test": lambda _db: "house-check 알림 연결 확인 ✅"}[a.mode](db)
         if not text:
             print("  보낼 것 없음")
             return 0
