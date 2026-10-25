@@ -20,6 +20,9 @@ from collector.regions import REGIONS
 
 KST = ZoneInfo("Asia/Seoul")
 COLS = (*FIELDS.values(), "region_code", "umd_name", "bun", "ji", "stage_no")
+# 매주 다시 받을 때 좌표(jobs/redev_geo.py, 0074)는 구역 번호로 옮겨 둔다. 안 그러면 Geocoding 을 매주 다시 부른다
+KEEP_GEO = "CREATE TEMP TABLE _geo ON COMMIT DROP AS SELECT code, lat, lng, geo_src FROM redev_zone WHERE src = '{}' AND geo_src IS NOT NULL;"
+PUT_GEO = "UPDATE redev_zone z SET lat = g.lat, lng = g.lng, geo_src = g.geo_src FROM _geo g WHERE z.code = g.code;"
 
 
 def load(db: Db, today) -> int:
@@ -29,7 +32,8 @@ def load(db: Db, today) -> int:
         print("  서울 정비사업: 0건", file=sys.stderr)
         return 1
     vals = ", ".join("(" + ", ".join([*(lit(z[c]) for c in COLS), lit(today)]) + ")" for z in zones)
-    db.query(f"BEGIN;\nDELETE FROM redev_zone WHERE src = 'seoul';\nINSERT INTO redev_zone ({', '.join(COLS)}, fetched_at) VALUES {vals};\nCOMMIT;")
+    db.query(f"BEGIN;\n{KEEP_GEO.format('seoul')}\nDELETE FROM redev_zone WHERE src = 'seoul';\n"
+             f"INSERT INTO redev_zone ({', '.join(COLS)}, fetched_at) VALUES {vals};\n{PUT_GEO}\nCOMMIT;")
     st = Counter(z["stage"] for z in zones)
     print(f"  서울 정비사업 {len(zones)}개 구역, 단계 {dict(st.most_common())}, 지번 못 읽음 {sum(z['umd_name'] is None for z in zones)}")
     return 0
@@ -57,7 +61,8 @@ def load_gg(db: Db, path: str, today) -> int:
         z["region_code"] = G.region_code(z, REGIONS, umd)
     zs = list(zones.values())
     vals = ", ".join("(" + ", ".join([*(lit(z[c]) for c in GG_COLS), lit(today)]) + ")" for z in zs)
-    db.query(f"BEGIN;\nDELETE FROM redev_zone WHERE src = 'gg';\nINSERT INTO redev_zone ({', '.join(GG_COLS)}, fetched_at) VALUES {vals};\nCOMMIT;")
+    db.query(f"BEGIN;\n{KEEP_GEO.format('gg')}\nDELETE FROM redev_zone WHERE src = 'gg';\n"
+             f"INSERT INTO redev_zone ({', '.join(GG_COLS)}, fetched_at) VALUES {vals};\n{PUT_GEO}\nCOMMIT;")
     st = Counter(z["stage"] for z in zs)
     print(f"  경기 정비사업 {len(zs)}개 구역(같은 행 {dup}개 뺌), 단계 {dict(st.most_common())}, "
           f"지번 못 읽음 {sum(z['bun'] is None for z in zs)}, 시군구 못 정함 {sum(z['region_code'] is None for z in zs)}")
