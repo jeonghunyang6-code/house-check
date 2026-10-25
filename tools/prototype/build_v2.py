@@ -6,6 +6,7 @@ E6 분기 시계열은 단지 일련번호 → 시계열 사전(v2_e6)으로 바
     python tools/prototype/extract.py && python tools/prototype/compute.py && python tools/prototype/build_v2.py
 """
 import json
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -54,7 +55,8 @@ if "--web" in sys.argv:
               " var l = document.getElementById('hc-loading'); if (l) l.remove(); }).catch(function () { document.getElementById('hc-loading').textContent = '데이터를 불러오지 못했습니다. 새로고침해 주세요.'; });</script>\n")
     page = ('<!doctype html>\n<html lang="ko">\n<head>\n<meta charset="utf-8">\n'
             '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n<meta name="robots" content="noindex, nofollow">\n'
-            + tmpl[:i] + f"\n<script>{sync}</script>\n</head>\n<body>\n" + body + "\n" + loader + "</body>\n</html>\n")
+            + tmpl[:i] + (f"\n<script>window.HC_MAPKEY = {json.dumps(os.environ['HC_MAPKEY'])};</script>" if os.environ.get("HC_MAPKEY") else "")
+            + f"\n<script>{sync}</script>\n</head>\n<body>\n" + body + "\n" + loader + "</body>\n</html>\n")
     (dst / "index.html").write_text(page, encoding="utf-8")
     (dst / "data.json").write_text(djs, encoding="utf-8")
     print(dst / "index.html")

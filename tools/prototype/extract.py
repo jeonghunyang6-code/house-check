@@ -271,7 +271,7 @@ out['v2_poi'] = {
   'mart': [[r['name'], r['brand'], round(float(r['lat']), 5), round(float(r['lng']), 5)] for r in select(db, "SELECT name, brand, lat, lng FROM mart WHERE lat IS NOT NULL")],
   'mid': [[r['name'], round(float(r['lat']), 5), round(float(r['lng']), 5)] for r in select(db, "SELECT name, lat, lng FROM mid_school WHERE lat IS NOT NULL")]}
 # since = 지금 단계에 들어간 날(단계별 날짜 열). old_built = 기존 주택 준공연도(경기만)
-out['v2_redev'] = select(db, """SELECT src, region_code rc, umd_name umd, zone_nm, biz_type, stage, stage_no, old_built,
+out['v2_redev'] = select(db, """SELECT src, region_code rc, umd_name umd, zone_nm, biz_type, stage, stage_no, old_built, lat::float lat, lng::float lng,
   (CASE stage_no WHEN 1 THEN zone_ymd WHEN 2 THEN committee_ymd WHEN 3 THEN assoc_ymd WHEN 4 THEN assoc_ymd WHEN 5 THEN impl_ymd
      WHEN 6 THEN mgmt_ymd WHEN 7 THEN construction_ymd END)::text since
   FROM redev_zone WHERE region_code IS NOT NULL AND coalesce(stage_no, 0) < 8""")

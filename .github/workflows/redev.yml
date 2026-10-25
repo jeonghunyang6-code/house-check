@@ -32,3 +32,11 @@ jobs:
           HC_DB_BACKEND: psql
           PYTHONUNBUFFERED: "1"
         run: python -m jobs.redev
+      - name: 정비구역 좌표(상세 탭 지도)
+        env:
+          NCP_MAPS_KEY_ID: ${{ secrets.NCP_MAPS_KEY_ID }}
+          NCP_MAPS_KEY: ${{ secrets.NCP_MAPS_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          HC_DB_BACKEND: psql
+          PYTHONUNBUFFERED: "1"
+        run: python -m jobs.redev_geo
