@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -30,6 +31,10 @@ class Stop(RuntimeError):
 
 
 def query_of(z: dict) -> str:
+    """'시도 시군구 동 번-지'. 시군구를 못 정했거나 번지가 없으면(경기 파일 일부) 원래 주소 글('경기도 부천시 계수동 1-6', '… 산108-1일원')."""
+    addr = re.sub(r"\s*(일원|일대|외\s?\d+\s?필지).*$", "", z.get("jibun_addr") or "")
+    if (not z.get("region_code") or z.get("bun") is None or not z.get("umd_name")) and re.match(r"(서울|경기|인천)", addr):
+        return addr
     sgg = " ".join(REGIONS.get(z["region_code"], "").split()[1:])
     jb = f"{z['bun']}" + (f"-{z['ji']}" if z.get("ji") else "")
     return f"{SIDO.get(z['region_code'][:2], '')} {sgg} {z['umd_name']} {jb}".strip()
@@ -48,6 +53,14 @@ def geocode(q: str, kid: str, key: str, opener=urllib.request.urlopen) -> tuple[
     return (float(a["y"]), float(a["x"])) if a else None
 
 
+def save(db: Db, got: list, miss: list) -> None:
+    if got:
+        db.query("UPDATE redev_zone z SET lat = x.la, lng = x.lo, geo_src = 'ncp' FROM (VALUES "
+                 + ", ".join(f"({lit(c)}, {p[0]}, {p[1]})" for c, p in got) + ") AS x (c, la, lo) WHERE z.code = x.c;")
+    if miss:
+        db.query("UPDATE redev_zone SET geo_src = 'none' WHERE code IN (" + ", ".join(lit(c) for c, _ in miss) + ");")
+
+
 def run(db: Db, redo: bool) -> int:
     if redo:
         db.query("UPDATE redev_zone SET lat = NULL, lng = NULL, geo_src = NULL;")
@@ -55,28 +68,31 @@ def run(db: Db, redo: bool) -> int:
   SELECT DISTINCT ON (z2.code) z2.code, c.lat, c.lng FROM redev_zone z2 JOIN complexes c ON c.region_code = z2.region_code AND c.umd_name = z2.umd_name
     AND c.jibun = z2.bun::text || CASE WHEN coalesce(z2.ji, 0) > 0 THEN '-' || z2.ji ELSE '' END AND c.lat IS NOT NULL
   WHERE z2.lat IS NULL ORDER BY z2.code) c WHERE z.code = c.code;""")
-    todo = select(db, "SELECT code, region_code, umd_name, bun, ji FROM redev_zone WHERE lat IS NULL AND geo_src IS DISTINCT FROM 'none' AND bun IS NOT NULL AND umd_name IS NOT NULL")
+    todo = select(db, "SELECT code, region_code, umd_name, bun, ji, jibun_addr FROM redev_zone WHERE lat IS NULL AND geo_src IS DISTINCT FROM 'none' "
+                      "AND (region_code IS NOT NULL AND bun IS NOT NULL AND umd_name IS NOT NULL OR jibun_addr ~ '^(서울|경기|인천)')")
     kid, key = os.environ.get("NCP_MAPS_KEY_ID", ""), os.environ.get("NCP_MAPS_KEY", "")
     print(f"  단지 지번으로 채움 뒤 남은 {len(todo)}곳")
     if todo and not (kid and key):
         print("  NCP_MAPS_KEY_ID·NCP_MAPS_KEY 없음 → Geocoding 건너뜀")
         return 0
-    got, miss = [], []
+    got, miss, n_got, n_miss = [], [], 0, 0
     try:
         for i, z in enumerate(todo):
             p = geocode(query_of(z), kid, key)
             (got if p else miss).append((z["code"], p))
             if i and i % 9 == 0:
                 time.sleep(1)
+            if len(got) + len(miss) >= 50:   # 중간에 멈춰도 받은 만큼은 남게
+                n_got, n_miss = n_got + len(got), n_miss + len(miss)
+                save(db, got, miss)
+                got, miss = [], []
     except Stop as e:
         print(f"  멈춤: {e}", file=sys.stderr)
-    if got:
-        db.query("UPDATE redev_zone z SET lat = x.la, lng = x.lo, geo_src = 'ncp' FROM (VALUES "
-                 + ", ".join(f"({lit(c)}, {p[0]}, {p[1]})" for c, p in got) + ") AS x (c, la, lo) WHERE z.code = x.c;")
-    if miss:
-        db.query("UPDATE redev_zone SET geo_src = 'none' WHERE code IN (" + ", ".join(lit(c) for c, _ in miss) + ");")
+    finally:
+        n_got, n_miss = n_got + len(got), n_miss + len(miss)
+        save(db, got, miss)
     s = select(db, "SELECT count(*) n, count(lat) geo, count(*) FILTER (WHERE geo_src = 'complex') cx, count(*) FILTER (WHERE geo_src = 'ncp') ncp FROM redev_zone")[0]
-    print(f"  정비구역 {s['n']}곳 중 좌표 {s['geo']}(단지 {s['cx']} · Geocoding {s['ncp']}), 이번 Geocoding 성공 {len(got)} · 못 찾음 {len(miss)}")
+    print(f"  정비구역 {s['n']}곳 중 좌표 {s['geo']}(단지 {s['cx']} · Geocoding {s['ncp']}), 이번 Geocoding 성공 {n_got} · 못 찾음 {n_miss}")
     return 0
 
 
