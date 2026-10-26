@@ -240,6 +240,61 @@ def e6():
     return {'q': qs, 'cx': rows, 't': t}
 
 from collector.regions import REGIONS
+def with_label_points(geo: dict) -> dict:
+    """지도 글씨 위치(lp): 경계에서 가장 먼 안쪽 점. 화면(template_v2.html labelPt)과 같은 계산을 미리 해 둔다(첫 화면 약 0.15초, 2026-10-26)."""
+    import math
+    import re
+    for g in geo.values():
+        rings, cur = [], None
+        for seg in re.findall(r"[MLZ][^MLZ]*", g["d"]):
+            t, n = seg[0], [float(x) for x in re.split(r"[ ,]+", seg[1:].strip()) if x]
+            if t == "M":
+                cur = []
+                rings.append(cur)
+            if t != "Z":
+                cur.extend((n[i], n[i + 1]) for i in range(0, len(n) - 1, 2))
+        pts = [p for r in rings for p in r]
+        if not pts:
+            continue
+        x0, x1, y0, y1 = min(p[0] for p in pts), max(p[0] for p in pts), min(p[1] for p in pts), max(p[1] for p in pts)
+
+        def inside(x, y):
+            c = False
+            for r in rings:
+                j = len(r) - 1
+                for i in range(len(r)):
+                    (xi, yi), (xj, yj) = r[i], r[j]
+                    if (yi > y) != (yj > y) and x < (xj - xi) * (y - yi) / (yj - yi) + xi:
+                        c = not c
+                    j = i
+            return c
+
+        def seg_d(x, y, a, b):
+            dx, dy = b[0] - a[0], b[1] - a[1]
+            l2 = dx * dx + dy * dy
+            t = max(0.0, min(1.0, ((x - a[0]) * dx + (y - a[1]) * dy) / l2 if l2 else 0.0))
+            return math.hypot(x - a[0] - t * dx, y - a[1] - t * dy)
+
+        def edge(x, y):
+            return min(seg_d(x, y, r[j], r[i]) for r in rings for i, j in ((i, i - 1 if i else len(r) - 1) for i in range(len(r))))
+
+        c = g.get("c")
+        c = json.loads(c) if isinstance(c, str) else c
+        best, bd, N = c, (edge(*c) if c and inside(*c) else -1), 22
+        for i in range(1, N):
+            for j in range(1, N):
+                x, y = x0 + (x1 - x0) * i / N, y0 + (y1 - y0) * j / N
+                if not inside(x, y):
+                    continue
+                cx, cy = c or (x, y)
+                d = edge(x, y) - 0.15 * math.hypot(x - cx, y - cy) * 0.1
+                if d > bd:
+                    bd, best = d, [x, y]
+        if best:
+            g["lp"] = [round(best[0], 1), round(best[1], 1)]
+    return geo
+
+
 json.dump({'monthly': monthly, 'cx': cx, 'today': today,
            'recent': {'n': len(rh), 'highs': sum(r['price_10k'] > r['prev_high'] for r in rh)},
            'weekly': weekly(), 'signals': {r['key']: r for r in d['signals']},
@@ -269,7 +324,7 @@ json.dump({'monthly': monthly, 'cx': cx, 'today': today,
            **{k: v for k, v in d.items() if k.startswith('v2_')},   # 시안 v2 전용(extract.py 'v2_' 키를 그대로)
            'price_bands': d.get('price_bands', []),
            'b2_validation': d.get('b2_validation', []),
-           'geo': json.load(open(ROOT / 'data/geo/sudogwon_sgg_20260701.json')),
+           'geo': with_label_points(json.load(open(ROOT / 'data/geo/sudogwon_sgg_20260701.json'))),
            'region_names': REGIONS, 'asof': TODAY.isoformat()}, open(OUT / 'data.json', 'w'), ensure_ascii=False)
 for c in cx: print(c['name'], c['region'], c['P'], c['T'], c['C'], c['conf'], c['cn'], c['pattern'], c['rec'] and round(c['rec'],2), c['J'], c['jn'], c['ratio'] and round(c['ratio']), c['band'], c['n12'])
 print('today statuses', {s: sum(t['status'] == s for t in today) for s in set(t['status'] for t in today)})

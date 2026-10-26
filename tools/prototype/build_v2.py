@@ -50,11 +50,13 @@ if "--web" in sys.argv:
     body = body[:j] + '<script type="text/plain" id="hc-main">' + body[j + len("<script>"):]
     ver = hashlib.md5(djs.encode()).hexdigest()[:10]
     loader = ("<div id=\"hc-loading\" style=\"position:fixed;inset:0;display:grid;place-items:center;background:var(--bg);color:var(--ink-2);font-size:15px;z-index:99\">불러오는 중…</div>\n"
-              "<script>Promise.all([fetch('data.json?v=" + ver + "').then(function (r) { return r.json(); }), window.__stateP]).then(function (a) { window.__D = a[0];"
+              "<script>Promise.all([window.__DP, window.__stateP]).then(function (a) { window.__D = a[0];"
               " var s = document.createElement('script'); s.textContent = document.getElementById('hc-main').textContent; document.body.appendChild(s);"
               " var l = document.getElementById('hc-loading'); if (l) l.remove(); }).catch(function () { document.getElementById('hc-loading').textContent = '데이터를 불러오지 못했습니다. 새로고침해 주세요.'; });</script>\n")
     page = ('<!doctype html>\n<html lang="ko">\n<head>\n<meta charset="utf-8">\n'
             '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n<meta name="robots" content="noindex, nofollow">\n'
+            # 2026-10-26 속도: 데이터 받기를 <head> 맨 앞에서 시작(글꼴 CSS·본문 HTML 을 기다리지 않게) → 약 0.4초
+            + "<script>window.__DP = fetch('data.json?v=" + ver + "').then(function (r) { return r.json(); });</script>\n"
             + tmpl[:i] + (f"\n<script>window.HC_MAPKEY = {json.dumps(os.environ['HC_MAPKEY'])};</script>" if os.environ.get("HC_MAPKEY") else "")
             + f"\n<script>{sync}</script>\n</head>\n<body>\n" + body + "\n" + loader + "</body>\n</html>\n")
     (dst / "index.html").write_text(page, encoding="utf-8")
