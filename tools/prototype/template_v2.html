@@ -639,6 +639,7 @@ function labelPt(k, g) {
   const pts = rings.flat(); if (!pts.length) return (LABEL[k] = g.c);
   const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
   const inside = (x, y) => { let c = false; rings.forEach(r => { for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [xi, yi] = r[i], [xj, yj] = r[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } }); return c; };
+  if (g.lp) return (LABEL[k] = Object.assign(g.lp.slice(), { inside }));   // compute.py 가 미리 계산(첫 화면 약 0.15초, 2026-10-26)
   const segD = (x, y, a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], l = dx * dx + dy * dy; let t = l ? ((x - a[0]) * dx + (y - a[1]) * dy) / l : 0; t = Math.max(0, Math.min(1, t)); return Math.hypot(x - a[0] - t * dx, y - a[1] - t * dy); };
   const edge = (x, y) => { let m = Infinity; rings.forEach(r => { for (let i = 0, j = r.length - 1; i < r.length; j = i++) m = Math.min(m, segD(x, y, r[j], r[i])); }); return m; };
   let best = g.c, bd = g.c && inside(g.c[0], g.c[1]) ? edge(g.c[0], g.c[1]) : -1; const N = 22;
@@ -788,9 +789,10 @@ const PSHORT = { '2026-10-01|세금': '조정지역 일시적 2주택 처분 3�
 })();
 
 (function fontCheck() {
-  const ok = () => { if (!document.fonts) return false; let y = false; document.fonts.forEach(f => { if (f.family.replace(/"/g, '') === 'IBM Plex Sans KR' && f.status === 'loaded') y = true; }); return y; };
-  const show = () => { $('#fontChk').textContent = (ok() ? '글꼴: IBM Plex Sans KR' : '글꼴: IBM Plex Sans KR을 불러오지 못해 기기 기본 글꼴(맑은 고딕 등)로 보입니다') + (window.HC_WEB ? (HC_WEB.ok ? ' · 기록: 서버 저장(모든 기기)' : HC_WEB.bad ? ' · 기록: 비밀 문구가 달라 이 기기에만' : ' · 기록: 이 기기에만') : ''); };
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(show); setTimeout(show, 2500); show();
+  // document.fonts 를 훑거나 check() 하면 그 자리에서 화면 배치를 다시 계산해 첫 화면이 약 0.3초 늦었다(2026-10-26) → 웹에서는 기록 저장 상태만, 첫 그림 뒤에
+  const ok = () => !!(document.fonts && document.fonts.check && document.fonts.check('16px "IBM Plex Sans KR"', '가'));
+  const show = () => { $('#fontChk').textContent = (window.HC_WEB ? (HC_WEB.ok ? '기록: 서버 저장(모든 기기)' : HC_WEB.bad ? '기록: 비밀 문구가 달라 이 기기에만' : '기록: 이 기기에만') : (ok() ? '글꼴: IBM Plex Sans KR' : '글꼴: 기기 기본 글꼴')); };
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(show); setTimeout(show, 2500); requestAnimationFrame(() => setTimeout(show, 0));
 })();
 
 /* ───── ② 찾기 ───── */
@@ -886,11 +888,12 @@ chips('#fWork', Object.keys(WORK), cst.work, reset('work')); chips('#fMin', Obje
 chips('#fSt', Object.keys(STF), cst.st, reset('st')); chips('#fSort', Object.keys(SORTF), cst.sort, reset('sort'));
 $('#cMore').addEventListener('click', () => { cst.shown += 20; drawCand(); });
 /* 단지 검색: 이름·동 (띄어쓰기 무시, 2글자 이상) */
-const SEARCH = Object.entries(INFO).filter(([seq]) => !PM[seq]).map(([seq, i]) => [seq, (i[0] + ' ' + (i[2] || '') + ' ' + rn(i[1])).replace(/\s+/g, '')]).concat(Object.entries(SR).filter(([seq]) => !INFO[seq] && !PM[seq]).map(([seq, x]) => [seq, (x.n + ' ' + (x.kn || '') + ' ' + (x.umd || '') + ' ' + rn(x.rc)).replace(/\s+/g, '')]));
+let SEARCH_ = null;   // 검색 목록은 처음 찾을 때 만든다(첫 화면 약 0.1초, 2026-10-26)
+const searchList = () => SEARCH_ || (SEARCH_ = Object.entries(INFO).filter(([seq]) => !PM[seq]).map(([seq, i]) => [seq, (i[0] + ' ' + (i[2] || '') + ' ' + rn(i[1])).replace(/\s+/g, '')]).concat(Object.entries(SR).filter(([seq]) => !INFO[seq] && !PM[seq]).map(([seq, x]) => [seq, (x.n + ' ' + (x.kn || '') + ' ' + (x.umd || '') + ' ' + rn(x.rc)).replace(/\s+/g, '')])));
 let qHits = [];
 function drawSearch() {
   const q = $('#qName').value.replace(/\s+/g, '');
-  qHits = q.length < 2 ? [] : SEARCH.filter(([, t]) => t.includes(q)).map(([seq]) => seq).sort((a, b) => (cxRef(b) || (SR[b] && SR[b].lp) || 0) - (cxRef(a) || (SR[a] && SR[a].lp) || 0)).slice(0, 15);
+  qHits = q.length < 2 ? [] : searchList().filter(([, t]) => t.includes(q)).map(([seq]) => seq).sort((a, b) => (cxRef(b) || (SR[b] && SR[b].lp) || 0) - (cxRef(a) || (SR[a] && SR[a].lp) || 0)).slice(0, 15);
   $('#qList').innerHTML = q.length < 2 ? '' : qHits.map(seq => { const i = INFO[seq] || [], r = main(seq);
     if (!INFO[seq] && SR[seq]) { const x = SR[seq];   // 기준 시세 없는 단지
       return `<div class="irow"><button type="button" class="open" data-s="${seq}"><span class="nm">${srName(x)}</span><span class="sub">${rn(x.rc)} ${x.umd || ''}${x.pre ? ' · ' + preNote(x) : x.by ? ' · ' + x.by + '년' : ''}${x.hh ? ' · ' + Number(x.hh).toLocaleString() + '세대' : ''}${x.kn && srName(x) !== x.n ? ' · 옛 이름 ' + x.n : ''}</span><span class="sub">${srNote(x, seq)} · 기준 시세 없음</span></button>
@@ -1236,7 +1239,7 @@ $('#askSave').addEventListener('click', () => {
 /* 네이버 단지 이름 → 우리 단지(이름·K-apt 이름 띄어쓰기 무시, 관심 단지 먼저, 하나로 정해질 때만) */
 function nameSeq(nm) {
   const q = (nm || '').replace(/[\s()·.\-]/g, '').toLowerCase(); if (q.length < 3) return null;
-  const hit = SEARCH.filter(([seq]) => { const n = (cxName(seq) + ' ' + ((SR[seq] || {}).n || '')).replace(/[\s()·.\-]/g, '').toLowerCase(); return n.includes(q) || q.includes(cxName(seq).replace(/[\s()·.\-]/g, '').toLowerCase()); }).map(x => x[0]);
+  const hit = searchList().filter(([seq]) => { const n = (cxName(seq) + ' ' + ((SR[seq] || {}).n || '')).replace(/[\s()·.\-]/g, '').toLowerCase(); return n.includes(q) || q.includes(cxName(seq).replace(/[\s()·.\-]/g, '').toLowerCase()); }).map(x => x[0]);
   const w = hit.filter(s => watch.has(s)); return w.length === 1 ? w[0] : hit.length === 1 ? hit[0] : null;
 }
 function drawAsks() {
@@ -1396,7 +1399,7 @@ function importAskHash() {
   const seq = (d.no && NMAP[String(d.no)]) || nameSeq(d.nm);
   if (seq) { const msg = saveAsk(d, seq); dSeq = seq; drawDaily(); $('#askMsg').textContent = msg || ''; toast(msg ? '✅ ' + msg : '매물을 읽지 못했습니다'); return; }
   // 처음 보는 단지: 이름이 비슷한 단지 + 관심 단지 중에서 고르기
-  const q = (d.nm || '').replace(/\s+/g, ''), cands = [...new Set([...SEARCH.filter(([, t]) => q && (t.includes(q.slice(0, 4)))).map(x => x[0]).slice(0, 8), ...watch])];
+  const q = (d.nm || '').replace(/\s+/g, ''), cands = [...new Set([...searchList().filter(([, t]) => q && (t.includes(q.slice(0, 4)))).map(x => x[0]).slice(0, 8), ...watch])];
   const box = $('#askPick'); box.hidden = false;
   box.innerHTML = `<b>이 호가는 어느 단지인가요?</b><span class="muted">네이버: ${d.nm || '이름 없음'}${d.no ? ' (' + d.no + ')' : ''} · 매물 ${askItems(d).length}개</span>
     <select id="askPickSel" class="icon-btn" style="width:100%;text-align:left">${cands.map(s => `<option value="${s}">${cxName(s)}</option>`).join('')}</select>
