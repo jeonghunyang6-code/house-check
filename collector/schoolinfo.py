@@ -59,10 +59,10 @@ def fetch(api_type: int, sgg: str, year: str, kind: str = "03", key: str | None 
 
 
 def norm_name(s: str) -> str:
-    """'서울대치중학교' → '대치중', '단국대학교사범대학부속중학교' → '단국대학교사범대학부속중'."""
+    """'서울대치중학교' → '대치중', '단국대학교사범대학부속중학교' → '단국대학교사범대학부속중', '서울성내초등학교' → '성내초'."""
     s = re.sub(r"\s+", "", s or "")
     s = re.sub(r"^(서울|인천|경기)", "", s)
-    return re.sub(r"중학교$", "중", s)
+    return re.sub(r"초등학교$", "초", re.sub(r"중학교$", "중", s))
 
 
 def net_in_rate(row: dict) -> float | None:

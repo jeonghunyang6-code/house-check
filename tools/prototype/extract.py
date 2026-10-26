@@ -270,13 +270,24 @@ out['v2_poi'] = {
   'hosp': [[r['name'], r['kind'], round(float(r['lat']), 5), round(float(r['lng']), 5)] for r in select(db, "SELECT name, kind, lat, lng FROM hospital WHERE lat IS NOT NULL")],
   'mart': [[r['name'], r['brand'], round(float(r['lat']), 5), round(float(r['lng']), 5)] for r in select(db, "SELECT name, brand, lat, lng FROM mart WHERE lat IS NOT NULL")],
   'mid': [[r['name'], round(float(r['lat']), 5), round(float(r['lng']), 5)] for r in select(db, "SELECT name, lat, lng FROM mid_school WHERE lat IS NOT NULL")],
-  'elem': [[r['name'], round(float(r['lat']), 5), round(float(r['lng']), 5)] for r in select(db, "SELECT name, lat, lng FROM elem_school ORDER BY school_id")]}
+  # 초등: [이름, 위도, 경도, 학생 수, 1년 전입, 전출] (학교알리미, 0078. 없으면 null)
+  'elem': [[r['name'], round(float(r['lat']), 5), round(float(r['lng']), 5), r['students'], r['mv_in'], r['mv_out']]
+           for r in select(db, "SELECT name, lat, lng, students, mv_in, mv_out FROM elem_school ORDER BY school_id")]}
 # 단지 → 통학구역 배정 초등학교(가장 가까운 1곳)의 v2_poi.elem 순번 (jobs/infra.py elem, 0075)
 _eix = {r['school_id']: i for i, r in enumerate(select(db, "SELECT school_id FROM elem_school ORDER BY school_id"))}
 # 상세 지도를 열 수 있는 단지(v2_info·v2_srch)만 — 전부 넣으면 첫 화면 데이터가 약 90KB(압축) 늘어남
 _open = set(out['v2_info']) | {r[0] for r in out['v2_srch']}
 out['v2_elemz'] = {r['apt_seq']: _eix[r['sid']] for r in select(db, "SELECT apt_seq, elem_assigned->0->>'id' sid FROM complexes WHERE elem_assigned IS NOT NULL")
                    if r['sid'] in _eix and r['apt_seq'] in _open}
+# 6개월 안 같은 생활권 입주(한국부동산원 입주예정물량 ipju_plan, 📖 입주장 → 전세 하락 p.153~154). 6개월은 🔧
+# v2_ipz = {생활권: [[단지, 세대, 'YYYYMM'], ...]}, v2_lz = {단지: 생활권} (입주가 있는 생활권의 상세를 열 수 있는 단지만)
+out['v2_ipz'] = {}
+for r in select(db, """SELECT lifezone_id z, name, households h, move_in_ym ym FROM ipju_plan WHERE lifezone_id IS NOT NULL
+   AND move_in_ym BETWEEN to_char(now() AT TIME ZONE 'Asia/Seoul', 'YYYYMM') AND to_char((now() AT TIME ZONE 'Asia/Seoul') + interval '5 months', 'YYYYMM')
+   ORDER BY move_in_ym, households DESC"""):
+    out['v2_ipz'].setdefault(r['z'], []).append([r['name'], r['h'], r['ym']])
+out['v2_lz'] = {r['apt_seq']: r['z'] for r in select(db, "SELECT apt_seq, lifezone_id z FROM complexes WHERE lifezone_id IS NOT NULL")
+                if r['z'] in out['v2_ipz'] and r['apt_seq'] in _open}
 # since = 지금 단계에 들어간 날(단계별 날짜 열). old_built = 기존 주택 준공연도(경기만)
 out['v2_redev'] = select(db, """SELECT src, region_code rc, umd_name umd, zone_nm, biz_type, stage, stage_no, old_built, lat::float lat, lng::float lng,
   (CASE stage_no WHEN 1 THEN zone_ymd WHEN 2 THEN committee_ymd WHEN 3 THEN assoc_ymd WHEN 4 THEN assoc_ymd WHEN 5 THEN impl_ymd

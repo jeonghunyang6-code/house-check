@@ -382,7 +382,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
           </form></div></details>
         <p class="src">호가 ÷ 최근 실거래 기준 시세: 3% 이내 초록, 3~5% 노랑, 5% 넘으면 빨강, 5% 이상 싸면 파랑. 시안에서는 이 기기에만 저장됩니다.</p>
       </div>
-      <div class="card"><h2>주변 지도 <small id="dMapSub">반경 1.5km</small><button type="button" class="icon-btn" id="dMapType" hidden style="margin-left:auto;font-size:12.5px">위성</button></h2><div class="nmap" id="dNmap" hidden></div><svg class="lmap" id="dMap" viewBox="-1600 -1600 3200 3200" role="img" aria-label="단지 주변 역·병원·마트·중학교"></svg><div class="legend" id="dMapLg"></div>
+      <div class="card"><h2>주변 지도 <small id="dMapSub">반경 1.5km</small><button type="button" class="icon-btn" id="dMapType" hidden style="margin-left:auto;font-size:12.5px">위성</button></h2><div class="src" id="dNear" hidden style="margin:0 0 8px;line-height:1.6"></div><div class="nmap" id="dNmap" hidden></div><svg class="lmap" id="dMap" viewBox="-1600 -1600 3200 3200" role="img" aria-label="단지 주변 역·병원·마트·중학교"></svg><div class="legend" id="dMapLg"></div>
         <div class="legend" id="dMapZ" hidden style="margin-top:6px">더 보기 <label class="chk"><input type="checkbox" data-z="after"> 정비 조합설립 뒤</label><label class="chk"><input type="checkbox" data-z="before"> 정비 그 전</label><label class="chk"><input type="checkbox" data-z="proj"> 개통 예정 역</label></div></div>
       <div class="card"><h2>개발 호재 · 주변 정비사업</h2><div id="dDev"></div></div>
     </div>
@@ -1317,10 +1317,9 @@ function nmapDraw(seq, M) {
   [[POI.mart, '#c07a00', '🛒', '대형마트'], [POI.hosp, '#c0392b', '🏥', '큰 병원']].forEach(([list, col, sym, kind]) =>
     near(list, 2, 3, 2).slice(0, 3).forEach(([x, d]) => pin(x[2], x[3], dot(col, '', sym), 20, `<b>${x[0]}</b><br>${kind} · ${Math.round(d)}m`)));
   // 학교 🏫: 중학교 2km 안 4곳, 초등학교 = 통학구역 배정 학교(jobs/infra.py elem) + 1km 안 3곳
-  const sname = (n) => n.replace(/^서울(?=.{2,}초등학교$)/, '').replace(/초등학교$/, '초').replace(/중학교$/, '중');
   const walk = (d) => `${Math.round(d)}m · 걸어서 ${Math.round(d * 1.3 / 67)}분(직선 기준 추정)`;
   const school = (x, d, kind, mine) => pin(x[1], x[2], `<div class="nm-pin"><span class="nm-emo">🏫</span><span class="nm-lb"${mine ? ' style="font-weight:700"' : ''}>${sname(x[0])}${mine ? ' · 배정' : ''}</span></div>`, mine ? 24 : 22,
-    `<b>${x[0]}</b><br>${kind} · ${walk(d)}${mine ? '<br>이 단지 통학구역 학교(학구도 기준, 실제 배정은 교육청 확인)' : ''}`);
+    `<b>${x[0]}</b><br>${kind} · ${walk(d)}${x[3] ? `<br>${moveTxt(x)}` : ''}${mine ? '<br>이 단지 통학구역 학교(학구도 기준, 실제 배정은 교육청 확인)' : ''}`);
   near(POI.mid, 1, 2, 2).slice(0, 4).forEach(([x, d]) => school(x, d, '중학교'));
   const ELEM = POI.elem || [], mine = ELEM[(D.v2_elemz || {})[seq]];
   if (mine) school(mine, distM(la, lo, mine[1], mine[2]), '초등학교', true);
@@ -1354,8 +1353,20 @@ function nmapDraw(seq, M) {
 const ZLB = { after: '정비 조합설립 뒤', before: '정비 그 전(추진위·예정)', proj: '개통 예정 역' };
 function nmapZones() { const on = store.get('v2-mapz', {}), map = NMAPS.map; NMAPS.zv.forEach(([k, m]) => m.setMap(on[k] ? map : null)); $$('#dMapZ input').forEach(c => { c.checked = !!on[c.dataset.z]; }); }
 $$('#dMapZ input').forEach(c => c.addEventListener('change', () => { store.set('v2-mapz', { ...store.get('v2-mapz', {}), [c.dataset.z]: c.checked }); nmapZones(); }));
+/* 지도 위 한두 줄: 배정 초등학교(학교알리미 숫자만), 6개월 안 같은 생활권 입주(📖 입주장 p.153~154, 6개월 🔧) */
+const sname = (n) => n.replace(/^서울(?=.{2,}초등학교$)/, '').replace(/초등학교$/, '초').replace(/중학교$/, '중');
+const moveTxt = (e) => `학생 ${e[3].toLocaleString()}명 · 1년 전입 ${e[4]} / 전출 ${e[5]}`;
+function drawNear(seq) {
+  const out = [], inf = infoOf(seq), e = (POI.elem || [])[(D.v2_elemz || {})[seq]];
+  if (e && inf[3]) out.push(`🏫 배정 ${sname(e[0])} ${Math.round(distM(inf[3], inf[4], e[1], e[2]))}m${e[3] ? ' · ' + moveTxt(e) : ''}`);
+  const me = cxName(seq).replace(/\s/g, ''), z = (D.v2_lz || {})[seq];
+  const ip = ((z && (D.v2_ipz || {})[z]) || []).filter(x => x[0].replace(/\s/g, '') !== me);
+  if (ip.length) out.push('🏗️ 6개월 안 주변 입주: ' + ip.slice(0, 3).map(x => `${x[0]} ${x[1].toLocaleString()}세대(${x[2].slice(2, 4)}.${x[2].slice(4)})`).join(', ')
+    + (ip.length > 3 ? ` 외 ${ip.length - 3}곳 · 합계 ${ip.reduce((a, x) => a + x[1], 0).toLocaleString()}세대` : ''));
+  $('#dNear').innerHTML = out.map(l => `<div>${l}</div>`).join(''); $('#dNear').hidden = !out.length;
+}
 function drawMap(seq) {
-  NMAPS.seq = seq;
+  NMAPS.seq = seq; drawNear(seq);
   if (window.HC_MAPKEY && !NMAPS.fail) {   // 실제 지도를 쓸 수 있으면 그림 지도는 안 그린다. 못 불러오면 nmapOff 가 그림 지도로
     $('#dNmap').hidden = false; svgShow(false);
     nmapLoad().then(M => nmapDraw(seq, M)).catch(() => nmapOff());
