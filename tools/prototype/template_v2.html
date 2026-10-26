@@ -925,6 +925,7 @@ function redevLeft(z) {
   return { med: sum(0), lo: sum(1), hi: sum(2), el };
 }
 function redevNote(z) {
+  if (z.src === 'newtown') return `${z.stage_no ? '' : '선도지구 선정(구역 지정 전) · '}노후계획도시 특별법 · 정부 목표 2027 착공·2030 입주`;   // collector/newtown.py
   const L = redevLeft(z), rd = /재개발/.test(z.biz_type || ''), out = [];
   if (rd && (z.stage_no || 0) < 3) out.push('<span class="pill warn">조합설립 전: 매수 이르다</span>');
   if (L) out.push(`입주까지 보통 ${L.med.toFixed(0)}년(${L.lo.toFixed(0)}~${L.hi.toFixed(0)}년)`);
@@ -1359,6 +1360,8 @@ const moveTxt = (e) => `학생 ${e[3].toLocaleString()}명 · 1년 전입 ${e[4]
 function drawNear(seq) {
   const out = [], inf = infoOf(seq), e = (POI.elem || [])[(D.v2_elemz || {})[seq]];
   if (e && inf[3]) out.push(`🏫 배정 ${sname(e[0])} ${Math.round(distM(inf[3], inf[4], e[1], e[2]))}m${e[3] ? ' · ' + moveTxt(e) : ''}`);
+  const m = (POI.mid || [])[(D.v2_midz || {})[seq]];   // 학교군 안 가장 가까운 중학교(추첨 배정이라 '가까운')
+  if (m && inf[3]) out.push(`🏫 가까운 ${sname(m[0])} ${Math.round(distM(inf[3], inf[4], m[1], m[2]))}m${m[3] ? ' · ' + moveTxt(m) : ''}`);
   const me = cxName(seq).replace(/\s/g, ''), z = (D.v2_lz || {})[seq];
   const ip = ((z && (D.v2_ipz || {})[z]) || []).filter(x => x[0].replace(/\s/g, '') !== me);
   if (ip.length) out.push('🏗️ 6개월 안 주변 입주: ' + ip.slice(0, 3).map(x => `${x[0]} ${x[1].toLocaleString()}세대(${x[2].slice(2, 4)}.${x[2].slice(4)})`).join(', ')

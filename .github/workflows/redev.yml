@@ -39,6 +39,13 @@ jobs:
           HC_DB_BACKEND: psql
           PYTHONUNBUFFERED: "1"
         run: python -m jobs.redev --molit
+      - name: 1기 신도시 선도지구(손으로 관리하는 목록)
+        if: ${{ !cancelled() }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          HC_DB_BACKEND: psql
+          PYTHONUNBUFFERED: "1"
+        run: python -m jobs.redev --newtown
       - name: 정비구역 좌표(상세 탭 지도)
         env:
           NCP_MAPS_KEY_ID: ${{ secrets.NCP_MAPS_KEY_ID }}

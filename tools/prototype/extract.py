@@ -269,7 +269,9 @@ out['v2_poi'] = {
   'st': [[r['name'], r['lines'], round(float(r['lat']), 5), round(float(r['lng']), 5)] for r in select(db, "SELECT name, lines, lat, lng FROM station WHERE lat IS NOT NULL")],
   'hosp': [[r['name'], r['kind'], round(float(r['lat']), 5), round(float(r['lng']), 5)] for r in select(db, "SELECT name, kind, lat, lng FROM hospital WHERE lat IS NOT NULL")],
   'mart': [[r['name'], r['brand'], round(float(r['lat']), 5), round(float(r['lng']), 5)] for r in select(db, "SELECT name, brand, lat, lng FROM mart WHERE lat IS NOT NULL")],
-  'mid': [[r['name'], round(float(r['lat']), 5), round(float(r['lng']), 5)] for r in select(db, "SELECT name, lat, lng FROM mid_school WHERE lat IS NOT NULL")],
+  # 중학교: [이름, 위도, 경도, 학생 수, 1년 전입, 전출] (학교알리미, jobs/infra.py midzone)
+  'mid': [[r['name'], round(float(r['lat']), 5), round(float(r['lng']), 5), r['students'], r['mv_in'], r['mv_out']]
+          for r in select(db, "SELECT name, lat, lng, students, mv_in, mv_out FROM mid_school WHERE lat IS NOT NULL ORDER BY school_id")],
   # 초등: [이름, 위도, 경도, 학생 수, 1년 전입, 전출] (학교알리미, 0078. 없으면 null)
   'elem': [[r['name'], round(float(r['lat']), 5), round(float(r['lng']), 5), r['students'], r['mv_in'], r['mv_out']]
            for r in select(db, "SELECT name, lat, lng, students, mv_in, mv_out FROM elem_school ORDER BY school_id")]}
@@ -279,6 +281,10 @@ _eix = {r['school_id']: i for i, r in enumerate(select(db, "SELECT school_id FRO
 _open = set(out['v2_info']) | {r[0] for r in out['v2_srch']}
 out['v2_elemz'] = {r['apt_seq']: _eix[r['sid']] for r in select(db, "SELECT apt_seq, elem_assigned->0->>'id' sid FROM complexes WHERE elem_assigned IS NOT NULL")
                    if r['sid'] in _eix and r['apt_seq'] in _open}
+# 단지 → 학교군 안 가장 가까운 중학교(complexes.mid_near 첫째)의 v2_poi.mid 순번. 서울 등은 학교군 안 추첨이라 '배정'이 아니라 '가까운'
+_mix = {r['school_id']: i for i, r in enumerate(select(db, "SELECT school_id FROM mid_school WHERE lat IS NOT NULL ORDER BY school_id"))}
+out['v2_midz'] = {r['apt_seq']: _mix[r['sid']] for r in select(db, "SELECT apt_seq, mid_near->0->>'id' sid FROM complexes WHERE mid_near IS NOT NULL")
+                  if r['sid'] in _mix and r['apt_seq'] in _open}
 # 6개월 안 같은 생활권 입주(한국부동산원 입주예정물량 ipju_plan, 📖 입주장 → 전세 하락 p.153~154). 6개월은 🔧
 # v2_ipz = {생활권: [[단지, 세대, 'YYYYMM'], ...]}, v2_lz = {단지: 생활권} (입주가 있는 생활권의 상세를 열 수 있는 단지만)
 out['v2_ipz'] = {}
