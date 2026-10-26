@@ -235,15 +235,15 @@ def _csv_file(pk: str) -> list[dict]:
 MID_NEAR = 3   # 학교군에 학교가 여럿이면 가까운 순으로 이만큼 보여준다 (배정 확정 아님)
 
 
-def _schoolinfo_moves(schools: dict[str, dict]) -> tuple[dict[str, dict], str | None]:
-    """학구도 중학교 → 학교알리미 전·출입. 키가 없거나 실패하면 빈 값(학교군 연결은 그대로 한다)."""
+def _schoolinfo_moves(schools: dict[str, dict], kind: str = "03") -> tuple[dict[str, dict], str | None]:
+    """학구도 학교(kind 03 중·02 초) → 학교알리미 전·출입. 키가 없거나 실패하면 빈 값(학교군 연결은 그대로 한다)."""
     for year in (time.strftime("%Y"), str(int(time.strftime("%Y")) - 1)):
         try:
             base, moves = {}, {}
             for sgg in list(REGIONS) + schoolinfo.EXTRA_SGG:
-                for r in schoolinfo.fetch(0, sgg, year):
+                for r in schoolinfo.fetch(0, sgg, year, kind):
                     base[r["SCHUL_CODE"]] = r
-                for r in schoolinfo.fetch(10, sgg, year):
+                for r in schoolinfo.fetch(10, sgg, year, kind):
                     moves[r["SCHUL_CODE"]] = r
                 time.sleep(0.3)
             base = list(base.values())
@@ -260,7 +260,7 @@ def _schoolinfo_moves(schools: dict[str, dict]) -> tuple[dict[str, dict], str | 
                 out[sid] = {"si_code": r["SCHUL_CODE"], "students": int(m.get("STDNT_SUM") or 0),
                             "mv_in": int(m.get("MVIN_SUM") or 0), "mv_out": int(m.get("MVT_SUM") or 0),
                             "net_in": schoolinfo.net_in_rate(m)}
-        print(f"  학교알리미 {year} 공시: 기본정보 {len(base)}곳, 학구도 중학교 {len(schools)}곳 중 {len(linked)}곳 연결, 전출입 {len(out)}곳")
+        print(f"  학교알리미 {year} 공시({'초' if kind == '02' else '중'}): 기본정보 {len(base)}곳, 학구도 학교 {len(schools)}곳 중 {len(linked)}곳 연결, 전출입 {len(out)}곳")
         return out, year
     return {}, None
 
@@ -371,16 +371,19 @@ def run_elem(db: Db) -> int:
             near = [{"id": s["id"], "name": s["name"], "m": round(dist_m(la, lo, s["lat"], s["lng"]))} for s in ranked]
             vals.append(f"({lit(c['apt_seq'])}, {lit(json.dumps(near, ensure_ascii=False))}::jsonb)")
     rows = list(schools.values())
+    moves, year = _schoolinfo_moves(schools, kind="02")   # 0078 학생 수·1년 전입·전출(키 없으면 빈 값)
+    mv = lambda s, k: lit(moves.get(s["id"], {}).get(k))
     stmts = ["BEGIN;", "DELETE FROM elem_school;"]
     for i in range(0, len(rows), 500):
-        stmts.append("INSERT INTO elem_school (school_id, name, est_type, lat, lng) VALUES "
-                     + ", ".join(f"({lit(s['id'])}, {lit(s['name'])}, {lit(s['type'])}, {s['lat']}, {s['lng']})" for s in rows[i:i + 500]) + ";")
+        stmts.append("INSERT INTO elem_school (school_id, name, est_type, lat, lng, students, mv_in, mv_out, pban_yr) VALUES "
+                     + ", ".join(f"({lit(s['id'])}, {lit(s['name'])}, {lit(s['type'])}, {s['lat']}, {s['lng']}, {mv(s, 'students')}::int, "
+                                 f"{mv(s, 'mv_in')}::int, {mv(s, 'mv_out')}::int, {lit(year if s['id'] in moves else None)})" for s in rows[i:i + 500]) + ";")
     stmts.append("UPDATE complexes SET elem_assigned = NULL WHERE elem_assigned IS NOT NULL;")
     for i in range(0, len(vals), 1000):
         stmts.append(f"UPDATE complexes AS c SET elem_assigned = v.e FROM (VALUES {', '.join(vals[i:i + 1000])}) AS v(a, e) WHERE c.apt_seq = v.a;")
     stmts.append("COMMIT;")
     db.query("\n".join(stmts))
-    print(f"  수도권 초등학교 {len(rows)}곳, 통학구역 있는 단지 {len(cx)}개 중 배정 학교 연결 {len(vals)}개")
+    print(f"  수도권 초등학교 {len(rows)}곳(전출입 {len(moves)}곳), 통학구역 있는 단지 {len(cx)}개 중 배정 학교 연결 {len(vals)}개")
     return 0
 
 

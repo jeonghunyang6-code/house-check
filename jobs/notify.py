@@ -213,6 +213,28 @@ def jeonse_lines(db: Db, seqs: list[str], names: dict[str, str], today, save: bo
     return out
 
 
+def ipju_lines(db: Db, seqs: list[str], names: dict[str, str]) -> list[str]:
+    """관심 단지 생활권의 6개월 🔧 안 입주(한국부동산원 입주예정물량, 📖 입주장 → 전세 하락 p.153~154). 같은 생활권 단지는 한 줄로 묶음."""
+    if not seqs:
+        return []
+    ins = ", ".join(lit(s) for s in seqs)
+    rows = select(db, f"""SELECT c.apt_seq s, p.name, p.households h, p.move_in_ym ym FROM complexes c JOIN ipju_plan p ON p.lifezone_id = c.lifezone_id
+      WHERE c.apt_seq IN ({ins}) AND p.move_in_ym BETWEEN to_char(now() AT TIME ZONE 'Asia/Seoul', 'YYYYMM')
+        AND to_char((now() AT TIME ZONE 'Asia/Seoul') + interval '5 months', 'YYYYMM') ORDER BY p.move_in_ym, p.households DESC""")
+    by: dict[tuple, list[str]] = {}
+    for s in seqs:
+        mine = [r for r in rows if r["s"] == s and r["name"].replace(" ", "") != names.get(s, "").replace(" ", "")]
+        if mine:
+            key = tuple((r["name"], r["ym"]) for r in mine)
+            by.setdefault(key, []).append(s)
+    out = []
+    for key, ss in by.items():
+        rs = [r for r in rows if r["s"] == ss[0] and (r["name"], r["ym"]) in key]
+        out.append(f"▪️ {', '.join(html.escape(names.get(s, s)) for s in ss)}: " + ", ".join(
+            f"{html.escape(r['name'])} {int(r['h']):,}세대({r['ym'][4:].lstrip('0')}월)" for r in rs[:3]) + (f" 외 {len(rs) - 3}곳" if len(rs) > 3 else ""))
+    return out
+
+
 ASK_STALE_DAYS = 14   # 이보다 오래 호가를 안 저장한 관심 단지는 주간 요약에서 챙김(매물 수 흐름이 끊기지 않게, 2026-10-26 사용자 요청)
 
 
@@ -270,6 +292,10 @@ def weekly(db: Db, save: bool = True) -> str:
     if js:
         out.append("\n🔑 <b>전세 신호</b>")
         out += js
+    ip = ipju_lines(db, seqs, {k: v["name"] for k, v in info.items()})
+    if ip:
+        out.append("\n🏗️ <b>주변 입주(6개월 안, 같은 생활권)</b>")
+        out += ip
     up = upcoming(today)
     pn = select(db, "SELECT kind, first_date::text d, n_press n FROM policy_news WHERE detected_at > now() - interval '7 days' AND known IS NULL ORDER BY first_date")
     if up or pn:

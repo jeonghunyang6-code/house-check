@@ -61,3 +61,13 @@ def test_restore_check_string_values():
     assert check({"v2-area": "84", "w": [1]}, {"v2-area": "84", "w": "[1]"}) == 0
     assert check({"w": [1]}, {"w": "[1]", "x": "1"}) == 1
 
+
+
+def test_ipju_lines_groups_same_zone():
+    from jobs.notify import ipju_lines
+    rows = [{"s": "a", "name": "신혼희망타운", "h": 440, "ym": "202612"}, {"s": "b", "name": "신혼희망타운", "h": 440, "ym": "202612"},
+            {"s": "c", "name": "다단지", "h": 900, "ym": "202701"}]
+    class Db:
+        def query(self, q): return rows
+    out = ipju_lines(Db(), ["a", "b", "c", "d"], {"a": "가", "b": "나", "c": "다단지", "d": "라"})
+    assert out == ["▪️ 가, 나: 신혼희망타운 440세대(12월)"]   # 자기 단지(다단지) 입주는 뺌, 입주 없는 라는 안 나옴
