@@ -97,16 +97,36 @@ def run_link(db: Db) -> int:
     return 0
 
 
+MOLIT_FILE = "15160169"   # 국토교통부 전국 도시정비사업 통합 데이터(CSV, 연 1회)
+
+
+def load_molit(db: Db) -> int:
+    """경기 구역 단계를 국토부 전국 자료로 올린다(앞선 단계일 때만, collector/redev_molit.py). 2026-10-26 사용자 결정: 경기 파일 손으로 넣기 대신."""
+    from collector import redev_molit as M
+    from jobs.infra import _csv_file
+    rows = [r for r in _csv_file(MOLIT_FILE) if r.get("시도") == "경기도"]
+    zones = select(db, "SELECT code, district, zone_nm, stage, stage_no FROM redev_zone WHERE src = 'gg'")
+    hits = [(r, M.match(r, zones), M.stage_of(r.get("현 사업추진단계"))) for r in rows]
+    taken = Counter(z["code"] for _, z, _ in hits if z)
+    up = [(z["code"], st) for r, z, st in hits if z and st and taken[z["code"]] == 1 and (z["stage_no"] or 0) != 8 and st[1] > (z["stage_no"] or 0)]
+    if up:
+        db.query("UPDATE redev_zone z SET stage = x.s, stage_no = x.n FROM (VALUES "
+                 + ", ".join(f"({lit(c)}, {lit(st[0])}, {st[1]})" for c, st in up) + ") AS x (c, s, n) WHERE z.code = x.c;")
+    print(f"  국토부 정비사업 자료: 경기 {len(rows)}구역 중 우리 구역과 연결 {sum(1 for _, z, _ in hits if z)}, 단계 올림 {len(up)}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--link-only", action="store_true")
-    ap.add_argument("--gg-file", help="경기데이터드림 '일반 정비 사업 추진 현황' CSV")
+    ap.add_argument("--gg-file", help="경기데이터드림 '일반 정비 사업 추진 현황' CSV(손으로, 선택)")
+    ap.add_argument("--molit", action="store_true", help="경기 단계를 국토부 전국 정비사업 자료로 갱신")
     ap.add_argument("--db", choices=["api", "psql"])
     a = ap.parse_args(argv)
     try:
         db = connect(a.db)
         today = datetime.now(KST).date()
-        rc = load_gg(db, a.gg_file, today) if a.gg_file else 0 if a.link_only else load(db, today)
+        rc = load_gg(db, a.gg_file, today) if a.gg_file else load_molit(db) if a.molit else 0 if a.link_only else load(db, today)
         if not rc and not a.link_only:
             log_stages(db, today)
         return rc or run_link(db)
