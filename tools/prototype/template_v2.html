@@ -11,7 +11,7 @@
   --ink: #15212b; --ink-2: #4f5d69; --ink-3: #7c8893;
   --accent: #0f6a64; --accent-bg: #dcefec;
   --good: #1f7a3a; --good-bg: #e2f2e6; --warn: #9a6200; --warn-bg: #fbefd5; --bad: #b3341f; --bad-bg: #fbe3dd; --none-bg: #eef1f4;
-  --up3: #a3241b; --up2: #d0493a; --up1: #eba596; --mid: #e3e6e9; --dn1: #9fc1e6; --dn2: #3f7fcf; --dn3: #1d4f99; --on-strong: #ffffff;
+  --up3: #a3241b; --up2: #d0493a; --up1: #eba596; --mid: #e3e6e9; --dn1: #9fc1e6; --dn2: #3f7fcf; --dn3: #1d4f99; --on-strong: #ffffff; --river: #9fdbe9;
   --c1: #2a78d6; --c2: #eb6834; --c3: #8a96a1;
   --font: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
   --display: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
@@ -21,14 +21,14 @@
   --ink: #e8edf1; --ink-2: #b2bec8; --ink-3: #8593a0;
   --accent: #4fb8ad; --accent-bg: #173a37;
   --good: #6fcf8a; --good-bg: #183324; --warn: #e6b450; --warn-bg: #3a2e14; --bad: #f08a72; --bad-bg: #3c1f19; --none-bg: #24313a;
-  --up3: #e2675a; --up2: #b9473b; --up1: #6e3832; --mid: #2b343c; --dn1: #2c4a6c; --dn2: #3d74bd; --dn3: #73a6e6; --on-strong: #0f1418;
+  --up3: #e2675a; --up2: #b9473b; --up1: #6e3832; --mid: #2b343c; --dn1: #2c4a6c; --dn2: #3d74bd; --dn3: #73a6e6; --on-strong: #0f1418; --river: #1f5a6b;
   --c1: #3987e5; --c2: #d95926; --c3: #8593a0; color-scheme: dark; } }
 :root[data-theme="dark"] {
   --bg: #0f1418; --surface: #182128; --sunk: #1f2a32; --line: #2c3a45;
   --ink: #e8edf1; --ink-2: #b2bec8; --ink-3: #8593a0;
   --accent: #4fb8ad; --accent-bg: #173a37;
   --good: #6fcf8a; --good-bg: #183324; --warn: #e6b450; --warn-bg: #3a2e14; --bad: #f08a72; --bad-bg: #3c1f19; --none-bg: #24313a;
-  --up3: #e2675a; --up2: #b9473b; --up1: #6e3832; --mid: #2b343c; --dn1: #2c4a6c; --dn2: #3d74bd; --dn3: #73a6e6; --on-strong: #0f1418;
+  --up3: #e2675a; --up2: #b9473b; --up1: #6e3832; --mid: #2b343c; --dn1: #2c4a6c; --dn2: #3d74bd; --dn3: #73a6e6; --on-strong: #0f1418; --river: #1f5a6b;
   --c1: #3987e5; --c2: #d95926; --c3: #8593a0; color-scheme: dark; }
 html, body { background: var(--bg); color: var(--ink); }
 body { font-family: var(--font); font-size: 15px; line-height: 1.55; -webkit-font-smoothing: antialiased; }
@@ -229,13 +229,14 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
       <div class="card">
         <h2>이번 주 가격 <small id="wkDate"></small></h2>
         <div class="row" style="justify-content:space-between">
-          <div class="seg" id="wkScope"><button type="button" data-v="seoul" aria-pressed="true">서울</button><button type="button" data-v="sudo" aria-pressed="false">수도권</button></div>
+          <div class="seg" id="wkScope"><button type="button" data-v="mine" aria-pressed="true">관심권</button><button type="button" data-v="seoul" aria-pressed="false">서울</button><button type="button" data-v="sudo" aria-pressed="false">수도권</button></div>
           <div class="seg" id="wkKind"><button type="button" data-v="t" aria-pressed="true">매매</button><button type="button" data-v="j" aria-pressed="false">전세</button></div>
         </div>
         <div class="kpis" id="wkKpis"></div>
         <svg class="map" id="map" role="img" aria-label="시군구별 주간 아파트 가격 변동률 지도" style="width:100%;height:auto;display:block"></svg>
         <div class="scale" id="mapScale"></div>
         <div class="rank" id="wkRank"></div>
+        <details id="wkAll" style="margin-top:6px"><summary class="muted" style="font-size:12.5px;cursor:pointer">전체 순위</summary><div class="rank" id="wkAllRows" style="margin-top:6px"></div></details>
         <p class="src" id="wkSrc"></p>
       </div>
       <div class="card">
@@ -574,31 +575,40 @@ function labelPt(k, g) {
 }
 (function weekly() {
   const W = D.weekly, G = D.geo, V = W.v, NODATA = new Set(W.nodata || []), names = D.region_names;
-  const st = { scope: 'seoul', kind: 't' };
+  // 관심권(2026-10-26 사용자 지정, 고정): 서울 25개 구 + 경기 15곳(토허 40곳과 같음). 넣고 빼기는 여기
+  const MINE = new Set([...Object.keys(G).filter(k => k.startsWith('11')), '41111', '41115', '41117', '41131', '41133', '41135', '41173', '41210', '41290', '41310', '41430', '41450', '41463', '41465', '41597']);
+  const st = { scope: 'mine', kind: 't' };
+  const bbox = (ks) => { let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; ks.forEach(k => (G[k].d.match(/-?[\d.]+,-?[\d.]+/g) || []).forEach(p => { const [x, y] = p.split(',').map(Number); x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }));
+    const pad = (x1 - x0) * 0.03; return [x0 - pad, y0 - pad, x1 - x0 + pad * 2, y1 - y0 + pad * 2].map(v => Math.round(v)); };
+  const VB = { seoul: [600, 692, 346, 286], sudo: [90, 100, 1384, 1414], mine: bbox([...MINE]) };
   $('#wkDate').textContent = `${dt(W.date)} 주`;
   const BINS = [[-Infinity, -0.3, '--dn3', 1], [-0.3, -0.1, '--dn2', 1], [-0.1, -0.02, '--dn1', 0], [-0.02, 0.02, '--mid', 0], [0.02, 0.1, '--up1', 0], [0.1, 0.3, '--up2', 1], [0.3, Infinity, '--up3', 1]];
   const bin = (v) => BINS.find(b => v >= b[0] && v < b[1]) || BINS[3];
   const fmt = (v) => (v > 0 ? '+' : '') + v.toFixed(2) + '%';
   const short = (k) => names[k].replace(/^(서울|경기|인천) /, '').replace(/시 (.+구)$/, ' $1');
+  const tiny = (k) => short(k).replace(/(.{2,})[구시]$/, '$1');   // 관심권 지도 글씨: '강남' '성남 분당' '하남'(구·시 뺌)
   $('#mapScale').innerHTML = '<span>-0.3%</span>' + BINS.map(b => `<span class="sw" style="background:var(${b[2]})"></span>`).join('') + '<span>+0.3%</span><span style="flex-basis:100%">파랑 하락 · 회색 보합(±0.02%) · 빨강 상승</span>';
-  $('#wkSrc').textContent = `한국부동산원 R-ONE 주간 아파트 가격지수, ${dt(W.prev_date)} 주 대비. 빗금은 주간 조사 대상 아님. 지역을 누르면 1년 변화도 보입니다.`;
+  $('#wkSrc').textContent = `한국부동산원 R-ONE 주간 아파트 가격지수, ${dt(W.prev_date)} 주 대비. 빗금은 주간 조사 대상 아님. 지역을 누르면 1년 변화도 보입니다. 관심권 = 서울 25개 구 + 경기 15곳(분당·수정·중원·과천·광명·하남·의왕·안양 동안·수원 영통·장안·팔달·용인 수지·기흥·화성 동탄·구리).`;
   function draw() {
-    const keys = Object.keys(G).filter(k => st.scope === 'sudo' || k.startsWith('11'));
-    const vb = st.scope === 'seoul' ? [600, 692, 346, 286] : [90, 100, 1384, 1414];
+    const keys = Object.keys(G).filter(k => st.scope === 'sudo' || (st.scope === 'mine' ? MINE.has(k) : k.startsWith('11')));
+    const vb = VB[st.scope], u = vb[2] / 346;   // u = 서울 보기 대비 배율(글씨·선 굵기)
     const svg = $('#map'); svg.setAttribute('viewBox', vb.join(' ')); svg.innerHTML = '';
-    const defs = el('defs', {}, svg), pat = el('pattern', { id: 'nd', width: st.scope === 'seoul' ? 4 : 14, height: st.scope === 'seoul' ? 4 : 14, patternUnits: 'userSpaceOnUse', patternTransform: 'rotate(45)' }, defs);
-    el('rect', { width: 20, height: 20, fill: 'var(--sunk)' }, pat); el('line', { x1: 0, y1: 0, x2: 0, y2: 20, stroke: 'var(--line)', 'stroke-width': st.scope === 'seoul' ? 1.5 : 5 }, pat);
+    const defs = el('defs', {}, svg), pat = el('pattern', { id: 'nd', width: 4 * u, height: 4 * u, patternUnits: 'userSpaceOnUse', patternTransform: 'rotate(45)' }, defs);
+    el('rect', { width: 20 * u, height: 20 * u, fill: 'var(--sunk)' }, pat); el('line', { x1: 0, y1: 0, x2: 0, y2: 20 * u, stroke: 'var(--line)', 'stroke-width': 1.5 * u }, pat);
     keys.forEach(k => {
       const nd = NODATA.has(k) || !V[k] || V[k][st.kind] == null, v = nd ? null : V[k][st.kind];
       const p = el('path', { d: G[k].d, class: 'r', fill: nd ? 'url(#nd)' : `var(${bin(v)[2]})`, 'fill-rule': 'evenodd' }, svg);
-      if (st.scope === 'sudo') p.style.strokeWidth = '3';
+      if (st.scope !== 'seoul') p.style.strokeWidth = (st.scope === 'sudo' ? 3 : u).toFixed(2);
       hover(p, nd ? `${names[k]} · 주간 조사 대상 아님` : `<b>${names[k]}</b><br>이번 주 ${fmt(v)} · 1년 ${V[k]['y' + st.kind] == null ? '–' : fmt(V[k]['y' + st.kind])}`);
     });
-    const fs = st.scope === 'seoul' ? 8.6 : 26, boxes = [];
+    // 한강(SGIS 행정동 경계에서 북·남 시군구가 맞닿는 선, data/geo/han_river_2025.json): 흰 테두리 + 청록
+    if (D.han) [['var(--surface)', 9], ['var(--river)', 6.5]].forEach(([c, w]) => el('path', { d: D.han, fill: 'none', stroke: c, 'stroke-width': w * u, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', 'pointer-events': 'none' }, svg));
+    const fs = st.scope === 'sudo' ? 26 : st.scope === 'mine' ? 7.4 * u : 8.6, boxes = [];   // 관심권은 서울이 작게 보여 글씨를 줄이고 서울 구는 이름만
     const hit = (b) => boxes.some(o => b[0] < o[2] && b[2] > o[0] && b[1] < o[3] && b[3] > o[1]);
     keys.slice().sort((a, b) => (G[b].a || 0) - (G[a].a || 0)).forEach(k => {
       if (!G[k].c || NODATA.has(k) || !V[k] || V[k][st.kind] == null) return;
-      const c0 = labelPt(k, G[k]), mx = fs * 2.2, w = fs * 0.62 * Math.max(short(k).length * 1.6, 6), h = fs * 2.15;
+      const nm = st.scope === 'mine' ? tiny(k) : short(k), only = st.scope === 'mine' && k.startsWith('11');
+      const c0 = labelPt(k, G[k]), mx = fs * 2.2, w = fs * 0.62 * Math.max(nm.length * 1.6, 6), h = only ? fs * 1.2 : fs * 2.15;
       const clamp = (p) => [Math.max(vb[0] + mx, Math.min(vb[0] + vb[2] - mx, p[0])), Math.max(vb[1] + fs, Math.min(vb[1] + vb[3] - fs * 1.4, p[1]))];
       const box = (p) => [p[0] - w / 2, p[1] - fs * 1.05, p[0] + w / 2, p[1] - fs * 1.05 + h];
       // 겹치면 위·아래·옆으로 조금 옮겨 본다(구 안쪽일 때만). 끝까지 겹치면 원래 자리
@@ -609,8 +619,8 @@ function labelPt(k, g) {
       boxes.push(box(c));
       if (st.scope === 'sudo' && (k.startsWith('11') || G[k].a < 9000)) return;
       const v = V[k][st.kind], col = bin(v)[3] ? 'var(--on-strong)' : 'var(--ink)';
-      const t1 = el('text', { x: c[0], y: c[1] - fs * 0.15, 'font-size': fs, 'font-weight': 600, fill: col }, svg); t1.textContent = short(k);
-      const t2 = el('text', { x: c[0], y: c[1] + fs * 1.0, 'font-size': fs * 0.92, fill: col }, svg); t2.textContent = fmt(v);
+      const t1 = el('text', { x: c[0], y: c[1] + (only ? fs * 0.35 : -fs * 0.15), 'font-size': fs, 'font-weight': 600, fill: col }, svg); t1.textContent = nm;
+      if (!only) { const t2 = el('text', { x: c[0], y: c[1] + fs * 1.0, 'font-size': fs * 0.92, fill: col }, svg); t2.textContent = fmt(v); }
     });
     $('#wkKpis').innerHTML = [['서울 전체', 'seoul'], ['수도권 전체', 'sudo']].map(([n, id]) => {
       const t = W.tot[`${id}_${st.kind}`], up = t.w >= 0;
@@ -618,6 +628,8 @@ function labelPt(k, g) {
     }).join('');
     const ranked = keys.filter(k => V[k] && V[k][st.kind] != null).map(k => [k, V[k][st.kind]]).sort((a, b) => b[1] - a[1]);
     const top = ranked.slice(0, 4), bot = ranked.slice(-4).reverse();
+    $('#wkAllRows').style.cssText = `margin-top:6px;grid-auto-flow:column;grid-template-rows:repeat(${Math.ceil(ranked.length / 2)},auto)`;   // 위→아래 순위
+    $('#wkAllRows').innerHTML = ranked.map(([k, v], i) => `<div><span><span class="muted num" style="display:inline-block;width:2em">${i + 1}</span>${short(k)}</span><span class="${v > 0 ? 'up' : v < 0 ? 'dn' : 'muted'} num">${fmt(v)}</span></div>`).join('');
     $('#wkRank').innerHTML = `<b style="font-size:12px;color:var(--ink-3)">많이 오른 곳</b><b style="font-size:12px;color:var(--ink-3)">${bot[0] && bot[0][1] < 0 ? '내린 곳' : '덜 오른 곳'}</b>` +
       [0, 1, 2, 3].map(i => `<div><span>${top[i] ? short(top[i][0]) : ''}</span><span class="up num">${top[i] ? fmt(top[i][1]) : ''}</span></div><div><span>${bot[i] ? short(bot[i][0]) : ''}</span><span class="${bot[i] && bot[i][1] < 0 ? 'dn' : 'muted'} num">${bot[i] ? fmt(bot[i][1]) : ''}</span></div>`).join('');
   }

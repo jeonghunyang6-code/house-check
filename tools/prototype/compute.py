@@ -325,6 +325,7 @@ json.dump({'monthly': monthly, 'cx': cx, 'today': today,
            'price_bands': d.get('price_bands', []),
            'b2_validation': d.get('b2_validation', []),
            'geo': with_label_points(json.load(open(ROOT / 'data/geo/sudogwon_sgg_20260701.json'))),
+           'han': json.load(open(ROOT / 'data/geo/han_river_2025.json'))['d'],   # 한강 선(tools/prototype/han_river.py)
            'region_names': REGIONS, 'asof': TODAY.isoformat()}, open(OUT / 'data.json', 'w'), ensure_ascii=False)
 for c in cx: print(c['name'], c['region'], c['P'], c['T'], c['C'], c['conf'], c['cn'], c['pattern'], c['rec'] and round(c['rec'],2), c['J'], c['jn'], c['ratio'] and round(c['ratio']), c['band'], c['n12'])
 print('today statuses', {s: sum(t['status'] == s for t in today) for s in set(t['status'] for t in today)})
