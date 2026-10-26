@@ -9,3 +9,5 @@
 
 원본 파일: `vuski/admdongkor` 저장소 `ver20260701/HangJeongDong_ver20260701.geojson` (2026-07-01 행정구역).
 시군구 코드 83개가 `collector/regions.py`와 일치함을 2026-10-12에 확인했다.
+
+`han_river_2025.json`(한강 선)은 통계청 SGIS 행정동 경계(2025, 공공누리 제1유형)에서 한강 북쪽·남쪽 시군구 동이 맞닿는 변을 뽑아 같은 화면 좌표로 바꾼 것이다(`tools/prototype/han_river.py`).
