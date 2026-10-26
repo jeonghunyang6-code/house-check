@@ -81,6 +81,8 @@ def run_link(db: Db) -> int:
                    "zone_ymd, committee_ymd, assoc_ymd, impl_ymd, mgmt_ymd, construction_ymd FROM redev_zone")
     cx = select(db, "SELECT apt_seq, apt_name, region_code, umd_name, jibun, build_year FROM complexes WHERE region_code LIKE '11%' OR region_code LIKE '41%'")
     pairs = link(zones, cx)
+    from collector.newtown import ZONES as NT   # 선도지구는 구성 단지를 손으로 적어 둠
+    pairs += [(m, z.code, "newtown") for z in NT for m in z.members]
     gen = general_sale(zones)
     stmts = ["BEGIN;", "DELETE FROM complex_redev;", "UPDATE redev_zone SET gen_sale_est = NULL, gen_ratio = NULL, gen_pct = NULL;"]
     if gen:
@@ -94,6 +96,25 @@ def run_link(db: Db) -> int:
     print(f"  일반분양 근사 {len(gen)}곳 (÷기존 세대 중앙값 {sorted(r for _, r, _ in gen.values())[len(gen) // 2] if gen else '-'})")
     print(f"  재건축 구역 {n_reb}곳 중 {len({c for _, c, _ in pairs})}곳이 단지 {len({a for a, _, _ in pairs})}곳과 연결 "
           f"({dict(Counter(h for _, _, h in pairs))})")
+    return 0
+
+
+def load_newtown(db: Db, today) -> int:
+    """1기 신도시 선도지구(collector/newtown.py) → redev_zone src='newtown'. 위치 = 구성 단지 좌표 평균."""
+    from collector.newtown import ZONES
+    vals = ", ".join(
+        f"({lit(z.code)}, {lit(z.region_code)}, {lit(z.zone_nm.split()[0])}, {lit(z.zone_nm)}, '재건축(노후계획도시)', {lit(z.stage)}, {z.stage_no}, "
+        f"{z.households}, {lit(z.since if z.stage_no == 1 else None)}, {lit(z.since if z.stage_no == 3 else None)}, 'newtown', {lit(today)})" for z in ZONES)
+    pts = ", ".join(f"({lit(z.code)}, {lit(m)})" for z in ZONES for m in z.members)
+    db.query(f"""BEGIN;
+DELETE FROM redev_zone WHERE src = 'newtown';
+INSERT INTO redev_zone (code, region_code, district, zone_nm, biz_type, stage, stage_no, existing_hh, zone_ymd, assoc_ymd, src, fetched_at) VALUES {vals};
+UPDATE redev_zone z SET lat = x.la, lng = x.lo, geo_src = 'complex', umd_name = x.umd FROM (
+  SELECT v.code, avg(c.lat) la, avg(c.lng) lo, mode() WITHIN GROUP (ORDER BY c.umd_name) umd
+  FROM (VALUES {pts}) AS v(code, s) JOIN complexes c ON c.apt_seq = v.s AND c.lat IS NOT NULL GROUP BY 1) x
+WHERE z.code = x.code;
+COMMIT;""")
+    print(f"  1기 신도시 선도지구 {len(ZONES)}구역(단계: {dict(Counter(z.stage for z in ZONES))})")
     return 0
 
 
@@ -121,12 +142,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--link-only", action="store_true")
     ap.add_argument("--gg-file", help="경기데이터드림 '일반 정비 사업 추진 현황' CSV(손으로, 선택)")
     ap.add_argument("--molit", action="store_true", help="경기 단계를 국토부 전국 정비사업 자료로 갱신")
+    ap.add_argument("--newtown", action="store_true", help="1기 신도시 선도지구(collector/newtown.py) 다시 넣기")
     ap.add_argument("--db", choices=["api", "psql"])
     a = ap.parse_args(argv)
     try:
         db = connect(a.db)
         today = datetime.now(KST).date()
-        rc = load_gg(db, a.gg_file, today) if a.gg_file else load_molit(db) if a.molit else 0 if a.link_only else load(db, today)
+        rc = load_gg(db, a.gg_file, today) if a.gg_file else load_molit(db) if a.molit else load_newtown(db, today) if a.newtown else 0 if a.link_only else load(db, today)
         if not rc and not a.link_only:
             log_stages(db, today)
         return rc or run_link(db)
