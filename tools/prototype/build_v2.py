@@ -46,19 +46,37 @@ if "--web" in sys.argv:
     import hashlib
     i = tmpl.index("</style>") + len("</style>")   # 템플릿은 조각(아티팩트가 감쌈) → 웹에서는 문서로 감싼다
     body = tmpl[i:].replace("/*DATA*/null", "window.__D", 1)
+    # 2026-10-26 속도 2단계: 템플릿의 /*LATE*/ 앞(공통 도구 + 시장 탭)은 그 부분이 쓰는 데이터(data.json)만 받고 먼저 실행해 첫 화면을 띄우고,
+    # 나머지 데이터(data2.json, 약 90%)는 동시에 받기 시작해 오면 D 에 합친 뒤 뒷부분을 실행. 그 전에 다른 탭을 누르면 '불러오는 중'
+    import re
     j = body.index("<script>")
-    body = body[:j] + '<script type="text/plain" id="hc-main">' + body[j + len("<script>"):]
-    ver = hashlib.md5(djs.encode()).hexdigest()[:10]
+    k = body.index("/*LATE*/")
+    e = body.index("</script>", k)
+    part_a, part_b = body[j + len("<script>"):k], body[k:e]
+    core_keys = set(re.findall(r"\bD\.([A-Za-z0-9_]+)", part_a)) | {"asof", "region_names"}
+    core = {x: v for x, v in d.items() if x in core_keys}
+    late = {x: v for x, v in d.items() if x not in core_keys}
+    body = (body[:j] + '<script type="text/plain" id="hc-a">' + part_a + '</script>\n<script type="text/plain" id="hc-b">' + part_b + body[e:])
+    djs = json.dumps(core, ensure_ascii=False, separators=(",", ":"))
+    djs2 = json.dumps(late, ensure_ascii=False, separators=(",", ":"))
+    ver, ver2 = hashlib.md5(djs.encode()).hexdigest()[:10], hashlib.md5(djs2.encode()).hexdigest()[:10]
+    run = "function (id) { var s = document.createElement('script'); s.textContent = document.getElementById(id).textContent; document.body.appendChild(s); }"
     loader = ("<div id=\"hc-loading\" style=\"position:fixed;inset:0;display:grid;place-items:center;background:var(--bg);color:var(--ink-2);font-size:15px;z-index:99\">불러오는 중…</div>\n"
-              "<script>Promise.all([window.__DP, window.__stateP]).then(function (a) { window.__D = a[0];"
-              " var s = document.createElement('script'); s.textContent = document.getElementById('hc-main').textContent; document.body.appendChild(s);"
-              " var l = document.getElementById('hc-loading'); if (l) l.remove(); }).catch(function () { document.getElementById('hc-loading').textContent = '데이터를 불러오지 못했습니다. 새로고침해 주세요.'; });</script>\n")
+              "<style>body:not(.hc-b) .tab-page:not(#home)::before { content: '나머지 데이터를 불러오는 중…'; display: block; padding: 20px 4px; color: var(--ink-3); }"
+              " body.hc-fail .tab-page:not(#home)::before { content: '데이터를 불러오지 못했습니다. 새로고침해 주세요.'; }</style>\n"
+              "<script>(function () { var run = " + run + ";"
+              " var fail = function () { document.body.classList.add('hc-fail'); var l = document.getElementById('hc-loading'); if (l) l.textContent = '데이터를 불러오지 못했습니다. 새로고침해 주세요.'; };"
+              " Promise.all([window.__DP, window.__stateP]).then(function (a) { window.__D = a[0]; run('hc-a'); var l = document.getElementById('hc-loading'); if (l) l.remove();"
+              " return window.__DP2; }).then(function (late) { Object.assign(window.__D, late); run('hc-b'); document.body.classList.add('hc-b'); }).catch(fail); })();</script>\n")
     page = ('<!doctype html>\n<html lang="ko">\n<head>\n<meta charset="utf-8">\n'
             '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n<meta name="robots" content="noindex, nofollow">\n'
             # 2026-10-26 속도: 데이터 받기를 <head> 맨 앞에서 시작(글꼴 CSS·본문 HTML 을 기다리지 않게) → 약 0.4초
-            + "<script>window.__DP = fetch('data.json?v=" + ver + "').then(function (r) { return r.json(); });</script>\n"
+            + "<script>window.__DP = fetch('data.json?v=" + ver + "').then(function (r) { return r.json(); });"
+            + " window.__DP2 = fetch('data2.json?v=" + ver2 + "').then(function (r) { return r.json(); });</script>\n"
             + tmpl[:i] + (f"\n<script>window.HC_MAPKEY = {json.dumps(os.environ['HC_MAPKEY'])};</script>" if os.environ.get("HC_MAPKEY") else "")
             + f"\n<script>{sync}</script>\n</head>\n<body>\n" + body + "\n" + loader + "</body>\n</html>\n")
     (dst / "index.html").write_text(page, encoding="utf-8")
     (dst / "data.json").write_text(djs, encoding="utf-8")
+    (dst / "data2.json").write_text(djs2, encoding="utf-8")
+    print(f"  첫 데이터 {len(djs) // 1024:,}KB({len(core)}개 키) · 나머지 {len(djs2) // 1024:,}KB")
     print(dst / "index.html")

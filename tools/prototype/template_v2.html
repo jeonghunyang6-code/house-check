@@ -485,7 +485,6 @@ const dt = (s) => s ? s.slice(2).replace(/-/g, '.') : '';
 const YEAR = +D.asof.slice(0, 4);
 const CX = D.cx || [];
 const CXS = Object.fromEntries(CX.map(c => [c.seq, c]));
-const INFO = D.v2_info || {};   // 단지 → [이름, 시군구, 동, 위도, 경도, 역, 역m, 사대문분, 여의도분, 강남분, 마트, 마트m, 병원, 병원m, 중학교군, 준공, 세대수]
 const rn = (rc) => (D.region_names[rc] || rc || '').replace(/^(서울|경기|인천) /, '');
 
 /* 대출·세금 규칙 (collector/policy.py LOAN_RULES, 10·15 대책 2025-10-16~, 생애최초 LTV 70% 6·27 대책). 정책 바뀌면 여기만 */
@@ -506,80 +505,6 @@ const Calc = {
   },
 };
 
-/* ───── 공통: 단지 모델 ───── */
-const CAND = (D.cand || []).map(r => ({ name: r[0] ?? (INFO[r[23]] || [])[0], rc: r[1], umd: r[2] ?? (INFO[r[23]] || [])[2], ag: r[3], ref: r[4], conf: r[5], phase: r[6], grade: r[7], newbig: r[10], hh: r[11], by: r[12], tv: r[13], dr: r[14], est: r[15], vl: r[17], stage: r[19], sno: r[20], seq: r[23],
-  js: r[24], jn: r[25], rr: r[26], j24: r[27], uz: r[28] }));
-/* 용적률 옆 용도지역: 400%가 넘는 곳은 대부분 상업지역 주상복합·준주거·준공업이라 오류가 아님(2026-10-25 점검 414곳 중 405곳) */
-const zoneTag = (z, vl) => !z ? (vl > 400 ? ' · 용도지역 미확인' : '') : /상업/.test(z) ? ' · 상업지역(주상복합)' : ' · ' + z.replace('일반주거지역', '일반').replace('지역', '');
-const CANDBY = {}; CAND.forEach(r => (CANDBY[r.seq] = CANDBY[r.seq] || []).push(r));
-/* 평형 선택(관심·상세·계획 공통): 84 = 84·85㎡, 없으면 75~99㎡ 중 가장 가까운 것 / 59 = 59·60㎡, 없으면 50~74㎡ */
-let AREA = store.get('v2-area', '84');
-function areaRow(seq, pref = AREA) {
-  const rs = CANDBY[seq] || [], t = +pref, ex = t === 84 ? [84, 85] : [59, 60], bd = t === 84 ? [75, 99] : [50, 74];
-  return rs.find(r => r.ag >= ex[0] && r.ag <= ex[1]) || rs.filter(r => r.ag >= bd[0] && r.ag <= bd[1]).sort((a, b) => Math.abs(a.ag - t) - Math.abs(b.ag - t))[0] || null;
-}
-const main = (seq) => areaRow(seq) || areaRow(seq, AREA === '84' ? '59' : '84') || (CANDBY[seq] || [])[0] || null;
-const useFull = (seq) => AREA === '84' && !!CXS[seq];
-const agTag = (seq) => { const r = areaRow(seq); return !r ? `<span class="pill warn">${AREA}㎡ 없음</span>` : (r.ag !== +AREA && r.ag !== +AREA + 1) ? `<span class="pill none">대표 ${r.ag}㎡</span>` : ''; };
-function bandFor(p) {   // D1 가격대별 전세가율 정상 범위(compute.py band 와 같음)
-  const pts = [[0, [60, 90]], [50000, [60, 90]], [80000, [50, 60]], [150000, [50, 60]], [200000, [30, 50]], [1e9, [30, 50]]];
-  for (let i = 0; i < pts.length - 1; i++) { const [x0, r0] = pts[i], [x1, r1] = pts[i + 1]; if (p >= x0 && p <= x1) { const t = x1 === x0 ? 0 : (p - x0) / (x1 - x0); return [Math.round(r0[0] + (r1[0] - r0[0]) * t), Math.round(r0[1] + (r1[1] - r0[1]) * t)]; } }
-  return [30, 50];
-}
-/* 기준 시세가 없는 단지(검색·관심만): [seq, 이름, K-apt 이름(다르면), 시군구, 동, 준공, 세대, 최근 거래가, 날짜 YYMMDD, 평형, 3년 거래 수] */
-const SR = {}; (D.v2_srch || []).forEach(r => { SR[r[0]] = { n: r[1], kn: r[2], rc: r[3], umd: r[4], by: r[5], hh: r[6], lp: r[7], ld: r[8], la: r[9], n3: r[10], lat: r[11], lng: r[12], st: r[13], stm: r[14], pre: r[15] || null }; });
-const preNote = (x) => x.pre ? (x.pre === '?' ? '분양 단지(입주 전)' : `분양 단지 · 입주 ${x.pre.slice(0, 4)}.${x.pre.slice(4)}${x.pre <= D.asof.slice(0, 7).replace('-', '') ? '(등기 전)' : ' 예정'}`) : '';
-/* 분양권·입주권 거래(1년): 단지 → [[단지, YYMMDD, 평형, 층, 가격, 0, '입주권'|'분양권']] (매매 DEALS 와 같은 모양 + 7번째 칸) */
-const RG = {}; (D.v2_rights || []).forEach(r => (RG[r[0]] = RG[r[0]] || []).push([r[0], r[1], r[2], r[3], r[4], 0, r[5] ? '입주권' : '분양권']));
-const srInfo = (seq) => { const x = SR[seq]; return x ? [srName(x), x.rc, x.umd, x.lat, x.lng, x.st, x.stm] : []; };
-const infoOf = (seq) => INFO[seq] || srInfo(seq);
-/* 기준 시세가 없을 때 쓰는 최근 거래가: 고른 평형대(84 → 75~99, 59 → 50~74) 매매·분양권·입주권 중 가장 최근, 없으면 아무 평형 */
-function lastPx(seq) {
-  const band = AREA === '84' ? [75, 99] : [50, 74], x = SR[seq];
-  const all = [...(DEALS[seq] || []).filter(d => !d[5]).map(d => [d[1], d[2], d[4], '매매']), ...(RG[seq] || []).map(d => [d[1], d[2], d[4], d[6]])];
-  if (x && x.lp) all.push([x.ld, x.la, x.lp, '매매']);
-  const pick = (a) => a.sort((p, q) => p[0] < q[0] ? 1 : -1)[0], inB = all.filter(d => d[1] >= band[0] && d[1] <= band[1]);
-  // 최근 3개월 평형대 거래가 3건 이상이면 중간값(한 건에 흔들리지 않게), 아니면 가장 최근 1건
-  const t1 = new Date(D.asof).getTime(), d3 = inB.filter(d => t1 - new Date(`20${d[0].slice(0, 2)}-${d[0].slice(2, 4)}-${d[0].slice(4)}`).getTime() <= 92 * 864e5);
-  if (d3.length >= 3) { const v = d3.map(d => d[2]).sort((a, b) => a - b), n = v.length, top = pick(d3), kinds = [...new Set(d3.map(d => d[3]))].join('·');
-    return { d: top[0], ag: top[1], p: (v[(n - 1) >> 1] + v[n >> 1]) / 2, k: `3개월 ${n}건 중간값(${kinds})`, n }; }
-  const b = pick(inB) || pick(all);
-  return b ? { d: b[0], ag: b[1], p: b[2], k: b[3] } : null;
-}
-const pxOf = (seq) => cxRef(seq) || (lastPx(seq) || {}).p || null;
-const pxNote = (seq) => { if (cxRef(seq)) return ''; const l = lastPx(seq); return l ? `최근 ${l.k} ${eok(l.p)} (${l.d.slice(0, 2)}.${l.d.slice(2, 4)} · ${l.ag}㎡)` : ''; };
-const srName = (x) => x.kn && x.by >= YEAR - 3 ? `${x.kn}` : x.n;   // 재건축 뒤 새 이름(K-apt)이 있으면 그 이름
-const srNote = (x, seq) => { const l = seq && lastPx(seq); if (l) return `최근 ${l.k} ${eok(l.p)} (${l.d.slice(0, 2)}.${l.d.slice(2, 4)}.${l.d.slice(4)} · ${l.ag}㎡)`;
-  return x.lp ? `최근 거래 ${eok(x.lp)} (${dt('20' + x.ld.slice(0, 2) + '-' + x.ld.slice(2, 4) + '-' + x.ld.slice(4))} · ${x.la}㎡)` : '아직 매매 실거래 없음'; };
-const light = (seq) => !CXS[seq] && !main(seq) && !!SR[seq];
-function cxName(seq) { return (CXS[seq] && CXS[seq].name) || (INFO[seq] && INFO[seq][0]) || (main(seq) || {}).name || (SR[seq] && srName(SR[seq])) || (typeof E6NM !== 'undefined' && E6NM[seq]) || seq; }
-function cxRef(seq) { return useFull(seq) ? CXS[seq].C : (main(seq) || {}).ref; }
-const E6 = D.v2_e6 || { q: [], s: {}, s59: {} };
-const qser = (seq) => (AREA === '84' ? E6.s : E6.s59 || {})[seq] || null;   // 고른 평형의 분기 중앙가 20분기
-function q1y(seq) {   // 최근 분기 vs 4분기 전 (둘 다 값이 있을 때)
-  const a = qser(seq); if (!a) return null; let i = a.length - 1; while (i >= 0 && a[i] == null) i--; if (i < 4 || a[i - 4] == null) return null; return (a[i] / a[i - 4] - 1) * 100;
-}
-const DEALS = {}; (D.v2_deals || []).forEach(r => (DEALS[r[0]] = DEALS[r[0]] || []).push(r));
-const TODAY_NEW = new Set((D.today || []).map(t => t.apt_seq));
-
-let watch = new Set(store.get('v2-watch2', CX.map(c => c.seq)));
-const watchChanged = [];
-/* 단지 번호가 바뀐 곳(분양 단지 → 실제 단지, 재건축 옛 단지 → 새 단지)은 관심·호가·네이버 번호·임장·계획 선택을 새 번호로 옮김 */
-const PM = D.v2_pmap || {};
-(function moveSeqs() {
-  const to = (s) => PM[s] || s;
-  if ([...watch].some(s => PM[s])) { watch = new Set([...watch].map(to)); store.set('v2-watch2', [...watch]); }
-  const A = store.get('v2-naver', {}); if (Object.keys(A).some(s => PM[s])) {
-    const B = {}; Object.entries(A).forEach(([s, v]) => { const n = to(s); B[n] = Object.assign(B[n] || {}, v); }); store.set('v2-naver', B); }
-  const N = store.get('v2-nmap', {}); if (Object.values(N).some(s => PM[s])) store.set('v2-nmap', Object.fromEntries(Object.entries(N).map(([k, s]) => [k, to(s)])));
-  const V = store.get('v2-visits', []); if (V.some(v => PM[v.s])) store.set('v2-visits', V.map(v => ({ ...v, s: to(v.s) })));
-  ['v2-my2', 'v2-tg'].forEach(k => { const v = store.get(k, null); if (v && PM[v]) store.set(k, PM[v]); });
-})();
-function toggleWatch(seq) { watch.has(seq) ? watch.delete(seq) : watch.add(seq); store.set('v2-watch2', [...watch]); watchChanged.forEach(f => f()); }
-
-/* 평형 선택 버튼(관심·상세·계획) */
-function syncArea() { document.querySelectorAll('.areaSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === AREA)); }
-document.addEventListener('click', (e) => { const b = e.target.closest('.areaSeg button'); if (!b || b.dataset.v === AREA) return; AREA = b.dataset.v; store.set('v2-area', AREA); syncArea(); watchChanged.forEach(f => f()); });
 /* ───── 탭 ───── */
 const TABS = ['home', 'find', 'watch', 'daily', 'plan'];
 function go(t) {
@@ -587,7 +512,8 @@ function go(t) {
   TABS.forEach(x => { $('#' + x).hidden = x !== t; });
   [...$('#tabbar').children].forEach(b => b.dataset.t === t ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'));
   store.set('v2-tab', t); scrollTo(0, 0);
-  if (t === 'daily' && NMAPS.map) setTimeout(nmapFit, 0);   // 숨은 탭에서 만든 지도는 크기가 0 → 보일 때 다시 맞춤
+  if (t === 'daily' && typeof NMAPS !== 'undefined' && NMAPS.map) setTimeout(nmapFit, 0);   // 숨은 탭에서 만든 지도는 크기가 0 → 보일 때 다시 맞춤
+  if (t === 'daily' && !go.daily && typeof drawDaily === 'function') { go.daily = 1; drawDaily(); }   // 상세 탭은 처음 볼 때 그림(첫 화면 약 0.07초)
 }
 $('#tabbar').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) go(b.dataset.t); });
 
@@ -795,6 +721,82 @@ const PSHORT = { '2026-10-01|세금': '조정지역 일시적 2주택 처분 3�
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(show); setTimeout(show, 2500); requestAnimationFrame(() => setTimeout(show, 0));
 })();
 
+/*LATE*/   // 웹: 여기까지(공통 도구 + 시장 탭)는 첫 데이터(data.json)로 먼저, 아래는 나머지 데이터(data2.json)가 온 뒤 실행(build_v2.py --web, 2026-10-26 속도)
+const INFO = D.v2_info || {};   // 단지 → [이름, 시군구, 동, 위도, 경도, 역, 역m, 사대문분, 여의도분, 강남분, 마트, 마트m, 병원, 병원m, 중학교군, 준공, 세대수]
+/* ───── 공통: 단지 모델 ───── */
+const CAND = (D.cand || []).map(r => ({ name: r[0] ?? (INFO[r[23]] || [])[0], rc: r[1], umd: r[2] ?? (INFO[r[23]] || [])[2], ag: r[3], ref: r[4], conf: r[5], phase: r[6], grade: r[7], newbig: r[10], hh: r[11], by: r[12], tv: r[13], dr: r[14], est: r[15], vl: r[17], stage: r[19], sno: r[20], seq: r[23],
+  js: r[24], jn: r[25], rr: r[26], j24: r[27], uz: r[28] }));
+/* 용적률 옆 용도지역: 400%가 넘는 곳은 대부분 상업지역 주상복합·준주거·준공업이라 오류가 아님(2026-10-25 점검 414곳 중 405곳) */
+const zoneTag = (z, vl) => !z ? (vl > 400 ? ' · 용도지역 미확인' : '') : /상업/.test(z) ? ' · 상업지역(주상복합)' : ' · ' + z.replace('일반주거지역', '일반').replace('지역', '');
+const CANDBY = {}; CAND.forEach(r => (CANDBY[r.seq] = CANDBY[r.seq] || []).push(r));
+/* 평형 선택(관심·상세·계획 공통): 84 = 84·85㎡, 없으면 75~99㎡ 중 가장 가까운 것 / 59 = 59·60㎡, 없으면 50~74㎡ */
+let AREA = store.get('v2-area', '84');
+function areaRow(seq, pref = AREA) {
+  const rs = CANDBY[seq] || [], t = +pref, ex = t === 84 ? [84, 85] : [59, 60], bd = t === 84 ? [75, 99] : [50, 74];
+  return rs.find(r => r.ag >= ex[0] && r.ag <= ex[1]) || rs.filter(r => r.ag >= bd[0] && r.ag <= bd[1]).sort((a, b) => Math.abs(a.ag - t) - Math.abs(b.ag - t))[0] || null;
+}
+const main = (seq) => areaRow(seq) || areaRow(seq, AREA === '84' ? '59' : '84') || (CANDBY[seq] || [])[0] || null;
+const useFull = (seq) => AREA === '84' && !!CXS[seq];
+const agTag = (seq) => { const r = areaRow(seq); return !r ? `<span class="pill warn">${AREA}㎡ 없음</span>` : (r.ag !== +AREA && r.ag !== +AREA + 1) ? `<span class="pill none">대표 ${r.ag}㎡</span>` : ''; };
+function bandFor(p) {   // D1 가격대별 전세가율 정상 범위(compute.py band 와 같음)
+  const pts = [[0, [60, 90]], [50000, [60, 90]], [80000, [50, 60]], [150000, [50, 60]], [200000, [30, 50]], [1e9, [30, 50]]];
+  for (let i = 0; i < pts.length - 1; i++) { const [x0, r0] = pts[i], [x1, r1] = pts[i + 1]; if (p >= x0 && p <= x1) { const t = x1 === x0 ? 0 : (p - x0) / (x1 - x0); return [Math.round(r0[0] + (r1[0] - r0[0]) * t), Math.round(r0[1] + (r1[1] - r0[1]) * t)]; } }
+  return [30, 50];
+}
+/* 기준 시세가 없는 단지(검색·관심만): [seq, 이름, K-apt 이름(다르면), 시군구, 동, 준공, 세대, 최근 거래가, 날짜 YYMMDD, 평형, 3년 거래 수] */
+const SR = {}; (D.v2_srch || []).forEach(r => { SR[r[0]] = { n: r[1], kn: r[2], rc: r[3], umd: r[4], by: r[5], hh: r[6], lp: r[7], ld: r[8], la: r[9], n3: r[10], lat: r[11], lng: r[12], st: r[13], stm: r[14], pre: r[15] || null }; });
+const preNote = (x) => x.pre ? (x.pre === '?' ? '분양 단지(입주 전)' : `분양 단지 · 입주 ${x.pre.slice(0, 4)}.${x.pre.slice(4)}${x.pre <= D.asof.slice(0, 7).replace('-', '') ? '(등기 전)' : ' 예정'}`) : '';
+/* 분양권·입주권 거래(1년): 단지 → [[단지, YYMMDD, 평형, 층, 가격, 0, '입주권'|'분양권']] (매매 DEALS 와 같은 모양 + 7번째 칸) */
+const RG = {}; (D.v2_rights || []).forEach(r => (RG[r[0]] = RG[r[0]] || []).push([r[0], r[1], r[2], r[3], r[4], 0, r[5] ? '입주권' : '분양권']));
+const srInfo = (seq) => { const x = SR[seq]; return x ? [srName(x), x.rc, x.umd, x.lat, x.lng, x.st, x.stm] : []; };
+const infoOf = (seq) => INFO[seq] || srInfo(seq);
+/* 기준 시세가 없을 때 쓰는 최근 거래가: 고른 평형대(84 → 75~99, 59 → 50~74) 매매·분양권·입주권 중 가장 최근, 없으면 아무 평형 */
+function lastPx(seq) {
+  const band = AREA === '84' ? [75, 99] : [50, 74], x = SR[seq];
+  const all = [...(DEALS[seq] || []).filter(d => !d[5]).map(d => [d[1], d[2], d[4], '매매']), ...(RG[seq] || []).map(d => [d[1], d[2], d[4], d[6]])];
+  if (x && x.lp) all.push([x.ld, x.la, x.lp, '매매']);
+  const pick = (a) => a.sort((p, q) => p[0] < q[0] ? 1 : -1)[0], inB = all.filter(d => d[1] >= band[0] && d[1] <= band[1]);
+  // 최근 3개월 평형대 거래가 3건 이상이면 중간값(한 건에 흔들리지 않게), 아니면 가장 최근 1건
+  const t1 = new Date(D.asof).getTime(), d3 = inB.filter(d => t1 - new Date(`20${d[0].slice(0, 2)}-${d[0].slice(2, 4)}-${d[0].slice(4)}`).getTime() <= 92 * 864e5);
+  if (d3.length >= 3) { const v = d3.map(d => d[2]).sort((a, b) => a - b), n = v.length, top = pick(d3), kinds = [...new Set(d3.map(d => d[3]))].join('·');
+    return { d: top[0], ag: top[1], p: (v[(n - 1) >> 1] + v[n >> 1]) / 2, k: `3개월 ${n}건 중간값(${kinds})`, n }; }
+  const b = pick(inB) || pick(all);
+  return b ? { d: b[0], ag: b[1], p: b[2], k: b[3] } : null;
+}
+const pxOf = (seq) => cxRef(seq) || (lastPx(seq) || {}).p || null;
+const pxNote = (seq) => { if (cxRef(seq)) return ''; const l = lastPx(seq); return l ? `최근 ${l.k} ${eok(l.p)} (${l.d.slice(0, 2)}.${l.d.slice(2, 4)} · ${l.ag}㎡)` : ''; };
+const srName = (x) => x.kn && x.by >= YEAR - 3 ? `${x.kn}` : x.n;   // 재건축 뒤 새 이름(K-apt)이 있으면 그 이름
+const srNote = (x, seq) => { const l = seq && lastPx(seq); if (l) return `최근 ${l.k} ${eok(l.p)} (${l.d.slice(0, 2)}.${l.d.slice(2, 4)}.${l.d.slice(4)} · ${l.ag}㎡)`;
+  return x.lp ? `최근 거래 ${eok(x.lp)} (${dt('20' + x.ld.slice(0, 2) + '-' + x.ld.slice(2, 4) + '-' + x.ld.slice(4))} · ${x.la}㎡)` : '아직 매매 실거래 없음'; };
+const light = (seq) => !CXS[seq] && !main(seq) && !!SR[seq];
+function cxName(seq) { return (CXS[seq] && CXS[seq].name) || (INFO[seq] && INFO[seq][0]) || (main(seq) || {}).name || (SR[seq] && srName(SR[seq])) || (typeof E6NM !== 'undefined' && E6NM[seq]) || seq; }
+function cxRef(seq) { return useFull(seq) ? CXS[seq].C : (main(seq) || {}).ref; }
+const E6 = D.v2_e6 || { q: [], s: {}, s59: {} };
+const qser = (seq) => (AREA === '84' ? E6.s : E6.s59 || {})[seq] || null;   // 고른 평형의 분기 중앙가 20분기
+function q1y(seq) {   // 최근 분기 vs 4분기 전 (둘 다 값이 있을 때)
+  const a = qser(seq); if (!a) return null; let i = a.length - 1; while (i >= 0 && a[i] == null) i--; if (i < 4 || a[i - 4] == null) return null; return (a[i] / a[i - 4] - 1) * 100;
+}
+const DEALS = {}; (D.v2_deals || []).forEach(r => (DEALS[r[0]] = DEALS[r[0]] || []).push(r));
+const TODAY_NEW = new Set((D.today || []).map(t => t.apt_seq));
+
+let watch = new Set(store.get('v2-watch2', CX.map(c => c.seq)));
+const watchChanged = [];
+/* 단지 번호가 바뀐 곳(분양 단지 → 실제 단지, 재건축 옛 단지 → 새 단지)은 관심·호가·네이버 번호·임장·계획 선택을 새 번호로 옮김 */
+const PM = D.v2_pmap || {};
+(function moveSeqs() {
+  const to = (s) => PM[s] || s;
+  if ([...watch].some(s => PM[s])) { watch = new Set([...watch].map(to)); store.set('v2-watch2', [...watch]); }
+  const A = store.get('v2-naver', {}); if (Object.keys(A).some(s => PM[s])) {
+    const B = {}; Object.entries(A).forEach(([s, v]) => { const n = to(s); B[n] = Object.assign(B[n] || {}, v); }); store.set('v2-naver', B); }
+  const N = store.get('v2-nmap', {}); if (Object.values(N).some(s => PM[s])) store.set('v2-nmap', Object.fromEntries(Object.entries(N).map(([k, s]) => [k, to(s)])));
+  const V = store.get('v2-visits', []); if (V.some(v => PM[v.s])) store.set('v2-visits', V.map(v => ({ ...v, s: to(v.s) })));
+  ['v2-my2', 'v2-tg'].forEach(k => { const v = store.get(k, null); if (v && PM[v]) store.set(k, PM[v]); });
+})();
+function toggleWatch(seq) { watch.has(seq) ? watch.delete(seq) : watch.add(seq); store.set('v2-watch2', [...watch]); watchChanged.forEach(f => f()); }
+
+/* 평형 선택 버튼(관심·상세·계획) */
+function syncArea() { document.querySelectorAll('.areaSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === AREA)); }
+document.addEventListener('click', (e) => { const b = e.target.closest('.areaSeg button'); if (!b || b.dataset.v === AREA) return; AREA = b.dataset.v; store.set('v2-area', AREA); syncArea(); watchChanged.forEach(f => f()); });
 /* ───── ② 찾기 ───── */
 const budget = { price: 0 };
 (function budgetCalc() {
@@ -1523,6 +1525,6 @@ $('#fundForm').addEventListener('input', () => { fundTouched = true; drawFund();
 watchChanged.push(drawMove);
 
 /* 처음 열 때 */
-syncArea(); drawWatch(); window.runBudget(); drawDaily(); drawMove();
+syncArea(); drawWatch(); window.runBudget(); drawMove();
 if (location.hash.startsWith('#ask=')) importAskHash(); else go((location.hash || '').slice(1) || store.get('v2-tab', 'home'));
 </script>
