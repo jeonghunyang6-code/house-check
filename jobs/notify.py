@@ -15,7 +15,7 @@ import html
 import json
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from collector import telegram as T
@@ -90,14 +90,42 @@ def db_mb(db: Db) -> int:
     return int(select(db, "SELECT pg_database_size(current_database()) / 1048576 AS mb")[0]["mb"])
 
 
+REDEV_NEAR_M = 2000   # 상세 탭 지도와 같은 반경
+
+
+def redev_changes(db: Db, seqs: list[str]) -> list[dict]:
+    """알리지 않은 정비구역 단계 변화(0077) 중 관심 단지 2km 안. 바로 전 단계가 있는 것만(처음 생긴 구역은 변화가 아님)."""
+    if not seqs:
+        return []
+    ins = ", ".join(lit(s) for s in seqs)
+    return select(db, f"""SELECT h.code, z.zone_nm, z.biz_type, h.stage, h.stage_no, p.stage prev, p.stage_no prev_no, h.first_seen::text d,
+       (SELECT c.apt_name FROM complexes c WHERE c.apt_seq IN ({ins}) AND c.lat IS NOT NULL
+          ORDER BY (c.lat - z.lat) ^ 2 + ((c.lng - z.lng) * 0.79) ^ 2 LIMIT 1) near_name
+FROM redev_stage_hist h JOIN redev_zone z ON z.code = h.code AND z.stage = h.stage
+JOIN LATERAL (SELECT stage, stage_no FROM redev_stage_hist p WHERE p.code = h.code AND p.stage <> h.stage AND p.first_seen < h.first_seen
+              ORDER BY p.first_seen DESC LIMIT 1) p ON true
+WHERE NOT h.notified AND z.lat IS NOT NULL AND EXISTS (SELECT 1 FROM complexes c WHERE c.apt_seq IN ({ins}) AND c.lat IS NOT NULL
+  AND 6371000 * 2 * asin(sqrt(sin(radians(z.lat - c.lat) / 2) ^ 2 + cos(radians(c.lat)) * cos(radians(z.lat)) * sin(radians(z.lng - c.lng) / 2) ^ 2)) <= {REDEV_NEAR_M})
+ORDER BY h.first_seen, z.zone_nm""")
+
+
+def mark_redev(db: Db) -> None:
+    db.query("UPDATE redev_stage_hist SET notified = true WHERE NOT notified;")
+
+
 def daily(db: Db) -> str | None:
-    rows, mb = deals(db, watch(db), 1), db_mb(db)
+    seqs = watch(db)
+    rows, mb, rd = deals(db, seqs, 1), db_mb(db), redev_changes(db, seqs)
     warn = [f"⚠️ DB {mb}MB / 500MB — 정리가 필요합니다(Claude 에게 'DB 정리')"] if mb >= DB_WARN_MB else []
-    if not rows and not warn:
+    if not rows and not warn and not rd:
         return None
     url = site(db)
     head = [f"🔔 <b>관심 단지 새 거래 {len(rows)}건</b>", *deal_lines(rows)] if rows else []
-    return "\n".join(warn + head + ([f"\n{url}"] if url and rows else []))
+    if rd:
+        head += [f"🏗️ <b>주변 정비구역 단계 변화 {len(rd)}곳</b>"] + [
+            f"{'⏫' if (r['stage_no'] or 0) > (r['prev_no'] or 0) else '🔁'} {html.escape(r['zone_nm'])}({html.escape(r['biz_type'] or '')}) "
+            f"{html.escape(r['prev'])} → <b>{html.escape(r['stage'])}</b> · {html.escape(r['near_name'] or '')} 근처" for r in rd]
+    return "\n".join(warn + head + ([f"\n{url}"] if url and (rows or rd) else []))
 
 
 def watch_info(db: Db, seqs: list[str]) -> dict[str, dict]:
@@ -136,7 +164,7 @@ def watch_info(db: Db, seqs: list[str]) -> dict[str, dict]:
                 diff = len(now) - len(cnt(dates[-2])) if len(dates) > 1 else 0
                 ask = f"🏷️ 호가 {len(now)}개 · 중간 {eok(now[(len(now) - 1) // 2])}" + (f" ({'+' if diff > 0 else ''}{diff}개)" if diff else "") + f" · {dates[-1][5:].replace('-', '/')} 저장"
                 moved = diff != 0 and dates[-1] >= week_ago
-        out[s] = {"name": names.get(s, s), "px": px, "ask": ask, "ask_moved": moved}
+        out[s] = {"name": names.get(s, s), "px": px, "ask": ask, "ask_moved": moved, "ask_last": dates[-1] if dates else None}
     return out
 
 
@@ -185,6 +213,23 @@ def jeonse_lines(db: Db, seqs: list[str], names: dict[str, str], today, save: bo
     return out
 
 
+ASK_STALE_DAYS = 14   # 이보다 오래 호가를 안 저장한 관심 단지는 주간 요약에서 챙김(매물 수 흐름이 끊기지 않게, 2026-10-26 사용자 요청)
+
+
+def ask_reminder(info: dict[str, dict], seqs: list[str], today) -> list[str]:
+    old = [(s, info[s]["ask_last"]) for s in seqs if info[s]["ask_last"] and (today - date.fromisoformat(info[s]["ask_last"])).days > ASK_STALE_DAYS]
+    never = [s for s in seqs if not info[s]["ask_last"]]
+    if not old and not never:
+        return []
+    out = [f"\n📝 <b>호가 저장 챙기기</b>(네이버 부동산 단지 화면에서 북마크)"]
+    if old:
+        out.append("   " + " · ".join(f"{html.escape(info[s]['name'])} {d[5:].replace('-', '/')}" for s, d in sorted(old, key=lambda x: x[1])) + f" ({ASK_STALE_DAYS}일 넘음)")
+    if never:
+        nm = [html.escape(info[s]["name"]) for s in never]
+        out.append(f"   저장한 적 없음 {len(never)}곳: " + " · ".join(nm[:5]) + (f" 외 {len(nm) - 5}곳" if len(nm) > 5 else ""))
+    return out
+
+
 def weekly(db: Db, save: bool = True) -> str:
     """금요일 주간 요약. 관심 단지는 이번 주 신고가 있거나 저장 호가 매물 수가 바뀐 곳만(2026-10-25 사용자 요청: 줄이고 이모지)."""
     today = datetime.now(KST).date()
@@ -220,6 +265,7 @@ def weekly(db: Db, save: bool = True) -> str:
         quiet = len(seqs) - len(moved)
         if quiet:
             out.append(f"\n😴 나머지 {quiet}곳: 이번 주 신고·호가 변동 없음")
+        out += ask_reminder(info, seqs, today)
     js = jeonse_lines(db, seqs, {k: v["name"] for k, v in info.items()}, today, save)
     if js:
         out.append("\n🔑 <b>전세 신호</b>")
@@ -247,11 +293,16 @@ def main(argv: list[str] | None = None) -> int:
         text = {"daily": daily, "weekly": lambda d: weekly(d, save=not a.dry), "test": lambda _db: "house-check 알림 연결 확인 ✅"}[a.mode](db)
         if not text:
             print("  보낼 것 없음")
+            if a.mode == "daily" and not a.dry:
+                mark_redev(db)   # 관심 단지 근처 변화가 없으면 먼 구역 변화도 '알림 끝'
             return 0
         if a.dry:
             print(text)
             return 0
-        print(f"  {a.mode}: {T.send(db, text, force=a.mode == 'test')} ({len(text)}자)")
+        got = T.send(db, text, force=a.mode == 'test')
+        print(f"  {a.mode}: {got} ({len(text)}자)")
+        if got == "sent" and a.mode == "daily":
+            mark_redev(db)   # 보낸 뒤에만. 관심 단지에서 먼 구역의 변화도 같이 '알림 끝'(밀리지 않게)
     except (DbError, T.TelegramError) as e:
         print(f"[notify] 실패: {e}", file=sys.stderr)
         return 1

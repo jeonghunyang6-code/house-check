@@ -44,3 +44,12 @@ def test_send_quiet_chat_and_split(monkeypatch):
     assert "chat_id=42" in calls[1][1] and "tg_chat" in db.sql[0]                                 # 대화 번호를 DB 에 저장
     monkeypatch.delenv("TELEGRAM_BOT_TOKEN")
     assert T.send(db, "hi", opener) == "off"
+
+
+def test_ask_reminder():
+    from datetime import date
+    from jobs.notify import ask_reminder
+    info = {"a": {"name": "가", "ask_last": "2026-10-01"}, "b": {"name": "나", "ask_last": "2026-10-20"}, "c": {"name": "다", "ask_last": None}}
+    out = ask_reminder(info, ["a", "b", "c"], date(2026, 10, 26))
+    assert "가 10/01" in out[1] and "나" not in out[1] and "저장한 적 없음 1곳: 다" in out[2]
+    assert ask_reminder({"b": info["b"]}, ["b"], date(2026, 10, 26)) == []

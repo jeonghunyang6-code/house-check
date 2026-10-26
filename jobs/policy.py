@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 
 from collector.db import DbError, connect, lit
@@ -19,12 +20,13 @@ def statements() -> str:
           for z in ZONES for c in z.region_codes for u in (z.umd_names or (None,))]
     ev = [f"({lit(d)}, {lit(k)}, {lit(t)}, {lit(s)})" for d, k, t, s in EVENTS]
     pv = [f"({lit(p.name)}, {lit(p.status)}, {lit(p.status_date)}, {lit(p.outlook)}, {lit(','.join(p.cbd) or None)}, "
-          f"{lit(','.join(p.region_codes))}, {lit(p.source)}, {lit(','.join(p.stations) or None)})" for p in PROJECTS]
+          f"{lit(','.join(p.region_codes))}, {lit(p.source)}, {lit(','.join(p.stations) or None)}, "
+          f"{lit(json.dumps([list(x) for x in p.new_stations], ensure_ascii=False) if p.new_stations else None)}::jsonb)" for p in PROJECTS]
     return "\n".join([
         "BEGIN;", "DELETE FROM policy_zone;", "DELETE FROM policy_events;", "DELETE FROM transit_projects;",
         "INSERT INTO policy_zone (kind, region_code, umd_name, start_date, end_date, scope, note, source) VALUES " + ", ".join(zv) + ";",
         "INSERT INTO policy_events (event_date, kind, title, source) VALUES " + ", ".join(ev) + ";",
-        "INSERT INTO transit_projects (name, status, status_date, outlook, cbd, region_codes, source, stations) VALUES " + ", ".join(pv) + ";",
+        "INSERT INTO transit_projects (name, status, status_date, outlook, cbd, region_codes, source, stations, new_stations) VALUES " + ", ".join(pv) + ";",
         "COMMIT;"])
 
 
