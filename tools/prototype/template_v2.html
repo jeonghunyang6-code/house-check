@@ -1334,6 +1334,11 @@ function nmapDraw(seq, M) {
     const m = pin(x[2], x[3], `<div class="nm-pin"><span class="nm-zone" style="background:#6b4fbb">${ps.map(p => p.name.split(' ')[0]).join('·')}</span><span class="nm-lb">${x[0]}</span></div>`, 28,
       `<b>${x[0]}역</b> · ${Math.round(d)}m<br>` + ps.map(p => `${p.name} · <b>${p.status}</b>${p.outlook ? `<br><span style="color:#7c8893">${p.outlook}</span>` : ''}`).join('<br>'));
     NMAPS.zv.push(['proj', m]); });
+  // 새로 생기는 역(가칭): 위치 미공개라 기사 지명 기준 대략(collector/projects.py new_stations)
+  (D.v2_proj || []).filter(p => !/개통|탈락/.test(p.status)).forEach(p => (p.new_stations || []).forEach(([nm, a, b]) => { const d = distM(la, lo, a, b); if (d > 3000) return;
+    const m = pin(a, b, `<div class="nm-pin"><span class="nm-zone" style="background:#6b4fbb;opacity:.85">${p.name.split(' ')[0].split('(')[0]}</span><span class="nm-lb">${nm}(가칭)</span></div>`, 28,
+      `<b>${nm}(가칭)</b> · ${Math.round(d)}m<br>${p.name} · <b>${p.status}</b>${p.outlook ? `<br><span style="color:#7c8893">${p.outlook}</span>` : ''}<br><span style="color:#7c8893">새 역 위치는 공개 전이라 기사 속 지명 기준 대략</span>`);
+    NMAPS.zv.push(['proj', m]); }));
   nmapZones();
   [...watch].filter(s2 => s2 !== seq).forEach(s2 => { const i2 = infoOf(s2); if (i2[3] && distM(la, lo, i2[3], i2[4]) <= 3000) pin(i2[3], i2[4], dot('#0f6a64', cxName(s2), '♥'), 40, `<b>${cxName(s2)}</b><br>${eok(pxOf(s2))}`); });
   pin(la, lo, `<div class="nm-pin nm-me"><span class="nm-dot" style="background:#0f6a64;width:30px;height:30px;font-size:16px">🏠</span><span class="nm-lb" style="font-weight:700">${cxName(seq)}</span></div>`, 50, `<b>${cxName(seq)}</b><br>${eok(pxOf(seq))}`);

@@ -293,7 +293,7 @@ out['v2_e6t'] = [[r['apt_seq'], r['target_seq'], float(r['ratio_now']), float(r[
 out['v2_drive'] = {}
 for r in select(db, "SELECT apt_seq, dest, minutes FROM complex_drive WHERE minutes IS NOT NULL"):
     out['v2_drive'].setdefault(r['apt_seq'], {})[r['dest']] = float(r['minutes'])
-out['v2_proj'] = select(db, "SELECT name, status, status_date::text, outlook, cbd, region_codes, stations FROM transit_projects")
+out['v2_proj'] = select(db, "SELECT name, status, status_date::text, outlook, cbd, region_codes, stations, new_stations FROM transit_projects")
 out['seqs'] = SEQS
 out['regions'] = {k: v for k, v in REGIONS.items()}
 json.dump(out, open(OUT / 'raw.json', 'w'), ensure_ascii=False, default=str)

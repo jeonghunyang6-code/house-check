@@ -25,6 +25,13 @@ KEEP_GEO = "CREATE TEMP TABLE _geo ON COMMIT DROP AS SELECT code, lat, lng, geo_
 PUT_GEO = "UPDATE redev_zone z SET lat = g.lat, lng = g.lng, geo_src = g.geo_src FROM _geo g WHERE z.code = g.code;"
 
 
+def log_stages(db: Db, today) -> None:
+    """구역마다 지금 단계를 이력(0077)에 쌓는다. 표가 비어 있으면(처음) 알림 안 할 기준선으로 notified = true."""
+    first = not select(db, "SELECT 1 FROM redev_stage_hist LIMIT 1")
+    db.query(f"INSERT INTO redev_stage_hist (code, stage, stage_no, first_seen, notified) SELECT code, stage, stage_no, {lit(today)}, {lit(first)} "
+             "FROM redev_zone WHERE stage IS NOT NULL ON CONFLICT (code, stage) DO NOTHING;")
+
+
 def load(db: Db, today) -> int:
     from collector.redev import fetch_all
     zones = [zone_row(r, REGIONS) for r in fetch_all()]
@@ -100,6 +107,8 @@ def main(argv: list[str] | None = None) -> int:
         db = connect(a.db)
         today = datetime.now(KST).date()
         rc = load_gg(db, a.gg_file, today) if a.gg_file else 0 if a.link_only else load(db, today)
+        if not rc and not a.link_only:
+            log_stages(db, today)
         return rc or run_link(db)
     except (DbError, RuntimeError, OSError, ValueError) as e:
         print(f"[redev] 실패: {e}", file=sys.stderr)
