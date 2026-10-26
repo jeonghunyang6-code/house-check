@@ -61,13 +61,3 @@ def test_restore_check_string_values():
     assert check({"v2-area": "84", "w": [1]}, {"v2-area": "84", "w": "[1]"}) == 0
     assert check({"w": [1]}, {"w": "[1]", "x": "1"}) == 1
 
-
-def test_gg_file_reminder():
-    from datetime import date
-    from jobs.notify import gg_file_reminder
-    class Db:
-        def __init__(self, d): self.d = d
-        def query(self, q): return [{"d": self.d}]
-    assert gg_file_reminder(Db("2026-10-20"), date(2026, 12, 1)) == []
-    assert "103일" in gg_file_reminder(Db("2026-10-20"), date(2027, 1, 31))[0]
-    assert gg_file_reminder(Db(None), date(2027, 1, 31)) == []

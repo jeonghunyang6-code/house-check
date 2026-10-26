@@ -230,17 +230,6 @@ def ask_reminder(info: dict[str, dict], seqs: list[str], today) -> list[str]:
     return out
 
 
-GG_FILE_DAYS = 90   # 경기 정비구역은 사용자가 파일로 넣는다(경기 사이트가 해외 IP 를 막음). 단계가 천천히 바뀌어 석 달마다 🔧
-
-
-def gg_file_reminder(db: Db, today) -> list[str]:
-    got = select(db, "SELECT max(fetched_at)::text d FROM redev_zone WHERE src = 'gg'")
-    d = got[0]["d"] if got else None
-    if not d or (today - date.fromisoformat(d)).days <= GG_FILE_DAYS:
-        return []
-    return [f"\n📂 경기 정비구역 파일을 넣은 지 {(today - date.fromisoformat(d)).days}일 · 경기데이터드림 '일반 정비 사업 추진 현황' CSV 를 새로 받아 Claude 에게 주세요"]
-
-
 def weekly(db: Db, save: bool = True) -> str:
     """금요일 주간 요약. 관심 단지는 이번 주 신고가 있거나 저장 호가 매물 수가 바뀐 곳만(2026-10-25 사용자 요청: 줄이고 이모지)."""
     today = datetime.now(KST).date()
@@ -287,7 +276,6 @@ def weekly(db: Db, save: bool = True) -> str:
         out.append("\n📅 <b>정책</b>")
         out += [f"⏳ {d:%m/%d} (D-{(d - today).days}) {html.escape(t)}" for d, _, t, _ in up]
         out += [f"🆕 {r['d'][5:].replace('-', '/')} {r['kind']} 발표 후보 · 언론사 {r['n']}곳(확인 전)" for r in pn]
-    out += gg_file_reminder(db, today)
     mb = db_mb(db)
     url = site(db)
     out.append(f"\n{'⚠️' if mb >= DB_WARN_MB else '💾'} DB {mb}MB/500MB" + (f"  🔗 {url}" if url else ""))

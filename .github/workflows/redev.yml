@@ -32,6 +32,13 @@ jobs:
           HC_DB_BACKEND: psql
           PYTHONUNBUFFERED: "1"
         run: python -m jobs.redev
+      - name: 경기 정비사업 단계(국토부 전국 자료, 앞선 단계만 올림)
+        if: ${{ !cancelled() }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          HC_DB_BACKEND: psql
+          PYTHONUNBUFFERED: "1"
+        run: python -m jobs.redev --molit
       - name: 정비구역 좌표(상세 탭 지도)
         env:
           NCP_MAPS_KEY_ID: ${{ secrets.NCP_MAPS_KEY_ID }}
