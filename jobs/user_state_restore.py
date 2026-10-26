@@ -38,7 +38,7 @@ def check(backup: dict, now: dict) -> int:
             return v
     missing = sorted(set(now) - set(backup))
     for k in sorted(set(now) | set(backup)):
-        print(f"  {k}: {'같음' if k in backup and k in now and norm(now[k]) == backup[k] else '백업에 없음' if k not in backup else '지금 없음' if k not in now else '다름(백업 뒤 바뀜)'}")
+        print(f"  {k}: {'같음' if k in backup and k in now and backup[k] in (now[k], norm(now[k])) else '백업에 없음' if k not in backup else '지금 없음' if k not in now else '다름(백업 뒤 바뀜)'}")
     print(f"  되살리기 시험: 백업 키 {len(backup)}개 · 지금 키 {len(now)}개 · 빠진 키 {len(missing)}개 → {'실패' if missing else '정상'}")
     return 1 if missing or not backup else 0
 

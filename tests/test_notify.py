@@ -53,3 +53,10 @@ def test_ask_reminder():
     out = ask_reminder(info, ["a", "b", "c"], date(2026, 10, 26))
     assert "가 10/01" in out[1] and "나" not in out[1] and "저장한 적 없음 1곳: 다" in out[2]
     assert ask_reminder({"b": info["b"]}, ["b"], date(2026, 10, 26)) == []
+
+
+def test_restore_check_string_values():
+    from jobs.user_state_restore import check
+    # psql 은 jsonb 문자열 "84" 를 글자 84 로 준다 → 숫자로 바꿔 비교하면 '다름'이 됐던 것(2026-10-26 백업 시험)
+    assert check({"v2-area": "84", "w": [1]}, {"v2-area": "84", "w": "[1]"}) == 0
+    assert check({"w": [1]}, {"w": "[1]", "x": "1"}) == 1
