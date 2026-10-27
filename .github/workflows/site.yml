@@ -54,10 +54,11 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           HC_KEY: ${{ secrets.HC_KEY }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         run: |
           if [ -z "$VERCEL_TOKEN" ] || [ -z "$HC_KEY" ]; then echo "VERCEL_TOKEN·HC_KEY 없음 → 배포 건너뜀"; exit 0; fi
           cd house-check
-          npx --yes vercel@latest deploy --prod --yes --token "$VERCEL_TOKEN" -e DATABASE_URL="$DATABASE_URL" -e HC_KEY="$HC_KEY" 2>&1 | tee ../deploy.log
+          npx --yes vercel@latest deploy --prod --yes --token "$VERCEL_TOKEN" -e DATABASE_URL="$DATABASE_URL" -e HC_KEY="$HC_KEY" -e TELEGRAM_BOT_TOKEN="$TELEGRAM_BOT_TOKEN" 2>&1 | tee ../deploy.log
           URL=$(grep -oE 'https://[a-z0-9.-]+\.vercel\.app' ../deploy.log | grep -v -- '-[a-z0-9]\{9\}-' | tail -1)
           [ -z "$URL" ] && URL=$(grep -oE 'https://[a-z0-9.-]+\.vercel\.app' ../deploy.log | tail -1)
           echo "주소: $URL"
@@ -75,3 +76,10 @@ jobs:
           fi
           echo "저장 API(문구 없음, 401 이어야): $(curl -s -o /dev/null -w '%{http_code}' "$URL/api/state")"
           echo "저장 API(문구, 200 이어야): $(curl -s -o /dev/null -w '%{http_code}' -H "x-hc-key: $HC_KEY" "$URL/api/state")"
+          # 텔레그램에서 단지 이름 보내면 답하기(web/api/tg.js): 웹훅 주소·비밀 헤더(sha256(HC_KEY) 앞 48자) 등록. 토큰·문구는 출력하지 않음
+          if [ -n "$TELEGRAM_BOT_TOKEN" ]; then
+            SEC=$(printf '%s' "$HC_KEY" | sha256sum | cut -c1-48)
+            curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" --data-urlencode "url=$URL/api/tg" -d "secret_token=$SEC" \
+              --data-urlencode 'allowed_updates=["message"]' | jq -c '{웹훅: .ok, 설명: .description}'
+            curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/getWebhookInfo" | jq -c '{대기: .result.pending_update_count, 마지막오류: .result.last_error_message}'
+          fi

@@ -134,6 +134,8 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
 .cmp th { font-weight: 500; color: var(--ink-3); font-size: 11.5px; text-align: center; padding: 4px 2px; }
 .cmp td { padding: 8px 2px; border-top: 1px solid var(--line); text-align: center; }
 .cmp td:first-child, .cmp th:first-child { text-align: left; }
+.cmp.sbs td:first-child { color: var(--ink-3); font-size: 12px; white-space: nowrap; }
+.cmp.sbs td { vertical-align: top; }
 .cmp .sc { font-weight: 700; }
 .tg { background: var(--sunk); border-radius: 14px; padding: 12px; display: grid; gap: 6px; font-size: 13.5px; }
 .tg .bubble { background: var(--surface); border-radius: 12px 12px 12px 4px; padding: 10px 12px; box-shadow: 0 1px 1px rgba(0,0,0,.06); white-space: pre-line; line-height: 1.5; }
@@ -332,6 +334,11 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
         <div class="dotlegend"><span><i style="background:var(--good)"></i>충족</span><span><i style="background:var(--warn)"></i>미충족</span><span><i style="background:var(--line)"></i>자료 없음</span></div>
         <div style="overflow-x:auto"><table class="cmp" id="cmpT"></table></div>
         <p class="src">전세가율: 가격대별 정상 범위 안이고 80% 이하. 거래: 월 회전율 0.5% 이상. 하락기: 2022~23 하락 구간 거래가 같은 구 가운데 이상.</p>
+      </div>
+      <div class="card">
+        <h2>나란히 보기 <small>최대 3곳</small></h2>
+        <div class="row" id="sbsPick" style="gap:6px;flex-wrap:wrap;margin-bottom:8px"></div>
+        <div style="overflow-x:auto"><table class="cmp sbs" id="sbsT"></table></div>
       </div>
       <div class="card">
         <h2>임장 기록 <span class="pill ex">시안: 이 기기에만 저장</span></h2>
@@ -1121,6 +1128,31 @@ function drawWatch() {
   // 임장 기록 단지 목록
   const vs = $('#v_cx'), cur = vs.value; vs.innerHTML = seqs.map(s => `<option value="${s}">${cxName(s)}</option>`).join(''); if (seqs.includes(cur)) vs.value = cur;
 }
+/* 나란히 보기(2026-10-27 사용자 요청): 관심 단지 최대 3곳을 같은 항목으로. 판정 없이 숫자만, 고른 단지는 기기에 기억 */
+function drawSbs() {
+  const all = [...watch].filter(s => CXS[s] || main(s) || SR[s]);
+  let pick = store.get('v2-sbs', []).filter(s => all.includes(s)); if (!pick.length) pick = all.filter(s => !light(s)).slice(0, 3);
+  $('#sbsPick').innerHTML = all.map(s => `<label class="chip"><input type="checkbox" data-s="${s}"${pick.includes(s) ? ' checked' : ''}><span>${cxName(s)}</span></label>`).join('');
+  const nm = (n) => n.length > 8 ? n.slice(0, 8) + '…' : n;
+  const ROWS = [
+    ['기준 시세', s => { const r = main(s); if (light(s)) { const lp = lastPx(s); return lp ? `${eok(lp.p)}<br><span class="muted">최근 ${lp.k}</span>` : '–'; } return `${eok(cxRef(s))}<br><span class="muted">${r ? r.ag : 84}㎡</span>`; }],
+    ['1년 변화', s => { const c = useFull(s) ? CXS[s] : null, ch = c && c.phase ? +c.phase.chg_12m : q1y(s); return ch == null ? '–' : `<span class="${ch >= 0 ? 'up' : 'dn'}">${sgn(ch)}</span>`; }],
+    ['전세가율', s => { const r = main(s); return r && r.js && r.ref ? Math.round(r.js / r.ref * 100) + '%' : '–'; }],
+    ['역', s => { const i = infoOf(s); return i[5] ? `${i[5]}<br><span class="muted">${i[6]}m</span>` : '–'; }],
+    ['강남(대중교통)', s => { const i = infoOf(s); return i[9] != null ? i[9] + '분' : '–'; }],
+    ['차 출퇴근', s => { const d = DRIVE[s]; return d ? `이천 ${Math.round(d.skh_icheon)}분<br>용인 ${Math.round(d.yongin_cluster)}분` : '–'; }],
+    ['배정 초', s => { const i = infoOf(s), e = (POI.elem || [])[(D.v2_elemz || {})[s]]; return e && i[3] ? `${sname(e[0])} ${Math.round(distM(i[3], i[4], e[1], e[2]))}m${e[3] ? `<br><span class="muted">전입 ${e[4]}<br>전출 ${e[5]}</span>` : ''}` : '–'; }],
+    ['6개월 입주', s => { const z = (D.v2_lz || {})[s], ip = ((z && (D.v2_ipz || {})[z]) || []).filter(x => x[0].replace(/\s/g, '') !== cxName(s).replace(/\s/g, '')); return ip.length ? ip.reduce((a, x) => a + x[1], 0).toLocaleString() + '세대' : '없음'; }],
+    ['준공·세대', s => { const i = infoOf(s); return `${i[15] || '–'}년<br><span class="muted">${i[16] ? i[16].toLocaleString() + '세대' : ''}</span>`; }],
+    ['정비', s => { const c = useFull(s) ? CXS[s] : null, r = main(s); return c && (c.redev || []).length ? c.redev[0].stage : r && r.stage ? r.stage : '–'; }],
+  ];
+  $('#sbsT').innerHTML = pick.length ? `<thead><tr><th></th>${pick.map(s => `<th><b>${nm(cxName(s))}</b></th>`).join('')}</tr></thead><tbody>`
+    + ROWS.map(([k, f]) => `<tr><td>${k}</td>${pick.map(s => `<td>${f(s)}</td>`).join('')}</tr>`).join('') + '</tbody>' : '<tbody><tr><td class="muted">위에서 단지를 고르세요</td></tr></tbody>';
+}
+$('#sbsPick').addEventListener('change', (e) => { const box = e.target.closest('input'); if (!box) return;
+  let pick = [...$$('#sbsPick input:checked')].map(x => x.dataset.s); if (pick.length > 3) { box.checked = false; pick = pick.filter(s => s !== box.dataset.s); toast('최대 3곳까지 고를 수 있습니다'); }
+  store.set('v2-sbs', pick); drawSbs(); });
+watchChanged.push(drawSbs);
 $('#wList').addEventListener('click', (e) => { const h = e.target.closest('.heart'); if (h) { toggleWatch(h.dataset.s); return; } const o = e.target.closest('.open'); if (o) openCx(o.dataset.s); });
 watchChanged.push(drawWatch);
 
@@ -1537,6 +1569,6 @@ $('#fundForm').addEventListener('input', () => { fundTouched = true; drawFund();
 watchChanged.push(drawMove);
 
 /* 처음 열 때 */
-syncArea(); drawWatch(); window.runBudget(); drawMove();
+syncArea(); drawWatch(); drawSbs(); window.runBudget(); drawMove();
 if (location.hash.startsWith('#ask=')) importAskHash(); else go((location.hash || '').slice(1) || store.get('v2-tab', 'home'));
 </script>
