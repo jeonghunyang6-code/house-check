@@ -1,6 +1,6 @@
 # 텔레그램 알림 (jobs/notify.py). 필요한 시크릿: TELEGRAM_BOT_TOKEN(@BotFather 로 만든 봇), DATABASE_URL.
 # 대화 번호는 봇에게 한 번 말을 걸어 두면 첫 실행 때 찾아 DB 에 저장한다. 변수 HC_SITE_URL 이 있으면 글 끝에 웹 주소
-# 매일: 수집(daily-snapshot)이 끝나면 관심 단지 새 실거래. 금요일 19:07 KST: 주간 요약. 22~07시는 보내지 않음
+# 매일: 수집(daily-snapshot)이 끝나면(실패해도) 관심 단지 새 실거래 + 지난번 뒤 실패한 자동 작업. 금요일 19:07 KST: 주간 요약. 22~07시는 보내지 않음
 name: notify
 
 on:
@@ -12,11 +12,12 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "daily | weekly | test"
+        description: "daily | weekly | test | ops(실패 목록 보기만)"
         default: "test"
 
 permissions:
   contents: read
+  actions: read   # 자동 작업 실패 모으기(collector/ops.py)
 
 concurrency:
   group: notify
@@ -24,7 +25,7 @@ concurrency:
 
 jobs:
   notify:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    # 수집이 실패해도 돈다: 그 실패를 알려야 하므로(2026-10-27). 실거래 알림은 들어온 만큼만
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -39,6 +40,7 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           HC_SITE_URL: ${{ vars.HC_SITE_URL }}
+          GITHUB_TOKEN: ${{ github.token }}
           HC_DB_BACKEND: psql
           PYTHONUNBUFFERED: "1"
         run: |
