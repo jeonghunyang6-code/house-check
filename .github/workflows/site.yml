@@ -80,6 +80,6 @@ jobs:
           if [ -n "$TELEGRAM_BOT_TOKEN" ]; then
             SEC=$(printf '%s' "$HC_KEY" | sha256sum | cut -c1-48)
             curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" --data-urlencode "url=$URL/api/tg" -d "secret_token=$SEC" \
-              --data-urlencode 'allowed_updates=["message"]' | jq -c '{웹훅: .ok, 설명: .description}'
-            curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/getWebhookInfo" | jq -c '{대기: .result.pending_update_count, 마지막오류: .result.last_error_message}'
+              --data-urlencode 'allowed_updates=["message"]' | jq -c '{"웹훅": .ok, "설명": .description}' || true
+            curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/getWebhookInfo" | jq -c '{"대기": .result.pending_update_count, "마지막오류": .result.last_error_message}' || true
           fi
