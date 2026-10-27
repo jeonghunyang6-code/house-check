@@ -370,7 +370,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
       <div class="card" id="askPick" hidden style="display:grid;gap:8px;border:1.5px solid var(--accent)"></div>
       <label class="muted" for="dSel" style="display:grid;gap:4px">단지<select id="dSel" class="icon-btn" style="width:100%;text-align:left;font-size:15px"></select></label>
       <div class="card" id="dHead"></div>
-      <div class="card"><h2>최근 실거래 <small>최근 90일</small></h2><svg class="chart" id="dChart" viewBox="0 0 340 130" role="img" aria-label="최근 90일 실거래"></svg><div id="dDeals"></div></div>
+      <div class="card"><h2>최근 실거래 <small>최근 90일</small></h2><p id="dChartTitle" style="font-size:13.5px;margin:8px 0 2px"></p><svg class="chart" id="dChart" viewBox="0 0 340 130" role="img" aria-label="최근 90일 실거래"></svg><div id="dDeals"></div></div>
       <div class="card">
         <h2>호가 매물 <small id="askAsof"></small></h2>
         <div class="kpis" id="askSum"></div>
@@ -1233,19 +1233,30 @@ function drawDaily() {
     <div class="kpis"><div class="kpi"><span class="k">${lite ? '최근 거래가' : mainAg + '㎡ 기준 시세'}</span><span class="v">${lite ? eok(lp && lp.p) : eok(ref)}</span>${lite && lp ? `<span class="d">${lp.k} · ${lp.d.slice(0, 2)}.${lp.d.slice(2, 4)}.${lp.d.slice(4)} · ${lp.ag}㎡</span>` : ''}</div><div class="kpi"><span class="k">최근 ${lite ? '1년' : '90일'} 거래</span><span class="v">${deals.length}건</span><span class="d">${mainAg}㎡ ${same.length}건${(RG[seq] || []).length ? ' · 분양권·입주권 포함' : ''}${TODAY_NEW.has(seq) ? ' · 오늘 새로 등록' : ''}</span></div></div>
     ${lite ? '<p class="src" style="margin:0">거래가 적거나 등기 전(입주권·분양권만 신고)이라 기준 시세를 정하지 못했습니다. 입주권 가격은 추가분담금이 빠져 실제 집값보다 낮게 보일 수 있습니다.</p>' : ''}`;
   $('#dOpen').addEventListener('click', () => openCx(seq));
-  // 90일 차트: 면적 같은 거래 점, 기준 시세 선
-  const svg = $('#dChart'), W = 340, H = 130, L = 34, R = 8, T = 10, B = 18; svg.innerHTML = '';
-  const t1 = new Date(D.asof).getTime(), t0 = t1 - DAYS * 864e5, xs = (d) => L + (W - L - R) * (new Date(d2(d)).getTime() - t0) / (t1 - t0);
+  // 90일 차트: 면적 같은 거래 점, 기준 시세 점선. 2026-10-28 사용자: 점 옆 가격, 가로축 달 이름, 기준은 위 한 줄(호가 그래프와 같게)
+  const svg = $('#dChart'), W = 340, H = 130, L = 34, R = 8, T = 12, B = 18; svg.innerHTML = '';
+  const t1 = new Date(D.asof).getTime(), t0 = t1 - DAYS * 864e5, xt = (t) => L + (W - L - R) * (t - t0) / (t1 - t0), xs = (d) => xt(new Date(d2(d)).getTime());
   const vals = same.map(x => x[4]).concat(ref ? [ref] : []);
+  $('#dChartTitle').innerHTML = `${mainAg}㎡ <b>${same.length}건</b>${ref ? ` · <span style="color:var(--c1);border-bottom:1.5px dashed var(--c1);white-space:nowrap">기준 ${eok(ref)}</span>` : ''}`;
   if (vals.length) {
     const lo = Math.min(...vals) * 0.97, hi = Math.max(...vals) * 1.03, y = (v) => T + (H - T - B) * (1 - (v - lo) / ((hi - lo) || 1));
     [lo, (lo + hi) / 2, hi].forEach(t => { el('line', { x1: L, x2: W - R, y1: y(t), y2: y(t), stroke: 'var(--line)' }, svg); txt(svg, L - 4, y(t) + 3, eok(t), 'end'); });
+    // 매달 1일 옅은 세로선, 달 이름은 그 달 구간 가운데(좁으면 생략)
+    for (let m = new Date(new Date(t0).getFullYear(), new Date(t0).getMonth(), 1); m.getTime() < t1; m.setMonth(m.getMonth() + 1)) {
+      const a = Math.max(m.getTime(), t0), b = Math.min(new Date(m.getFullYear(), m.getMonth() + 1, 1).getTime(), t1);
+      if (m.getTime() > t0) el('line', { x1: xt(a), x2: xt(a), y1: T, y2: H - B, stroke: 'var(--line)' }, svg);
+      if (xt(b) - xt(a) >= 18) txt(svg, (xt(a) + xt(b)) / 2, H - 4, (m.getMonth() + 1) + '월', 'middle', { style: 'font-size:9px;fill:var(--ink-3)' });
+    }
     if (ref) { el('line', { x1: L, x2: W - R, y1: y(ref), y2: y(ref), stroke: 'var(--c1)', 'stroke-dasharray': '4 3' }, svg); }
-    same.forEach(x => { const dot = el('circle', { cx: xs(x[1]), cy: y(x[4]), r: 4, fill: ref && x[4] <= ref * 0.95 ? 'var(--dn2)' : ref && x[4] > ref * 1.03 ? 'var(--up2)' : 'var(--c3)', ...(x[6] ? { fill: 'var(--surface)', stroke: 'var(--c1)', 'stroke-width': 1.6 } : {}) }, svg); hover(dot, `${dt(d2(x[1]))} · ${x[3]}층 · ${eok(x[4])}${x[6] ? ' · ' + x[6] : ''}`); });
-    txt(svg, L, H - 4, lite ? '1년 전' : '90일 전', 'start'); txt(svg, W - R, H - 4, '오늘', 'end');
+    const col = (x) => ref && x[4] <= ref * 0.95 ? 'var(--dn2)' : ref && x[4] > ref * 1.03 ? 'var(--up2)' : 'var(--c3)';
+    same.forEach(x => { const dot = el('circle', { cx: xs(x[1]), cy: y(x[4]), r: 4, fill: col(x), ...(x[6] ? { fill: 'var(--surface)', stroke: 'var(--c1)', 'stroke-width': 1.6 } : {}) }, svg); hover(dot, `${dt(d2(x[1]))} · ${x[3]}층 · ${eok(x[4])}${x[6] ? ' · ' + x[6] : ''}`); });
+    // 가격 이름표: 6건 이하면 전부, 많으면 최고·최저·가장 최근만. 점 위(맨 위 칸이면 아래)
+    const tag = same.length <= 6 ? same : [...new Set([same[0], same.reduce((a, b) => b[4] > a[4] ? b : a), same.reduce((a, b) => b[4] < a[4] ? b : a)])];
+    tag.forEach(x => { const cx = Math.min(Math.max(xs(x[1]), L + 14), W - R - 14), cy = y(x[4]);
+      txt(svg, cx, cy < T + 12 ? cy + 13 : cy - 7, eok(x[4]), 'middle', { style: `font-size:9.5px;font-weight:700;fill:${col(x)};paint-order:stroke;stroke:var(--surface);stroke-width:3px` }); });
   }
   $('#dDeals').innerHTML = deals.slice(0, 12).map(x => { const g = ref ? (x[4] / ref - 1) * 100 : null, cl = g == null ? '' : g <= -5 ? 'dn' : g >= 3 ? 'up' : 'muted';
-    return `<div class="deal"><span class="muted num">${dt(d2(x[1]))}</span><span>${x[2]}㎡ · ${x[3]}층${x[5] ? ' · 직거래' : ''}${x[6] ? ` <span class="pill none">${x[6]}</span>` : ''}${g != null && g <= -5 && Math.abs(x[2] - mainAg) <= 1 ? ' <span class="pill acc">급매</span>' : ''}</span><span class="p">${eok(x[4])} <span class="${cl}" style="font-size:12px;font-weight:500">${Math.abs(x[2] - mainAg) <= 1 && g != null ? sgn(g, 0) : ''}</span></span></div>`; }).join('')
+    return `<div class="deal"${Math.abs(x[2] - mainAg) <= 1 ? '' : ' style="opacity:.45"'}><span class="muted num">${dt(d2(x[1]))}</span><span>${x[2]}㎡ · ${x[3]}층${x[5] ? ' · 직거래' : ''}${x[6] ? ` <span class="pill none">${x[6]}</span>` : ''}${g != null && g <= -5 && Math.abs(x[2] - mainAg) <= 1 ? ' <span class="pill acc">급매</span>' : ''}</span><span class="p"><span class="${cl}" style="font-size:12px;font-weight:500">${Math.abs(x[2] - mainAg) <= 1 && g != null ? sgn(g, 0) : ''}</span> ${eok(x[4])}</span></div>`; }).join('')
     || `<p class="muted">최근 ${lite ? '1년' : '90일'} 거래가 없습니다.</p>`;
   drawAsks(); drawMap(seq); $('#dDev').innerHTML = devHtml(seq);
 }
