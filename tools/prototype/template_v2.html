@@ -1320,7 +1320,7 @@ function drawAsks() {
     const W = 340, H = 168, L = 37, R = 4, T = 10, B = 30, cw = (W - L - R) / NW, xs = (i) => L + cw * (i + 0.5);
     const refs = weeks.map((_, i) => refAt(i)), ps = has.flatMap(c => c.v).concat(refs.filter(Boolean)), lo = Math.min(...ps) * 0.985, hi = Math.max(...ps) * 1.015;
     const y = (v) => T + (H - T - B) * (1 - (v - lo) / ((hi - lo) || 1)), cheap = (p, i) => refs[i] && p < refs[i];
-    const step = [100, 200, 250, 500, 1000, 2000, 2500, 5000, 10000].find(t => (hi - lo) / t <= 22) || 10000;   // 가격대 막대 한 칸(만원): 세로로 약 15~22칸
+    const step = [100, 200, 250, 500, 1000, 2000, 2500, 5000, 10000].find(t => (hi - lo) / t <= 12) || 10000;   // 가격대 막대 한 칸(만원): 세로로 약 8~12칸(굵게)
     [lo, (lo + hi) / 2, hi].forEach(v => { el('line', { x1: L, x2: W - R, y1: y(v), y2: y(v), stroke: 'var(--line)' }, tsvg); txt(tsvg, L - 4, y(v) + 3, eok(v), 'end'); });
     // 기준 시세 계단선(주마다 그때 값): 점선, 칸을 누르면 그 주 값
     if (refs.some(Boolean)) {
@@ -1334,28 +1334,21 @@ function drawAsks() {
     const mp = cols.map((c, i) => c ? [xs(i), y(c.m)] : null).filter(Boolean);
     if (mp.length > 1) el('path', { d: mp.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(''), fill: 'none', stroke: 'var(--c1)', 'stroke-width': 1.2, 'stroke-opacity': 0.5 }, tsvg);
     cols.forEach((c, i) => { if (!c) return; const x = xs(i);
-      if (MO) {
-        const bw = Math.min(10, cw * 0.45), top = y(c.v[c.v.length - 1]), bot = y(c.v[0]);
-        el('rect', { x: x - bw / 2, y: top, width: bw, height: Math.max(bot - top, 1.5), rx: bw / 2, fill: 'var(--ink-3)', 'fill-opacity': 0.4 }, tsvg);
-        if (refs[i] && c.v[0] < refs[i]) { const yr = Math.max(y(refs[i]), top); el('rect', { x: x - bw / 2, y: yr, width: bw, height: Math.max(bot - yr, 1.5), rx: bw / 2, fill: 'var(--good)' }, tsvg); }
-        const bar = el('rect', { x: x - bw, y: y(c.m) - 1.5, width: bw * 2, height: 3, rx: 1.5, fill: 'var(--c1)' }, tsvg);
-        hover(bar, `${dt(c.d)} · 매물 ${c.v.length}개 · 중간 ${eok(c.m)} · ${eok(c.v[0])}~${eok(c.v[c.v.length - 1])}${refs[i] ? ` · 그 주 기준 ${eok(refs[i])}` : ''}`);
-      } else {
-        const cnt = {}; c.v.forEach(p => { const key = Math.round(y(p) / 3); cnt[key] = (cnt[key] || 0) + 1; });
-        if (Math.max(...Object.values(cnt)) <= 5) {   // 점이 한 줄에 5개 넘게 몰리지 않으면 점 하나 = 매물 하나
-          const off0 = {};
-          c.v.forEach(p => { const key = Math.round(y(p) / 3), off = (off0[key] = (off0[key] || 0) + 1) - 1, cx = x + (off % 2 ? 1 : -1) * Math.ceil(off / 2) * 5.5;
-            const dot = el('circle', { cx, cy: y(p), r: 2.8, fill: cheap(p, i) ? 'var(--good)' : 'var(--ink-3)', 'fill-opacity': cheap(p, i) ? 1 : 0.5 }, tsvg);
-            hover(dot, `${dt(c.d)} · 호가 ${eok(p)}${refs[i] ? ` · 그 주 기준 ${eok(refs[i])}(${sgn((p / refs[i] - 1) * 100)})` : ''}`); });
-        } else {   // 매물이 많으면(고덕그라시움 66개 등, 2026-10-28 사용자) 가격대 막대: 가로 길이 = 그 가격대 매물 수(가장 많은 가격대 = 칸 폭)
-          const bins = {}; c.v.forEach(p => { const b = Math.floor((p - lo) / step); bins[b] = (bins[b] || 0) + 1; });
-          const mx = Math.max(...Object.values(bins));
-          Object.entries(bins).forEach(([b, n]) => { const p0 = lo + b * step, p1 = p0 + step, w = Math.max(2.5, cw * 0.86 * n / mx), green = refs[i] && p1 <= refs[i] + step * 0.5 && (p0 + p1) / 2 < refs[i];
-            const r = el('rect', { x: x - w / 2, y: y(p1) + 0.6, width: w, height: Math.max(y(p0) - y(p1) - 1.2, 1.5), rx: 1.2, fill: green ? 'var(--good)' : 'var(--ink-3)', 'fill-opacity': green ? 0.95 : 0.45 }, tsvg);
-            hover(r, `${dt(c.d)} · ${eok(p0)}~${eok(p1)} · ${n}개${refs[i] ? ` · 그 주 기준 ${eok(refs[i])}` : ''}`); });
-        }
-        el('rect', { x: x - cw * 0.34, y: y(c.m) - 1.5, width: cw * 0.68, height: 3, rx: 1.5, fill: 'var(--c1)' }, tsvg);
+      // 8주·6개월 같은 그림(2026-10-28 사용자: 6개월 최저~최고 막대는 산포가 안 보이고 8주는 빽빽함)
+      const cnt = {}; c.v.forEach(p => { const key = Math.round(y(p) / 3); cnt[key] = (cnt[key] || 0) + 1; });
+      if (Math.max(...Object.values(cnt)) <= 5) {   // 점이 한 줄에 5개 넘게 몰리지 않으면 점 하나 = 매물 하나
+        const off0 = {};
+        c.v.forEach(p => { const key = Math.round(y(p) / 3), off = (off0[key] = (off0[key] || 0) + 1) - 1, cx = x + (off % 2 ? 1 : -1) * Math.ceil(off / 2) * 5.5;
+          const dot = el('circle', { cx, cy: y(p), r: 2.8, fill: cheap(p, i) ? 'var(--good)' : 'var(--ink-3)', 'fill-opacity': cheap(p, i) ? 1 : 0.5 }, tsvg);
+          hover(dot, `${dt(c.d)} · 호가 ${eok(p)}${refs[i] ? ` · ${MO ? '그 달' : '그 주'} 기준 ${eok(refs[i])}(${sgn((p / refs[i] - 1) * 100)})` : ''}`); });
+      } else {   // 매물이 많으면(고덕그라시움 66개 등, 2026-10-28 사용자) 가격대 막대: 가로 길이 = 그 가격대 매물 수(가장 많은 가격대 = 칸 폭의 60%, 칸 사이 여백)
+        const bins = {}; c.v.forEach(p => { const b = Math.floor((p - lo) / step); bins[b] = (bins[b] || 0) + 1; });
+        const mx = Math.max(...Object.values(bins));
+        Object.entries(bins).forEach(([b, n]) => { const p0 = lo + b * step, p1 = p0 + step, w = Math.max(2.5, cw * 0.6 * n / mx), green = refs[i] && p1 <= refs[i] + step * 0.5 && (p0 + p1) / 2 < refs[i];
+          const r = el('rect', { x: x - w / 2, y: y(p1) + 0.6, width: w, height: Math.max(y(p0) - y(p1) - 1.2, 1.5), rx: 1.2, fill: green ? 'var(--good)' : 'var(--ink-3)', 'fill-opacity': green ? 0.95 : 0.3 }, tsvg);
+          hover(r, `${dt(c.d)} · ${eok(p0)}~${eok(p1)} · ${n}개${refs[i] ? ` · ${MO ? '그 달' : '그 주'} 기준 ${eok(refs[i])}` : ''}`); });
       }
+      el('rect', { x: x - cw * 0.34, y: y(c.m) - 1.5, width: cw * 0.68, height: 3, rx: 1.5, fill: 'var(--c1)' }, tsvg);
       const pv = cols.slice(0, i).reverse().find(Boolean), dn = pv ? c.v.length - pv.v.length : 0;
       txt(tsvg, x, H - 17, lab(i, c), 'middle', { style: 'font-size:9px;fill:var(--ink-3)' });
       txt(tsvg, x, H - 4, String(c.v.length) + (dn ? (dn > 0 ? '▲' : '▼') : ''), 'middle', { style: `font-size:10.5px;font-weight:700;fill:var(${dn > 0 ? '--up2' : dn < 0 ? '--dn2' : '--ink-2'})` });
