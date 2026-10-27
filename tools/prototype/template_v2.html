@@ -374,7 +374,9 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
       <div class="card">
         <h2>호가 매물 <small id="askAsof"></small></h2>
         <div class="kpis" id="askSum"></div>
-        <svg class="chart" id="askTrend" viewBox="0 0 340 120" role="img" aria-label="매매 매물 수와 중간 호가 추이" hidden></svg>
+        <div id="askTrendBox" hidden><p id="askTrendTitle" style="font-size:13.5px;margin:8px 0 2px"></p>
+          <svg class="chart" id="askTrend" viewBox="0 0 340 170" role="img" aria-label="저장한 날마다 매매 매물 하나하나의 호가"></svg>
+          <div class="legend" id="askTrendLg"></div></div>
         <div id="askList"></div>
         <details class="more-f" id="askPasteBox"><summary>네이버 부동산에서 붙여넣기</summary><div class="body">
           <textarea id="askPaste" rows="3" placeholder="'호가 저장' 버튼으로 복사한 내용을 붙여넣기" style="font:inherit;font-size:14px;width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:10px;padding:8px;background:var(--surface);color:var(--ink)"></textarea>
@@ -1297,21 +1299,34 @@ function drawAsks() {
   const med = (a) => { const n = a.length; return n ? (a[(n - 1) >> 1].p + a[n >> 1].p) / 2 : null; }, gap = (p) => ref && p ? (p / ref - 1) * 100 : null;
   const cl = (g) => g == null ? 'none' : g <= -5 ? 'acc' : g <= 3 ? 'good' : g <= 5 ? 'warn' : 'bad';
   $('#askAsof').textContent = last ? `${dt(last)} 기록 · ${ag}㎡` : '';
-  // 저장이 2번 이상이면 추이: 막대 = 매매 매물 수, 선 = 중간 호가(평형대), 점선 = 기준 시세
-  const tr = dates.map(d => { const v = snap(d).filter(x => x.t === '매매').map(x => x.p).sort((a, b) => a - b), n = v.length; return [d, n, n ? (v[(n - 1) >> 1] + v[n >> 1]) / 2 : null]; });
-  const tsvg = $('#askTrend'); tsvg.innerHTML = ''; tsvg.hidden = tr.length < 2;
+  // 저장이 2번 이상이면 추이(2026-10-27 사용자: 막대·선 그래프가 와닿지 않음 → 다시 그림): 저장한 날마다 매매 매물 하나 = 점 하나(세로 = 호가),
+  // 초록 점 = 기준 시세보다 싼 매물, 굵은 가로 막대 = 그날 중간 호가(값 표시), 점선 = 기준 시세, 아래 = 매물 수와 지난 저장 대비
+  const tr = dates.map(d => { const v = snap(d).filter(x => x.t === '매매').map(x => x.p).sort((a, b) => a - b), n = v.length; return [d, v, n ? (v[(n - 1) >> 1] + v[n >> 1]) / 2 : null]; }).filter(t => t[1].length);
+  const tsvg = $('#askTrend'); tsvg.innerHTML = ''; $('#askTrendBox').hidden = tr.length < 2;
   if (tr.length >= 2) {
-    const W = 340, H = 120, L = 34, R = 30, T = 10, B = 18, k = tr.length, xs = (i) => L + (W - L - R) * (k === 1 ? 0.5 : i / (k - 1));
-    const nmax = Math.max(...tr.map(t => t[1]), 1), ps = tr.map(t => t[2]).filter(Boolean).concat(ref ? [ref] : []);
-    const lo = Math.min(...ps) * 0.98, hi = Math.max(...ps) * 1.02, y = (v) => T + (H - T - B) * (1 - (v - lo) / ((hi - lo) || 1)), bw = Math.min(18, (W - L - R) / k * 0.5);
-    tr.forEach((t, i) => { const h = (H - T - B) * t[1] / nmax; el('rect', { x: xs(i) - bw / 2, y: H - B - h, width: bw, height: h, fill: 'var(--c3)', 'fill-opacity': .45, rx: 2 }, tsvg); txt(tsvg, xs(i), H - B - h - 3, String(t[1]), 'middle', { style: 'font-size:9px;fill:var(--ink-3)' }); });
-    if (ref) el('line', { x1: L, x2: W - R, y1: y(ref), y2: y(ref), stroke: 'var(--c1)', 'stroke-dasharray': '4 3' }, tsvg);
-    const pts = tr.map((t, i) => t[2] ? [xs(i), y(t[2])] : null).filter(Boolean);
-    if (pts.length > 1) el('path', { d: pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(''), fill: 'none', stroke: 'var(--c1)', 'stroke-width': 2 }, tsvg);
-    tr.forEach((t, i) => { if (t[2]) { const c = el('circle', { cx: xs(i), cy: y(t[2]), r: 3.6, fill: 'var(--surface)', stroke: 'var(--c1)', 'stroke-width': 1.8 }, tsvg); hover(c, `${dt(t[0])} · 매물 ${t[1]}개 · 중간 ${eok(t[2])}`); } });
-    [lo, hi].forEach(v => txt(tsvg, L - 4, y(v) + 3, eok(v), 'end'));
-    txt(tsvg, xs(0), H - 4, dt(tr[0][0]).slice(3), 'start'); txt(tsvg, xs(k - 1), H - 4, dt(tr[k - 1][0]).slice(3), 'end');
-    txt(tsvg, W - R + 4, y(ref || lo) + 3, ref ? '기준' : '', 'start', { style: 'font-size:9px;fill:var(--c1)' });
+    const show = tr.slice(-6), k = show.length, W = 340, H = 170, L = 40, R = 8, T = 12, B = 34, colW = (W - L - R) / k, xs = (i) => L + colW * (i + 0.5);
+    const ps = show.flatMap(t => t[1]).concat(ref ? [ref] : []), lo = Math.min(...ps) * 0.985, hi = Math.max(...ps) * 1.015;
+    const y = (v) => T + (H - T - B) * (1 - (v - lo) / ((hi - lo) || 1));
+    [lo, (lo + hi) / 2, hi].forEach(v => { el('line', { x1: L, x2: W - R, y1: y(v), y2: y(v), stroke: 'var(--line)' }, tsvg); txt(tsvg, L - 4, y(v) + 3, eok(v), 'end'); });
+    if (ref) { el('line', { x1: L, x2: W - R, y1: y(ref), y2: y(ref), stroke: 'var(--c1)', 'stroke-dasharray': '4 3' }, tsvg); }
+    show.forEach((t, i) => {
+      const x = xs(i), v = t[1], cnt = {};
+      v.forEach(p => { const key = Math.round(y(p) / 3); const off = (cnt[key] = (cnt[key] || 0) + 1) - 1;   // 같은 높이 점은 옆으로 벌림
+        const dot = el('circle', { cx: x + (off % 2 ? 1 : -1) * Math.ceil(off / 2) * 6, cy: y(p), r: 3.2, fill: ref && p < ref ? 'var(--good)' : 'var(--ink-3)', 'fill-opacity': ref && p < ref ? 0.95 : 0.55 }, tsvg);
+        hover(dot, `${dt(t[0])} · 호가 ${eok(p)}${ref ? ` · 기준 시세 ${sgn((p / ref - 1) * 100)}` : ''}`); });
+      el('line', { x1: x - colW * 0.32, x2: x + colW * 0.32, y1: y(t[2]), y2: y(t[2]), stroke: 'var(--c1)', 'stroke-width': 3, 'stroke-linecap': 'round' }, tsvg);
+      if (k <= 3 || i === k - 1) txt(tsvg, x + colW * 0.34, y(t[2]) + 3, eok(t[2]), 'start', { style: 'font-size:9.5px;font-weight:700;fill:var(--c1)' });   // 4번 넘게 저장하면 마지막만(겹침)
+      const prev = i ? show[i - 1][1].length : (tr.length > k ? tr[tr.length - k - 1][1].length : null), dn = prev == null ? null : v.length - prev;
+      txt(tsvg, x, H - 18, `${dt(t[0]).slice(3)}`, 'middle', { style: 'font-size:10px' });
+      txt(tsvg, x, H - 5, `${v.length}개${dn ? (dn > 0 ? ` ▲${dn}` : ` ▼${-dn}`) : ''}`, 'middle', { style: `font-size:10.5px;font-weight:600;fill:var(${dn > 0 ? '--up2' : dn < 0 ? '--dn2' : '--ink-2'})` });
+    });
+    const a = show[0], b = show[k - 1], gm1 = ref ? (b[2] / ref - 1) * 100 : null, cheap = ref ? b[1].filter(p => p < ref).length : 0;
+    $('#askTrendTitle').innerHTML = `${dt(a[0]).slice(3)} → ${dt(b[0]).slice(3)}: 매물 <b>${a[1].length} → ${b[1].length}개</b> · 중간 호가 <b>${eok(a[2])} → ${eok(b[2])}</b>`
+      + (ref ? ` <span class="muted">(기준 시세보다 ${sgn(gm1)}${cheap ? ` · 기준보다 싼 매물 ${cheap}개` : ''})</span>` : '');
+    $('#askTrendLg').innerHTML = '<span><i style="background:var(--ink-3);opacity:.6;width:7px;height:7px;border-radius:50%"></i>매물 1개</span>'
+      + (ref ? '<span><i style="background:var(--good);width:7px;height:7px;border-radius:50%"></i>기준 시세보다 싼 매물</span>' : '')
+      + '<span><i style="background:var(--c1);height:3px"></i>중간 호가</span>' + (ref ? `<span><i style="background:none;border-top:1.5px dashed var(--c1);height:0"></i>기준 시세 ${eok(ref)}</span>` : '')
+      + '<span>아래: 매물 수(▲늘어남 ▼줄어듦)</span>';
   }
   const pn = prevD ? snap(prevD).filter(x => x.t === '매매').length : null, gm = gap(med(sale));
   $('#askSum').innerHTML = !now.length ? '' : `
