@@ -12,6 +12,7 @@ SGIS 시군구 코드(송파 11240)는 법정동 코드(송파 11710)와 다르�
 
 from __future__ import annotations
 
+import re
 import json
 import os
 import time
@@ -92,8 +93,9 @@ def address_candidates(region_name: str, umd: str | None, jibun: str | None, roa
     sgg_full = " ".join(parts[1:])
     sgg_city = parts[1] if len(parts) > 2 else sgg_full
     out = []
+    ok_jibun = bool(jibun) and re.fullmatch(r"산?\d+(-\d+)?", jibun.strip()) is not None   # '가-' '지구BL'(지번 받기 전 블록) 같은 값은 SGIS 서버 오류(2026-10-26)
     for sgg in dict.fromkeys([sgg_full, sgg_city]):
-        if umd and jibun:
+        if umd and ok_jibun:
             out.append(("jibun", f"{sido} {sgg} {umd} {jibun}"))
         if road:
             out.append(("road", f"{sido} {sgg} {road}"))
@@ -111,4 +113,6 @@ def accept(hit: dict | None, bjd_code: str | None, umd: str | None, region_name:
     if bjd_code and leg_cd == bjd_code:
         return True
     ours = region_name.split()[1:]
-    return bool(umd) and leg_nm == umd and bool(sgg_nm) and any(t in sgg_nm or sgg_nm in t for t in ours)
+    # 읍·면 아래 리는 우리 쪽이 '남양읍 남양리', SGIS 는 '남양리' 처럼 끝 이름만 줄 때가 있다(2026-10-27 화성 만세·효행구 138곳이 이래서 못 찾음)
+    same_umd = bool(umd) and (leg_nm == umd or (" " in umd and leg_nm == umd.split()[-1]))
+    return same_umd and bool(sgg_nm) and any(t in sgg_nm or sgg_nm in t for t in ours)
