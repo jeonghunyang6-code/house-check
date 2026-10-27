@@ -1,6 +1,6 @@
 """텔레그램 알림 보내기. 봇 토큰은 환경 변수 TELEGRAM_BOT_TOKEN(출력 금지).
 
-대화 번호(chat id)는 TELEGRAM_CHAT_ID 가 있으면 그것, 없으면 DB user_state 'tg_chat', 그것도 없으면 봇이 받은 메시지(getUpdates)에서
+대화 번호(chat id)는 TELEGRAM_CHAT_ID 가 있으면 그것, 없으면 DB user_state 'tg_chat', 그것도 없으면 봇이 받은 메시지(getUpdates — 2026-10-27 부터 웹훅(web/api/tg.js)을 걸어 두므로 getUpdates 는 409 로 실패, tg_chat 이 이미 있어 쓰이지 않음)에서
 가장 최근 보낸 사람으로 정해 DB 에 저장한다 → 사용자는 봇에게 아무 말이나 한 번 보내 두면 된다.
 조용한 시간(22~07시 KST)에는 보내지 않는다(알림은 그 시간에 돌지 않게 짰지만 늦게 돈 경우 대비).
 """

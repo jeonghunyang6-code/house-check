@@ -12,6 +12,7 @@ SGIS 시군구 코드(송파 11240)는 법정동 코드(송파 11710)와 다르�
 
 from __future__ import annotations
 
+import re
 import json
 import os
 import time
@@ -92,8 +93,9 @@ def address_candidates(region_name: str, umd: str | None, jibun: str | None, roa
     sgg_full = " ".join(parts[1:])
     sgg_city = parts[1] if len(parts) > 2 else sgg_full
     out = []
+    ok_jibun = bool(jibun) and re.fullmatch(r"산?\d+(-\d+)?", jibun.strip()) is not None   # '가-' '지구BL'(지번 받기 전 블록) 같은 값은 SGIS 서버 오류(2026-10-26)
     for sgg in dict.fromkeys([sgg_full, sgg_city]):
-        if umd and jibun:
+        if umd and ok_jibun:
             out.append(("jibun", f"{sido} {sgg} {umd} {jibun}"))
         if road:
             out.append(("road", f"{sido} {sgg} {road}"))
@@ -111,4 +113,7 @@ def accept(hit: dict | None, bjd_code: str | None, umd: str | None, region_name:
     if bjd_code and leg_cd == bjd_code:
         return True
     ours = region_name.split()[1:]
-    return bool(umd) and leg_nm == umd and bool(sgg_nm) and any(t in sgg_nm or sgg_nm in t for t in ours)
+    # 읍·면 아래 리: 우리 쪽은 '우정읍 조암리', SGIS 는 읍·면 이름('우정읍')만 준다(2026-10-27 Actions 로그로 확인 — 화성 만세·효행구 138곳, 김포 고촌읍 등이 이래서 못 찾음).
+    # 좌표는 주소 자체의 점이라 읍·면까지 맞으면 받아들인다
+    same_umd = bool(umd) and (leg_nm == umd or (" " in umd and leg_nm in (umd.split()[0], umd.split()[-1])))
+    return same_umd and bool(sgg_nm) and any(t in sgg_nm or sgg_nm in t for t in ours)
