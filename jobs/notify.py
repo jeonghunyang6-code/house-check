@@ -113,10 +113,40 @@ def mark_redev(db: Db) -> None:
     db.query("UPDATE redev_stage_hist SET notified = true WHERE NOT notified;")
 
 
-def daily(db: Db) -> str | None:
+OPS_SEEN = "ops_seen"   # user_state: 마지막으로 실패를 알린 때(UTC ISO)
+
+
+def ops_lines(db: Db) -> tuple[list[str], str | None]:
+    """지난번 알린 뒤 실패한 자동 작업(collector/ops.py). (줄들, 이번에 저장할 시각). Actions 밖·API 실패면 ([], None)."""
+    from collector import ops
+    now = datetime.now(ZoneInfo("UTC"))
+    got = select(db, f"SELECT v #>> '{{}}' v FROM user_state WHERE k = {lit(OPS_SEEN)}")
+    try:
+        since = datetime.fromisoformat(got[0]["v"]) if got and got[0]["v"] else ops.default_since(now)
+        runs = ops.failures(since)
+    except (ops.OpsError, ValueError) as e:
+        print(f"  작업 실패 확인 못 함: {e}", file=sys.stderr)
+        return [], None
+    if runs is None:
+        return [], None
+    lines = [f"{'⚠️' if r['important'] else '▫️'} {r['label']} 실패 · {r['at'].astimezone(KST):%m/%d %H:%M}" + (f" · {html.escape(r['step'])}" if r["step"] else "")
+             for r in runs]
+    return ([f"🛠️ <b>자동 작업 실패 {len(runs)}건</b>(Claude 에게 '실패 확인')", *lines] if lines else []), now.isoformat()
+
+
+def mark_ops(db: Db, at: str | None) -> None:
+    if at:
+        db.query(f"INSERT INTO user_state (k, v) VALUES ({lit(OPS_SEEN)}, to_jsonb({lit(at)}::text)) ON CONFLICT (k) DO UPDATE SET v = EXCLUDED.v, updated_at = now();")
+
+
+def daily(db: Db, ops_out: list | None = None) -> str | None:
     seqs = watch(db)
     rows, mb, rd = deals(db, seqs, 1), db_mb(db), redev_changes(db, seqs)
     warn = [f"⚠️ DB {mb}MB / 500MB — 정리가 필요합니다(Claude 에게 'DB 정리')"] if mb >= DB_WARN_MB else []
+    op, at = ops_lines(db)
+    if ops_out is not None:
+        ops_out.append(at)
+    warn += op
     if not rows and not warn and not rd:
         return None
     url = site(db)
@@ -128,7 +158,7 @@ def daily(db: Db) -> str | None:
     return "\n".join(warn + head + ([f"\n{url}"] if url and (rows or rd) else []))
 
 
-def watch_info(db: Db, seqs: list[str]) -> dict[str, dict]:
+def watch_info(db: Db, seqs: list[str], save: bool = False) -> dict[str, dict]:
     """관심 단지별 이름·가격(84㎡ 기준 시세, 없으면 최근 거래가)·저장 호가(84㎡대, 최근 두 번)."""
     if not seqs:
         return {}
@@ -139,6 +169,13 @@ def watch_info(db: Db, seqs: list[str]) -> dict[str, dict]:
     refs = {}
     for r in select(db, f"SELECT apt_seq s, area_group ag, ref_10k p FROM complex_metrics WHERE apt_seq IN ({ins}) AND ref_10k IS NOT NULL ORDER BY abs(area_group - 84)"):
         refs.setdefault(r["s"], (r["ag"], r["p"]))
+    # 지난주 기준 시세: 금요일마다 jeonse_lines 가 metric_snap 에 쌓은 값(6~13일 전) — 2026-10-27 사용자 요청 '지난주 대비'
+    today = datetime.now(KST).date()
+    prev = {(r["s"], r["ag"]): r["p"] for r in select(db, f"""SELECT DISTINCT ON (apt_seq, area_group) apt_seq s, area_group ag, ref_10k p FROM metric_snap
+      WHERE apt_seq IN ({ins}) AND ref_10k IS NOT NULL AND asof BETWEEN {lit(today)}::date - 13 AND {lit(today)}::date - 6 ORDER BY apt_seq, area_group, asof DESC""")}
+    if save and refs:   # 보여 주는 평형(84㎡에 가장 가까운) 그대로 쌓는다(전세 신호는 84·59 만이라 따로)
+        db.query("INSERT INTO metric_snap (apt_seq, area_group, asof, ref_10k) VALUES " + ", ".join(f"({lit(k)}, {ag}, {lit(today)}, {p})" for k, (ag, p) in refs.items())
+                 + " ON CONFLICT (apt_seq, area_group, asof) DO UPDATE SET ref_10k = EXCLUDED.ref_10k;")
     last = {r["s"]: r for r in select(db, f"""SELECT DISTINCT ON (s) s, ag, p, k, d FROM (
       SELECT apt_seq s, area_group ag, price_10k p, '매매' k, contract_date d FROM deals WHERE apt_seq IN ({ins}) AND NOT is_cancelled AND area_group BETWEEN 75 AND 99
       UNION ALL SELECT coalesce(apt_seq, pc_seq), area_group, price_10k, kind, contract_date FROM right_deals
@@ -149,8 +186,14 @@ def watch_info(db: Db, seqs: list[str]) -> dict[str, dict]:
     week_ago = (datetime.now(KST).date() - timedelta(days=7)).isoformat()
     out = {}
     for s in seqs:
+        px_moved = False
         if s in refs:
             px = f"{refs[s][0]}㎡ 기준 {eok(refs[s][1])}"
+            p0 = prev.get((s, refs[s][0]))
+            if p0 and p0 != refs[s][1]:
+                d = refs[s][1] - p0
+                px += f" (지난주 {'+' if d > 0 else '−'}{eok(abs(d))})"
+                px_moved = abs(d) / p0 >= PX_MOVE
         elif s in last:
             px = f"최근 {last[s]['k']} {eok(last[s]['p'])}"
         else:
@@ -164,7 +207,7 @@ def watch_info(db: Db, seqs: list[str]) -> dict[str, dict]:
                 diff = len(now) - len(cnt(dates[-2])) if len(dates) > 1 else 0
                 ask = f"🏷️ 호가 {len(now)}개 · 중간 {eok(now[(len(now) - 1) // 2])}" + (f" ({'+' if diff > 0 else ''}{diff}개)" if diff else "") + f" · {dates[-1][5:].replace('-', '/')} 저장"
                 moved = diff != 0 and dates[-1] >= week_ago
-        out[s] = {"name": names.get(s, s), "px": px, "ask": ask, "ask_moved": moved, "ask_last": dates[-1] if dates else None}
+        out[s] = {"name": names.get(s, s), "px": px, "ask": ask, "ask_moved": moved, "px_moved": px_moved, "ask_last": dates[-1] if dates else None}
     return out
 
 
@@ -235,6 +278,7 @@ def ipju_lines(db: Db, seqs: list[str], names: dict[str, str]) -> list[str]:
     return out
 
 
+PX_MOVE = 0.01   # 🔧 기준 시세가 지난주보다 1% 넘게 바뀌면 주간 요약에 그 단지를 보여 줌
 ASK_STALE_DAYS = 14   # 이보다 오래 호가를 안 저장한 관심 단지는 주간 요약에서 챙김(매물 수 흐름이 끊기지 않게, 2026-10-26 사용자 요청)
 
 
@@ -253,7 +297,7 @@ def ask_reminder(info: dict[str, dict], seqs: list[str], today) -> list[str]:
 
 
 def weekly(db: Db, save: bool = True) -> str:
-    """금요일 주간 요약. 관심 단지는 이번 주 신고가 있거나 저장 호가 매물 수가 바뀐 곳만(2026-10-25 사용자 요청: 줄이고 이모지)."""
+    """금요일 주간 요약. 관심 단지는 이번 주 신고가 있거나 저장 호가 매물 수가 바뀌었거나 기준 시세가 지난주보다 1% 🔧 넘게 바뀐 곳만(2026-10-25 사용자 요청: 줄이고 이모지)."""
     today = datetime.now(KST).date()
     out = [f"📊 <b>주간 요약</b> · {today:%m/%d}"]
     wk = select(db, """SELECT cls_id, week_date::text d, value v FROM rone_weekly WHERE stat = 'sale' AND cls_id IN (50008, 50016, 50002)
@@ -272,8 +316,8 @@ def weekly(db: Db, save: bool = True) -> str:
         out.append("  ".join(parts) + f"\n<i>부동산원 {wk[-1]['d'][5:].replace('-', '/')} 주</i>")
     seqs = watch(db)
     rows = deals(db, seqs, 7)
-    info = watch_info(db, seqs)
-    moved = [s for s in seqs if any(r["apt_seq"] == s for r in rows) or info[s]["ask_moved"]]
+    info = watch_info(db, seqs, save)
+    moved = [s for s in seqs if any(r["apt_seq"] == s for r in rows) or info[s]["ask_moved"] or info[s]["px_moved"]]
     if not seqs:
         out.append("\n🏠 관심 단지가 없습니다(웹에서 ♡)")
     else:
@@ -310,17 +354,24 @@ def weekly(db: Db, save: bool = True) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("mode", choices=["daily", "weekly", "test"])
+    ap.add_argument("mode", choices=["daily", "weekly", "test", "ops"])
     ap.add_argument("--db", choices=["api", "psql"])
     ap.add_argument("--dry", action="store_true", help="보내지 않고 글만 출력")
     a = ap.parse_args(argv)
     try:
         db = connect(a.db)
-        text = {"daily": daily, "weekly": lambda d: weekly(d, save=not a.dry), "test": lambda _db: "house-check 알림 연결 확인 ✅"}[a.mode](db)
+        if a.mode == "ops":   # 시험: 지난 7일 실패를 보여 주기만(보내지 않고 저장 안 함)
+            from collector import ops
+            runs = ops.failures(ops.default_since() - timedelta(days=6))
+            print("Actions 밖" if runs is None else "\n".join(f"{r['label']} {r['at']:%m-%d %H:%M} {r['step']}" for r in runs) or "실패 없음")
+            return 0
+        ops_at: list = []
+        text = {"daily": lambda d: daily(d, ops_at), "weekly": lambda d: weekly(d, save=not a.dry), "test": lambda _db: "house-check 알림 연결 확인 ✅"}[a.mode](db)
         if not text:
             print("  보낼 것 없음")
             if a.mode == "daily" and not a.dry:
                 mark_redev(db)   # 관심 단지 근처 변화가 없으면 먼 구역 변화도 '알림 끝'
+                mark_ops(db, ops_at[0] if ops_at else None)
             return 0
         if a.dry:
             print(text)
@@ -328,6 +379,7 @@ def main(argv: list[str] | None = None) -> int:
         got = T.send(db, text, force=a.mode == 'test')
         print(f"  {a.mode}: {got} ({len(text)}자)")
         if got == "sent" and a.mode == "daily":
+            mark_ops(db, ops_at[0] if ops_at else None)
             mark_redev(db)   # 보낸 뒤에만. 관심 단지에서 먼 구역의 변화도 같이 '알림 끝'(밀리지 않게)
     except (DbError, T.TelegramError) as e:
         print(f"[notify] 실패: {e}", file=sys.stderr)

@@ -15,6 +15,7 @@ import time
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from collector import newtown_news as N
 from collector import policy_news as P
 from collector import telegram as T
 from collector.db import Db, DbError, connect, lit, select
@@ -25,9 +26,9 @@ KST = ZoneInfo("Asia/Seoul")
 SAME = 3   # 같은 종류로 이 날짜 차이 안이면 같은 후보로 본다
 
 
-def fetch(pages: int = 2) -> list[dict]:
+def fetch(pages: int = 2, queries=P.QUERIES) -> list[dict]:
     arts = []
-    for q in P.QUERIES:
+    for q in queries:
         for p in range(pages):
             arts += search(q, start=1 + 100 * p)
             time.sleep(0.2)
@@ -89,7 +90,37 @@ def run(db: Db, days: int, issue_file: str | None) -> int:
     if issue_file:
         with open(issue_file, "w", encoding="utf-8") as f:
             f.write(issue_md(new) if new else "")
+    newtown(db, today, days)
     return 0
+
+
+NT_SEEN = "nt_news_seen"   # user_state: 이미 알린 '구역|단계'
+
+
+def newtown(db: Db, today, days: int) -> None:
+    """1기 신도시 선도지구 단계 변화 후보(collector/newtown_news.py) → 텔레그램. 확인 뒤 collector/newtown.py 를 손으로 고친다."""
+    try:
+        arts = fetch(1, N.QUERIES)
+    except NewsBlocked as e:
+        print(f"  선도지구 뉴스 검색 막힘: {e}", file=sys.stderr)
+        return
+    got = select(db, f"SELECT v FROM user_state WHERE k = {lit(NT_SEEN)}")
+    seen = set((json.loads(got[0]["v"]) if isinstance(got[0]["v"], str) else got[0]["v"]) or []) if got else set()
+    cands = N.candidates(arts, today, days)
+    new = [c for c in cands if f"{c.code}|{c.stage}" not in seen]
+    print(f"  선도지구 기사 {len(arts):,}건, 후보 {len(cands)}건, 새 알림 {len(new)}건" + "".join(f"\n   {c.zone_nm} → {c.stage} 언론사 {len(c.press)}" for c in cands))
+    if not new:
+        return
+    if T.enabled():
+        try:
+            print("  텔레그램:", T.send(db, "<b>🏙️ 선도지구 단계 후보</b>(기사 확인 뒤 Claude 에게 '선도지구 반영')\n" + "\n".join(
+                f"• {c.zone_nm} → {c.stage} · 언론사 {len(c.press)}곳: {c.titles[0][1][:60]}" for c in new)))
+        except T.TelegramError as e:
+            print(f"  텔레그램 실패: {e}", file=sys.stderr)
+            return
+    seen |= {f"{c.code}|{c.stage}" for c in new}
+    db.query(f"INSERT INTO user_state (k, v) VALUES ({lit(NT_SEEN)}, {lit(json.dumps(sorted(seen), ensure_ascii=False))}::jsonb) "
+             "ON CONFLICT (k) DO UPDATE SET v = EXCLUDED.v, updated_at = now();")
 
 
 def main(argv: list[str] | None = None) -> int:

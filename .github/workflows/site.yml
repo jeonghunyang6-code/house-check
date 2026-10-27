@@ -44,6 +44,11 @@ jobs:
           python tools/prototype/compute.py > /dev/null
           python tools/prototype/build_v2.py --web house-check
           ls -la house-check
+      - name: 화면 점검(배포 전, 실패하면 배포 안 함 → 어제 사이트 그대로)
+        run: |
+          npm i --no-save --silent --prefix "$RUNNER_TEMP/pw" playwright@1.56.1
+          "$RUNNER_TEMP/pw/node_modules/.bin/playwright" install --with-deps chromium > /dev/null
+          NODE_PATH="$RUNNER_TEMP/pw/node_modules" node tools/prototype/smoke.js house-check
       - name: Vercel 배포
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
