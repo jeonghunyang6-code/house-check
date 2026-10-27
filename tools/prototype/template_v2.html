@@ -1313,7 +1313,7 @@ function drawAsks() {
   const refAt = (i) => { const k = w0r == null ? -1 : Math.round((weeks[i] - w0r) / (7 * 864e5)); return (k >= 0 && RW[k]) || ref; };
   const has = cols.filter(Boolean), tsvg = $('#askTrend'); tsvg.innerHTML = ''; $('#askTrendBox').hidden = !Object.keys(byW).length;
   if (has.length) {
-    const W = 340, H = 168, L = 36, R = 46, T = 10, B = span === '6m' ? 16 : 30, cw = (W - L - R) / NW, xs = (i) => L + cw * (i + 0.5);
+    const W = 340, H = 168, L = 37, R = 4, T = 10, B = span === '6m' ? 16 : 30, cw = (W - L - R) / NW, xs = (i) => L + cw * (i + 0.5);
     const refs = weeks.map((_, i) => refAt(i)), ps = has.flatMap(c => c.v).concat(refs.filter(Boolean)), lo = Math.min(...ps) * 0.985, hi = Math.max(...ps) * 1.015;
     const y = (v) => T + (H - T - B) * (1 - (v - lo) / ((hi - lo) || 1)), cheap = (p, i) => refs[i] && p < refs[i];
     const step = [100, 200, 250, 500, 1000, 2000, 2500, 5000, 10000].find(t => (hi - lo) / t <= 22) || 10000;   // 가격대 막대 한 칸(만원): 세로로 약 15~22칸
@@ -1322,9 +1322,6 @@ function drawAsks() {
     if (refs.some(Boolean)) {
       const seg = refs.map((v, i) => v ? `${i && refs[i - 1] ? 'L' : 'M'}${(xs(i) - cw / 2).toFixed(1)},${y(v).toFixed(1)}L${(xs(i) + cw / 2).toFixed(1)},${y(v).toFixed(1)}` : '').join('');
       el('path', { d: seg, fill: 'none', stroke: 'var(--c1)', 'stroke-dasharray': '4 3', 'stroke-width': 1.2 }, tsvg);
-      // 이름표는 오른쪽 빈 칸에(그래프 안에 두면 막대·점과 겹침): 지금 기준 시세. 중간 호가 이름표와 가까우면 아래로
-      const rl = refs[refs.length - 1] || refs.filter(Boolean).pop(), ml = has[has.length - 1].m, near = Math.abs(y(rl) - y(ml)) < 12;
-      txt(tsvg, W - 1, y(rl) + (near && y(rl) >= y(ml) ? 12 : near ? -6 : 3), '기준 ' + eok(rl), 'end', { style: 'font-size:8.5px;fill:var(--c1)' });
     }
     weeks.forEach((w, i) => { if (!cols[i]) el('rect', { x: xs(i) - cw * 0.3, y: T, width: cw * 0.6, height: H - T - B, fill: 'var(--sunk)', 'fill-opacity': 0.5, rx: 2 }, tsvg); });
     // 중간 호가를 잇는 가는 선(빈 주는 건너뜀)
@@ -1358,8 +1355,12 @@ function drawAsks() {
       } });
     if (span === '6m') weeks.forEach((w, i) => { const t = new Date(w), prev = new Date(w - 7 * 864e5); if (i === 0 || t.getMonth() !== prev.getMonth()) txt(tsvg, xs(i), H - 3, (t.getMonth() + 1) + '월', 'middle', { style: 'font-size:9px;fill:var(--ink-3)' }); });
     const last = has[has.length - 1], first = has[0];
-    txt(tsvg, W - 1, y(last.m) + 3, eok(last.m), 'end', { style: 'font-size:10px;font-weight:700;fill:var(--c1)' });
-    $('#askTrendTitle').innerHTML = has.length > 1 ? `매물 <b>${first.v.length}→${last.v.length}</b> · 중간 <b>${eok(first.m)}→${eok(last.m)}</b>` : `매물 <b>${last.v.length}</b> · 중간 <b>${eok(last.m)}</b>`;
+    // 값 이름표는 그래프 오른쪽 대신 위 한 줄에(2026-10-28 사용자: 가로를 끝까지 쓰기). 기준 = 지금 주 기준 시세, 점선 표시와 같은 색
+    const rl = refs[refs.length - 1] || refs.filter(Boolean).pop();
+    const nw = (h) => `<span style="white-space:nowrap">${h}</span>`;   // 좁은 화면에서 '기준 24.9 / 억'처럼 끊기지 않게 덩어리로 줄바꿈
+    $('#askTrendTitle').innerHTML = [has.length > 1 ? nw(`매물 <b>${first.v.length}→${last.v.length}</b>`) : nw(`매물 <b>${last.v.length}</b>`),
+      nw(`중간 <b style="color:var(--c1)">${has.length > 1 ? eok(first.m) + '→' : ''}${eok(last.m)}</b>`),
+      rl ? nw(`<span style="color:var(--c1);border-bottom:1.5px dashed var(--c1)">기준 ${eok(rl)}</span>`) : ''].filter(Boolean).join(' · ');
   }
   const pn = prevD ? snap(prevD).filter(x => x.t === '매매').length : null, gm = gap(med(sale));
   $('#askSum').innerHTML = !now.length ? '' : `
