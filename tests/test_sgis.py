@@ -21,9 +21,11 @@ def test_accept():
 
 def test_rural_ri_and_junk_jibun():
     # 2026-10-27: 화성 만세·효행구 읍면 리 단지가 SGIS 의 '남양리'(끝 이름만)와 안 맞아 138곳 좌표 없음
-    hit = {"leg_cd": "4159025021", "leg_nm": "남양리", "sgg_nm": "화성시"}
-    assert accept(hit, "4159125021", "남양읍 남양리", "경기 화성시 만세구")
-    assert not accept({"leg_nm": "남양리", "sgg_nm": "평택시"}, None, "남양읍 남양리", "경기 화성시 만세구")
+    hit = {"leg_cd": "4159025632", "leg_nm": "우정읍", "sgg_nm": "화성시"}   # 실제 SGIS 답(2026-10-27 로그)
+    assert accept(hit, "4159125032", "우정읍 조암리", "경기 화성시 만세구")
+    assert accept({"leg_nm": "고촌읍", "sgg_nm": "김포시"}, "4157025323", "고촌읍 태리", "경기 김포시")
+    assert not accept({"leg_nm": "남양읍", "sgg_nm": "화성시"}, None, "우정읍 조암리", "경기 화성시 만세구")
+    assert not accept({"leg_nm": "남양읍", "sgg_nm": "평택시"}, None, "남양읍 남양리", "경기 화성시 만세구")
     # 지번 받기 전 블록 값은 지번 후보로 쓰지 않는다(SGIS 서버 오류)
     assert all(m != "jibun" for m, _ in address_candidates("경기 화성시 효행구", "봉담읍 동화리", "지구BL", None, None))
     assert address_candidates("경기 화성시 효행구", "봉담읍 동화리", "산12-3", None, None)[0][0] == "jibun"

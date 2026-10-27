@@ -113,6 +113,7 @@ def accept(hit: dict | None, bjd_code: str | None, umd: str | None, region_name:
     if bjd_code and leg_cd == bjd_code:
         return True
     ours = region_name.split()[1:]
-    # 읍·면 아래 리는 우리 쪽이 '남양읍 남양리', SGIS 는 '남양리' 처럼 끝 이름만 줄 때가 있다(2026-10-27 화성 만세·효행구 138곳이 이래서 못 찾음)
-    same_umd = bool(umd) and (leg_nm == umd or (" " in umd and leg_nm == umd.split()[-1]))
+    # 읍·면 아래 리: 우리 쪽은 '우정읍 조암리', SGIS 는 읍·면 이름('우정읍')만 준다(2026-10-27 Actions 로그로 확인 — 화성 만세·효행구 138곳, 김포 고촌읍 등이 이래서 못 찾음).
+    # 좌표는 주소 자체의 점이라 읍·면까지 맞으면 받아들인다
+    same_umd = bool(umd) and (leg_nm == umd or (" " in umd and leg_nm in (umd.split()[0], umd.split()[-1])))
     return same_umd and bool(sgg_nm) and any(t in sgg_nm or sgg_nm in t for t in ours)
