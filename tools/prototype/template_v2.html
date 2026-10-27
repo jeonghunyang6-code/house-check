@@ -1245,7 +1245,7 @@ function drawDaily() {
     txt(svg, L, H - 4, lite ? '1년 전' : '90일 전', 'start'); txt(svg, W - R, H - 4, '오늘', 'end');
   }
   $('#dDeals').innerHTML = deals.slice(0, 12).map(x => { const g = ref ? (x[4] / ref - 1) * 100 : null, cl = g == null ? '' : g <= -5 ? 'dn' : g >= 3 ? 'up' : 'muted';
-    return `<div class="deal"><span class="muted num">${dt(d2(x[1]))}</span><span>${x[2]}㎡ · ${x[3]}층${x[5] ? ' · 직거래' : ''}${x[6] ? ` <span class="pill none">${x[6]}</span>` : ''}${g != null && g <= -5 && Math.abs(x[2] - mainAg) <= 1 ? ' <span class="pill acc">급매</span>' : ''}</span><span class="p">${eok(x[4])} <span class="${cl}" style="font-size:12px;font-weight:500">${Math.abs(x[2] - mainAg) <= 1 && g != null ? sgn(g, 0) : ''}</span></span></div>`; }).join('')
+    return `<div class="deal"><span class="muted num">${dt(d2(x[1]))}</span><span>${x[2]}㎡ · ${x[3]}층${x[5] ? ' · 직거래' : ''}${x[6] ? ` <span class="pill none">${x[6]}</span>` : ''}${g != null && g <= -5 && Math.abs(x[2] - mainAg) <= 1 ? ' <span class="pill acc">급매</span>' : ''}</span><span class="p"><span class="${cl}" style="font-size:12px;font-weight:500">${Math.abs(x[2] - mainAg) <= 1 && g != null ? sgn(g, 0) : ''}</span> ${eok(x[4])}</span></div>`; }).join('')
     || `<p class="muted">최근 ${lite ? '1년' : '90일'} 거래가 없습니다.</p>`;
   drawAsks(); drawMap(seq); $('#dDev').innerHTML = devHtml(seq);
 }
