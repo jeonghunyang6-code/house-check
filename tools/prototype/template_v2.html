@@ -1323,7 +1323,16 @@ function drawAsks() {
       const seg = refs.map((v, i) => v ? `${i && refs[i - 1] ? 'L' : 'M'}${(xs(i) - cw / 2).toFixed(1)},${y(v).toFixed(1)}L${(xs(i) + cw / 2).toFixed(1)},${y(v).toFixed(1)}` : '').join('');
       el('path', { d: seg, fill: 'none', stroke: 'var(--c1)', 'stroke-dasharray': '4 3', 'stroke-width': 1.2 }, tsvg);
     }
-    weeks.forEach((w, i) => { if (!cols[i]) el('rect', { x: xs(i) - cw * 0.3, y: T, width: cw * 0.6, height: H - T - B, fill: 'var(--sunk)', 'fill-opacity': 0.5, rx: 2 }, tsvg); });
+    // 빈 주는 그냥 비워 둔다(2026-10-28 사용자: 회색 띠가 무슨 뜻인지 헷갈림). 8주는 아래에 주 날짜를 흐리게, 6개월은 매달 1일에 옅은 세로선 + 달 이름은 그 달 가운데
+    const xt = (t) => L + cw * (t - weeks[0]) / (7 * 864e5);
+    if (span === '6m') {
+      const end = weeks[NW - 1] + 7 * 864e5, m0 = new Date(weeks[0]); m0.setDate(1);
+      for (let m = new Date(m0); m.getTime() < end; m.setMonth(m.getMonth() + 1)) {
+        const a = Math.max(m.getTime(), weeks[0]), nx = new Date(m); nx.setMonth(nx.getMonth() + 1); const b = Math.min(nx.getTime(), end);
+        if (m.getTime() >= weeks[0]) el('line', { x1: xt(a), x2: xt(a), y1: T, y2: H - B, stroke: 'var(--line)' }, tsvg);
+        if (xt(b) - xt(a) >= 16) txt(tsvg, (xt(a) + xt(b)) / 2, H - 3, (m.getMonth() + 1) + '월', 'middle', { style: 'font-size:9px;fill:var(--ink-3)' });
+      }
+    } else weeks.forEach((w, i) => { if (!cols[i]) txt(tsvg, xs(i), H - 17, ((d) => String(d.getMonth() + 1).padStart(2, '0') + '.' + String(d.getDate()).padStart(2, '0'))(new Date(w)), 'middle', { style: 'font-size:9px;fill:var(--ink-3);opacity:.45' }); });
     // 중간 호가를 잇는 가는 선(빈 주는 건너뜀)
     const mp = cols.map((c, i) => c ? [xs(i), y(c.m)] : null).filter(Boolean);
     if (mp.length > 1) el('path', { d: mp.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(''), fill: 'none', stroke: 'var(--c1)', 'stroke-width': 1.2, 'stroke-opacity': 0.5 }, tsvg);
@@ -1353,7 +1362,6 @@ function drawAsks() {
         txt(tsvg, x, H - 17, dt(c.d).slice(3), 'middle', { style: 'font-size:9px;fill:var(--ink-3)' });
         txt(tsvg, x, H - 4, String(c.v.length) + (dn ? (dn > 0 ? '▲' : '▼') : ''), 'middle', { style: `font-size:10.5px;font-weight:700;fill:var(${dn > 0 ? '--up2' : dn < 0 ? '--dn2' : '--ink-2'})` });
       } });
-    if (span === '6m') weeks.forEach((w, i) => { const t = new Date(w), prev = new Date(w - 7 * 864e5); if (i === 0 || t.getMonth() !== prev.getMonth()) txt(tsvg, xs(i), H - 3, (t.getMonth() + 1) + '월', 'middle', { style: 'font-size:9px;fill:var(--ink-3)' }); });
     const last = has[has.length - 1], first = has[0];
     // 값 이름표는 그래프 오른쪽 대신 위 한 줄에(2026-10-28 사용자: 가로를 끝까지 쓰기). 기준 = 지금 주 기준 시세, 점선 표시와 같은 색
     const rl = refs[refs.length - 1] || refs.filter(Boolean).pop();
