@@ -1308,13 +1308,23 @@ function drawAsks() {
   const w0 = monday(D.asof), weeks = [...Array(NW)].map((_, i) => { const t = new Date(w0); t.setDate(t.getDate() - 7 * (NW - 1 - i)); return t.getTime(); });
   const byW = {}; dates.forEach(d => { const v = snap(d).filter(x => x.t === '매매').map(x => x.p).sort((a, b) => a - b); if (v.length) byW[monday(d).getTime()] = [d, v]; });
   const cols = weeks.map(w => byW[w] ? { d: byW[w][0], v: byW[w][1], m: (byW[w][1][(byW[w][1].length - 1) >> 1] + byW[w][1][byW[w][1].length >> 1]) / 2 } : null);
+  // 주별 기준 시세(extract v2_refw: 그 주 끝 시점 A1 규칙). 없는 주는 오늘 기준 시세
+  const RW = ((D.v2_refw || {})[dSeq] || {})[String(ag)] || [], w0r = D.v2_refw_w0 ? new Date(D.v2_refw_w0 + 'T00:00:00').getTime() : null;
+  const refAt = (i) => { const k = w0r == null ? -1 : Math.round((weeks[i] - w0r) / (7 * 864e5)); return (k >= 0 && RW[k]) || ref; };
   const has = cols.filter(Boolean), tsvg = $('#askTrend'); tsvg.innerHTML = ''; $('#askTrendBox').hidden = !Object.keys(byW).length;
   if (has.length) {
-    const W = 340, H = 168, L = 36, R = 34, T = 10, B = span === '6m' ? 16 : 30, cw = (W - L - R) / NW, xs = (i) => L + cw * (i + 0.5);
-    const ps = has.flatMap(c => c.v).concat(ref ? [ref] : []), lo = Math.min(...ps) * 0.985, hi = Math.max(...ps) * 1.015;
-    const y = (v) => T + (H - T - B) * (1 - (v - lo) / ((hi - lo) || 1)), cheapC = (p) => ref && p < ref;
+    const W = 340, H = 168, L = 36, R = 46, T = 10, B = span === '6m' ? 16 : 30, cw = (W - L - R) / NW, xs = (i) => L + cw * (i + 0.5);
+    const refs = weeks.map((_, i) => refAt(i)), ps = has.flatMap(c => c.v).concat(refs.filter(Boolean)), lo = Math.min(...ps) * 0.985, hi = Math.max(...ps) * 1.015;
+    const y = (v) => T + (H - T - B) * (1 - (v - lo) / ((hi - lo) || 1)), cheap = (p, i) => refs[i] && p < refs[i];
     [lo, (lo + hi) / 2, hi].forEach(v => { el('line', { x1: L, x2: W - R, y1: y(v), y2: y(v), stroke: 'var(--line)' }, tsvg); txt(tsvg, L - 4, y(v) + 3, eok(v), 'end'); });
-    if (ref) { el('line', { x1: L, x2: W - R, y1: y(ref), y2: y(ref), stroke: 'var(--c1)', 'stroke-dasharray': '4 3' }, tsvg); txt(tsvg, L + 2, y(ref) - 3, '기준 ' + eok(ref), 'start', { style: 'font-size:9px;fill:var(--c1)' }); }   // 점선 왼쪽 위에(오른쪽은 좁은 화면에서 잘림)
+    // 기준 시세 계단선(주마다 그때 값): 점선, 칸을 누르면 그 주 값
+    if (refs.some(Boolean)) {
+      const seg = refs.map((v, i) => v ? `${i && refs[i - 1] ? 'L' : 'M'}${(xs(i) - cw / 2).toFixed(1)},${y(v).toFixed(1)}L${(xs(i) + cw / 2).toFixed(1)},${y(v).toFixed(1)}` : '').join('');
+      el('path', { d: seg, fill: 'none', stroke: 'var(--c1)', 'stroke-dasharray': '4 3', 'stroke-width': 1.2 }, tsvg);
+      // 이름표는 오른쪽 빈 칸에(그래프 안에 두면 막대·점과 겹침): 지금 기준 시세. 중간 호가 이름표와 가까우면 아래로
+      const rl = refs[refs.length - 1] || refs.filter(Boolean).pop(), ml = has[has.length - 1].m, near = Math.abs(y(rl) - y(ml)) < 12;
+      txt(tsvg, W - 1, y(rl) + (near && y(rl) >= y(ml) ? 12 : near ? -6 : 3), '기준 ' + eok(rl), 'end', { style: 'font-size:8.5px;fill:var(--c1)' });
+    }
     weeks.forEach((w, i) => { if (!cols[i]) el('rect', { x: xs(i) - cw * 0.3, y: T, width: cw * 0.6, height: H - T - B, fill: 'var(--sunk)', 'fill-opacity': 0.5, rx: 2 }, tsvg); });
     // 중간 호가를 잇는 가는 선(빈 주는 건너뜀)
     const mp = cols.map((c, i) => c ? [xs(i), y(c.m)] : null).filter(Boolean);
@@ -1323,14 +1333,14 @@ function drawAsks() {
       if (span === '6m') {
         const bw = Math.max(3, cw * 0.45), top = y(c.v[c.v.length - 1]), bot = y(c.v[0]);
         el('rect', { x: x - bw / 2, y: top, width: bw, height: Math.max(bot - top, 1.5), rx: bw / 2, fill: 'var(--ink-3)', 'fill-opacity': 0.4 }, tsvg);
-        if (ref && c.v[0] < ref) { const yr = Math.max(y(ref), top); el('rect', { x: x - bw / 2, y: yr, width: bw, height: Math.max(bot - yr, 1.5), rx: bw / 2, fill: 'var(--good)' }, tsvg); }
+        if (refs[i] && c.v[0] < refs[i]) { const yr = Math.max(y(refs[i]), top); el('rect', { x: x - bw / 2, y: yr, width: bw, height: Math.max(bot - yr, 1.5), rx: bw / 2, fill: 'var(--good)' }, tsvg); }
         const bar = el('rect', { x: x - bw, y: y(c.m) - 1.5, width: bw * 2, height: 3, rx: 1.5, fill: 'var(--c1)' }, tsvg);
-        hover(bar, `${dt(c.d)} · 매물 ${c.v.length}개 · 중간 ${eok(c.m)} · ${eok(c.v[0])}~${eok(c.v[c.v.length - 1])}`);
+        hover(bar, `${dt(c.d)} · 매물 ${c.v.length}개 · 중간 ${eok(c.m)} · ${eok(c.v[0])}~${eok(c.v[c.v.length - 1])}${refs[i] ? ` · 그 주 기준 ${eok(refs[i])}` : ''}`);
       } else {
         const cnt = {};
         c.v.forEach(p => { const key = Math.round(y(p) / 3), off = (cnt[key] = (cnt[key] || 0) + 1) - 1, cx = x + (off % 2 ? 1 : -1) * Math.ceil(off / 2) * 5.5;
-          const dot = el('circle', { cx, cy: y(p), r: 2.8, fill: cheapC(p) ? 'var(--good)' : 'var(--ink-3)', 'fill-opacity': cheapC(p) ? 1 : 0.5 }, tsvg);
-          hover(dot, `${dt(c.d)} · 호가 ${eok(p)}${ref ? ` · 기준 ${sgn((p / ref - 1) * 100)}` : ''}`);
+          const dot = el('circle', { cx, cy: y(p), r: 2.8, fill: cheap(p, i) ? 'var(--good)' : 'var(--ink-3)', 'fill-opacity': cheap(p, i) ? 1 : 0.5 }, tsvg);
+          hover(dot, `${dt(c.d)} · 호가 ${eok(p)}${refs[i] ? ` · 그 주 기준 ${eok(refs[i])}(${sgn((p / refs[i] - 1) * 100)})` : ''}`);
         });
         el('rect', { x: x - cw * 0.34, y: y(c.m) - 1.5, width: cw * 0.68, height: 3, rx: 1.5, fill: 'var(--c1)' }, tsvg);
         const pv = cols.slice(0, i).reverse().find(Boolean), dn = pv ? c.v.length - pv.v.length : 0;

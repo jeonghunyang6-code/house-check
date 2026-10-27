@@ -285,6 +285,29 @@ out['v2_elemz'] = {r['apt_seq']: _eix[r['sid']] for r in select(db, "SELECT apt_
 _mix = {r['school_id']: i for i, r in enumerate(select(db, "SELECT school_id FROM mid_school WHERE lat IS NOT NULL ORDER BY school_id"))}
 out['v2_midz'] = {r['apt_seq']: _mix[r['sid']] for r in select(db, "SELECT apt_seq, mid_near->0->>'id' sid FROM complexes WHERE mid_near IS NOT NULL")
                   if r['sid'] in _mix and r['apt_seq'] in _open}
+# 주별 기준 시세(상세 탭 호가 그래프, 2026-10-27 사용자 요청): 호가를 저장한 단지만(user_state v2-naver), 최근 26주 월요일마다 그 주 끝(일요일) 시점의
+# A1 규칙 = 최근 60일 중개·비해제·1층 제외 중앙값, 3건 미만이면 90→180일. v2_refw = {단지: {평형: [26주 값(만원) 또는 null]}}, 첫 주 = v2_refw_w0
+_nv = select(db, "SELECT v FROM user_state WHERE k = 'v2-naver'")
+_nv = (json.loads(_nv[0]['v']) if _nv and isinstance(_nv[0]['v'], str) else (_nv[0]['v'] if _nv else None)) or {}
+out['v2_refw'], out['v2_refw_w0'] = {}, None
+if _nv:
+    _ins = ", ".join("'" + k.replace("'", "''") + "'" for k in _nv)
+    for r in select(db, f"""WITH w AS (SELECT generate_series(date_trunc('week', (now() AT TIME ZONE 'Asia/Seoul')::date) - interval '25 weeks',
+        date_trunc('week', (now() AT TIME ZONE 'Asia/Seoul')::date), interval '1 week')::date AS wk),
+      d AS (SELECT apt_seq, area_group, contract_date cd, price_10k p FROM deals WHERE apt_seq IN ({_ins}) AND NOT is_cancelled AND deal_type = '중개'
+        AND floor IS DISTINCT FROM 1 AND contract_date > (now() AT TIME ZONE 'Asia/Seoul')::date - 370),
+      x AS (SELECT d.apt_seq, d.area_group ag, w.wk,
+        count(*) FILTER (WHERE d.cd > w.wk + 6 - 60) n60, percentile_cont(0.5) WITHIN GROUP (ORDER BY d.p) FILTER (WHERE d.cd > w.wk + 6 - 60) m60,
+        count(*) FILTER (WHERE d.cd > w.wk + 6 - 90) n90, percentile_cont(0.5) WITHIN GROUP (ORDER BY d.p) FILTER (WHERE d.cd > w.wk + 6 - 90) m90,
+        percentile_cont(0.5) WITHIN GROUP (ORDER BY d.p) m180
+        FROM w JOIN d ON d.cd > w.wk + 6 - 180 AND d.cd <= w.wk + 6 GROUP BY 1, 2, 3)
+      SELECT apt_seq s, ag, wk::text wk, round(CASE WHEN n60 >= 3 THEN m60 WHEN n90 >= 3 THEN m90 ELSE m180 END)::int v FROM x ORDER BY 1, 2, 3"""):
+        out['v2_refw'].setdefault(r['s'], {}).setdefault(str(r['ag']), {})[r['wk']] = r['v']
+    _w0 = select(db, "SELECT (date_trunc('week', (now() AT TIME ZONE 'Asia/Seoul')::date) - interval '25 weeks')::date::text w0")[0]['w0']
+    out['v2_refw_w0'] = _w0
+    from datetime import date as _date, timedelta as _td
+    _ws = [(_date.fromisoformat(_w0) + _td(weeks=i)).isoformat() for i in range(26)]
+    out['v2_refw'] = {s: {ag: [m.get(w) for w in _ws] for ag, m in g.items()} for s, g in out['v2_refw'].items()}
 # 6개월 안 같은 생활권 입주(한국부동산원 입주예정물량 ipju_plan, 📖 입주장 → 전세 하락 p.153~154). 6개월은 🔧
 # v2_ipz = {생활권: [[단지, 세대, 'YYYYMM'], ...]}, v2_lz = {단지: 생활권} (입주가 있는 생활권의 상세를 열 수 있는 단지만)
 out['v2_ipz'] = {}
