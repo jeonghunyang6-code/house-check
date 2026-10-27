@@ -45,15 +45,21 @@ def run_geocode(db: Db, sg: Sgis, limit: int, retry_none: bool, today) -> int:
             db.query("BEGIN;\n" + "\n".join(batch) + "\nCOMMIT;")
             batch.clear()
 
+    shown = 0
     for c in todo:
-        hit, method = None, "none"
+        hit, method, seen = None, "none", []
         try:
             rn = REGIONS.get(c["region_code"], "")
             for m, addr in address_candidates(rn, c["umd_name"], c["jibun"], c["road_addr"], c["kapt_road"]):
                 h = sg.geocode(addr)
+                seen.append((addr, h))
                 if accept(h, c["bjd_code"], c["umd_name"], rn):
                     hit, method = h, m
                     break
+            if not hit and shown < 5:   # 못 찾은 이유를 볼 수 있게 처음 5곳만 SGIS 답을 남긴다(2026-10-27 화성 읍면)
+                shown += 1
+                print(f"  못 찾음 {c['apt_seq']} 우리 동 '{c['umd_name']}' 법정동 {c['bjd_code']}: "
+                      + " | ".join(f"{a_} → {({k: h_.get(k) for k in ('leg_cd', 'leg_nm', 'sgg_nm')} if h_ else None)}" for a_, h_ in seen))
         except SgisError as e:
             err += 1
             streak += 1
