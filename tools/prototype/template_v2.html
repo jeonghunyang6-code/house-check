@@ -370,7 +370,8 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
       <div class="card" id="askPick" hidden style="display:grid;gap:8px;border:1.5px solid var(--accent)"></div>
       <label class="muted" for="dSel" style="display:grid;gap:4px">단지<select id="dSel" class="icon-btn" style="width:100%;text-align:left;font-size:15px"></select></label>
       <div class="card" id="dHead"></div>
-      <div class="card"><h2>최근 실거래 <small>최근 90일</small></h2><p id="dChartTitle" style="font-size:13.5px;margin:8px 0 2px"></p><svg class="chart" id="dChart" viewBox="0 0 340 130" role="img" aria-label="최근 90일 실거래"></svg><div id="dDeals"></div></div>
+      <div class="card"><h2>최근 실거래 <small id="dSpanNote">최근 90일</small></h2><div class="row" style="justify-content:space-between;align-items:center;margin:8px 0 2px;gap:8px"><p id="dChartTitle" style="font-size:13.5px;margin:0"></p>
+        <div class="seg" id="dSpan" style="flex:none" hidden><button type="button" data-v="90" aria-pressed="true">90일</button><button type="button" data-v="1y" aria-pressed="false">1년</button></div></div><svg class="chart" id="dChart" viewBox="0 0 340 130" role="img" aria-label="최근 90일 실거래"></svg><div id="dDeals"></div></div>
       <div class="card">
         <h2>호가 매물 <small id="askAsof"></small></h2>
         <div class="kpis" id="askSum"></div>
@@ -799,6 +800,22 @@ function q1y(seq) {   // 최근 분기 vs 4분기 전 (둘 다 값이 있을 때
   const a = qser(seq); if (!a) return null; let i = a.length - 1; while (i >= 0 && a[i] == null) i--; if (i < 4 || a[i - 4] == null) return null; return (a[i] / a[i - 4] - 1) * 100;
 }
 const DEALS = {}; (D.v2_deals || []).forEach(r => (DEALS[r[0]] = DEALS[r[0]] || []).push(r));
+// 1년 + 180일 실거래(web/api/deals.js, 비밀 문구가 맞을 때만, 2026-10-28 사용자 요청). 단지마다 한 번 받아 둔다. DEALS 와 같은 모양 [단지, 날짜, 평형, 층, 가격, 직거래]
+const DY = {}, DYP = {};
+function dealsY(seq, then) {
+  if (DY[seq]) return DY[seq];
+  if (!(window.HC_WEB && HC_WEB.ok) || !/^\d{5}-/.test(seq) || DYP[seq]) return null;
+  DYP[seq] = fetch('/api/deals?s=' + encodeURIComponent(seq), { headers: { 'x-hc-key': HC_WEB.key } }).then(r => r.ok ? r.json() : null)
+    .then(j => { if (j && j.d) { DY[seq] = j.d.map(x => [seq, ...x]); then && then(); } }).catch(() => {});
+  return null;
+}
+// 주별 기준 시세(A1 규칙: 그 주 끝까지 60일 중개·1층 제외 중앙값, 3건 미만이면 90 → 180일). starts = 주 월요일 시각들
+function refWeekly(rows, ag, starts) {
+  const t = (d) => new Date(`20${d.slice(0, 2)}-${d.slice(2, 4)}-${d.slice(4)}T00:00:00`).getTime();
+  const xs = rows.filter(x => x[2] === ag && !x[5] && String(x[3]) !== '1').map(x => [t(x[1]), x[4]]);
+  const med = (a) => { a.sort((p, q) => p - q); const n = a.length; return n ? (a[(n - 1) >> 1] + a[n >> 1]) / 2 : null; };
+  return starts.map(w => { const e = w + 7 * 864e5; for (const n of [60, 90, 180]) { const v = xs.filter(([d]) => d < e && d >= e - n * 864e5).map(x => x[1]); if (v.length >= 3 || n === 180) return v.length ? Math.round(med(v)) : null; } });
+}
 const TODAY_NEW = new Set((D.today || []).map(t => t.apt_seq));
 
 let watch = new Set(store.get('v2-watch2', CX.map(c => c.seq)));
@@ -1234,10 +1251,21 @@ function drawDaily() {
     ${lite ? '<p class="src" style="margin:0">거래가 적거나 등기 전(입주권·분양권만 신고)이라 기준 시세를 정하지 못했습니다. 입주권 가격은 추가분담금이 빠져 실제 집값보다 낮게 보일 수 있습니다.</p>' : ''}`;
   $('#dOpen').addEventListener('click', () => openCx(seq));
   // 90일 차트: 면적 같은 거래 점, 기준 시세 점선. 2026-10-28 사용자: 점 옆 가격, 가로축 달 이름, 기준은 위 한 줄(호가 그래프와 같게)
+  // '1년'(비밀 문구가 맞을 때만, web/api/deals.js): 기준 시세는 주마다 그때 값(계단 점선), 점 색도 그 주 기준과 비교
+  const dy = lite ? null : dealsY(seq, () => { if (dSeq === seq) { if (store.get('v2-dspan', '90') === '1y') drawDaily(); else drawAsks(); } });
+  const yr = !!dy && store.get('v2-dspan', '90') === '1y', CD = yr ? 365 : DAYS;
+  $('#dSpan').hidden = lite || !(window.HC_WEB && HC_WEB.ok); $$('#dSpan button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === (yr ? '1y' : '90')));
+  $('#dSpanNote').textContent = `최근 ${CD === 365 ? '1년' : '90일'}`;
+  const inY = (x) => t1d - new Date(d2(x[1])).getTime() <= 365 * 864e5;
+  const cdeals = yr ? [...dy.filter(inY), ...(RG[seq] || []).filter(inY)].sort((a, b) => a[1] < b[1] ? 1 : -1) : deals;
+  const csame = cdeals.filter(x => Math.abs(x[2] - mainAg) <= 1 && !x[5]);
   const svg = $('#dChart'), W = 340, H = 130, L = 34, R = 8, T = 12, B = 18; svg.innerHTML = '';
-  const t1 = new Date(D.asof).getTime(), t0 = t1 - DAYS * 864e5, xt = (t) => L + (W - L - R) * (t - t0) / (t1 - t0), xs = (d) => xt(new Date(d2(d)).getTime());
-  const vals = same.map(x => x[4]).concat(ref ? [ref] : []);
-  $('#dChartTitle').innerHTML = `${mainAg}㎡ <b>${same.length}건</b>${ref ? ` · <span style="color:var(--c1);border-bottom:1.5px dashed var(--c1);white-space:nowrap">기준 ${eok(ref)}</span>` : ''}`;
+  const t1 = new Date(D.asof).getTime(), t0 = t1 - CD * 864e5, xt = (t) => L + (W - L - R) * (t - t0) / (t1 - t0), xs = (d) => xt(new Date(d2(d)).getTime());
+  const wk0 = ((t) => { t.setDate(t.getDate() - (t.getDay() + 6) % 7); return t.getTime(); })(new Date(new Date(t0).setHours(0, 0, 0, 0)));
+  const wks = yr ? [...Array(Math.ceil((t1 - wk0) / (7 * 864e5)) + 1)].map((_, i) => wk0 + i * 7 * 864e5) : [], rws = yr ? refWeekly(dy, mainAg, wks) : [];
+  const refT = (t) => { if (!yr) return ref; const i = Math.floor((t - wk0) / (7 * 864e5)); return rws[Math.max(0, Math.min(i, rws.length - 1))] || ref; };
+  const vals = csame.map(x => x[4]).concat(ref ? [ref] : [], rws.filter(Boolean));
+  $('#dChartTitle').innerHTML = `${mainAg}㎡ <b>${csame.length}건</b>${ref ? ` · <span style="color:var(--c1);border-bottom:1.5px dashed var(--c1);white-space:nowrap">기준 ${eok(ref)}</span>` : ''}`;
   if (vals.length) {
     const lo = Math.min(...vals) * 0.97, hi = Math.max(...vals) * 1.03, y = (v) => T + (H - T - B) * (1 - (v - lo) / ((hi - lo) || 1));
     [lo, (lo + hi) / 2, hi].forEach(t => { el('line', { x1: L, x2: W - R, y1: y(t), y2: y(t), stroke: 'var(--line)' }, svg); txt(svg, L - 4, y(t) + 3, eok(t), 'end'); });
@@ -1247,17 +1275,25 @@ function drawDaily() {
       if (m.getTime() > t0) el('line', { x1: xt(a), x2: xt(a), y1: T, y2: H - B, stroke: 'var(--line)' }, svg);
       if (xt(b) - xt(a) >= 18) txt(svg, (xt(a) + xt(b)) / 2, H - 4, (m.getMonth() + 1) + '월', 'middle', { style: 'font-size:9px;fill:var(--ink-3)' });
     }
-    if (ref) { el('line', { x1: L, x2: W - R, y1: y(ref), y2: y(ref), stroke: 'var(--c1)', 'stroke-dasharray': '4 3' }, svg); }
-    const col = (x) => ref && x[4] <= ref * 0.95 ? 'var(--dn2)' : ref && x[4] > ref * 1.03 ? 'var(--up2)' : 'var(--c3)';
-    same.forEach(x => { const dot = el('circle', { cx: xs(x[1]), cy: y(x[4]), r: 4, fill: col(x), ...(x[6] ? { fill: 'var(--surface)', stroke: 'var(--c1)', 'stroke-width': 1.6 } : {}) }, svg); hover(dot, `${dt(d2(x[1]))} · ${x[3]}층 · ${eok(x[4])}${x[6] ? ' · ' + x[6] : ''}`); });
+    if (yr) {   // 주별 기준 시세 계단선(그래프 범위 안만)
+      const d = wks.map((w, i) => { const v = rws[i] || ref; if (!v) return ''; const a = Math.max(w, t0), e = Math.min(w + 7 * 864e5, t1); if (e <= a) return '';
+        return `${i && (rws[i - 1] || ref) && w > t0 ? 'L' : 'M'}${xt(a).toFixed(1)},${y(v).toFixed(1)}L${xt(e).toFixed(1)},${y(v).toFixed(1)}`; }).join('');
+      el('path', { d, fill: 'none', stroke: 'var(--c1)', 'stroke-dasharray': '4 3', 'stroke-width': 1.2 }, svg);
+    } else if (ref) { el('line', { x1: L, x2: W - R, y1: y(ref), y2: y(ref), stroke: 'var(--c1)', 'stroke-dasharray': '4 3' }, svg); }
+    const col = (x) => { const rf = refT(new Date(d2(x[1])).getTime()); return rf && x[4] <= rf * 0.95 ? 'var(--dn2)' : rf && x[4] > rf * 1.03 ? 'var(--up2)' : 'var(--c3)'; };
+    csame.forEach(x => { const dot = el('circle', { cx: xs(x[1]), cy: y(x[4]), r: yr ? 3.4 : 4, fill: col(x), ...(x[6] ? { fill: 'var(--surface)', stroke: 'var(--c1)', 'stroke-width': 1.6 } : {}) }, svg); hover(dot, `${dt(d2(x[1]))} · ${x[3]}층 · ${eok(x[4])}${x[6] ? ' · ' + x[6] : ''}`); });
     // 가격 이름표: 6건 이하면 전부, 많으면 최고·최저·가장 최근만. 점 위(맨 위 칸이면 아래)
-    const tag = same.length <= 6 ? same : [...new Set([same[0], same.reduce((a, b) => b[4] > a[4] ? b : a), same.reduce((a, b) => b[4] < a[4] ? b : a)])];
-    tag.forEach(x => { const cx = Math.min(Math.max(xs(x[1]), L + 14), W - R - 14), cy = y(x[4]);
-      txt(svg, cx, cy < T + 12 ? cy + 13 : cy - 7, eok(x[4]), 'middle', { style: `font-size:9.5px;font-weight:700;fill:${col(x)};paint-order:stroke;stroke:var(--surface);stroke-width:3px` }); });
+    const tag = csame.length <= 6 ? csame : [...new Set([csame[0], csame.reduce((a, b) => b[4] > a[4] ? b : a), csame.reduce((a, b) => b[4] < a[4] ? b : a)])];
+    const put = [];   // 이름표끼리 겹치면 점 아래로, 그래도 겹치면 생략(먼저 놓인 것 = 최근·최고 우선)
+    tag.forEach(x => { const cx = Math.min(Math.max(xs(x[1]), L + 14), W - R - 14), cy = y(x[4]), hit = (ly) => put.some(([px, py]) => Math.abs(px - cx) < 32 && Math.abs(py - ly) < 11);
+      const ly = [cy < T + 12 ? cy + 13 : cy - 7, cy + 13].find(v => !hit(v)); if (ly == null) return; put.push([cx, ly]);
+      txt(svg, cx, ly, eok(x[4]), 'middle', { style: `font-size:9.5px;font-weight:700;fill:${col(x)};paint-order:stroke;stroke:var(--surface);stroke-width:3px` }); });
   }
-  $('#dDeals').innerHTML = deals.slice(0, 12).map(x => { const g = ref ? (x[4] / ref - 1) * 100 : null, cl = g == null ? '' : g <= -5 ? 'dn' : g >= 3 ? 'up' : 'muted';
-    return `<div class="deal"${Math.abs(x[2] - mainAg) <= 1 ? '' : ' style="opacity:.45"'}><span class="muted num">${dt(d2(x[1]))}</span><span>${x[2]}㎡ · ${x[3]}층${x[5] ? ' · 직거래' : ''}${x[6] ? ` <span class="pill none">${x[6]}</span>` : ''}${g != null && g <= -5 && Math.abs(x[2] - mainAg) <= 1 ? ' <span class="pill acc">급매</span>' : ''}</span><span class="p"><span class="${cl}" style="font-size:12px;font-weight:500">${Math.abs(x[2] - mainAg) <= 1 && g != null ? sgn(g, 0) : ''}</span> ${eok(x[4])}</span></div>`; }).join('')
-    || `<p class="muted">최근 ${lite ? '1년' : '90일'} 거래가 없습니다.</p>`;
+  const drow = (x) => { const g = ref ? (x[4] / ref - 1) * 100 : null, cl = g == null ? '' : g <= -5 ? 'dn' : g >= 3 ? 'up' : 'muted';
+    return `<div class="deal"${Math.abs(x[2] - mainAg) <= 1 ? '' : ' style="opacity:.45"'}><span class="muted num">${dt(d2(x[1]))}</span><span>${x[2]}㎡ · ${x[3]}층${x[5] ? ' · 직거래' : ''}${x[6] ? ` <span class="pill none">${x[6]}</span>` : ''}${g != null && g <= -5 && Math.abs(x[2] - mainAg) <= 1 ? ' <span class="pill acc">급매</span>' : ''}</span><span class="p"><span class="${cl}" style="font-size:12px;font-weight:500">${Math.abs(x[2] - mainAg) <= 1 && g != null ? sgn(g, 0) : ''}</span> ${eok(x[4])}</span></div>`; };
+  $('#dDeals').innerHTML = cdeals.slice(0, 12).map(drow).join('')
+    + (cdeals.length > 12 ? `<details class="more-f"><summary>나머지 ${cdeals.length - 12}건 보기</summary>${cdeals.slice(12).map(drow).join('')}</details>` : '')
+    || `<p class="muted">최근 ${CD === 365 ? '1년' : '90일'} 거래가 없습니다.</p>`;
   drawAsks(); drawMap(seq); $('#dDev').innerHTML = devHtml(seq);
 }
 /* 호가: 네이버 부동산 '호가 저장' 버튼(tools/pc/naver_ask_bookmarklet.js) 붙여넣기 + 직접 기록. 단지 → 날짜 → 매물 목록 */
@@ -1326,10 +1362,13 @@ function drawAsks() {
   const refAt = (i) => { const e = MO ? new Date(Math.min(new Date(weeks[i]).setMonth(new Date(weeks[i]).getMonth() + 1) - 864e5, now0.getTime())) : null;
     const t = MO ? new Date(e.getFullYear(), e.getMonth(), e.getDate() - (e.getDay() + 6) % 7).getTime() : weeks[i];
     const k = w0r == null ? -1 : Math.min(Math.round((t - w0r) / (7 * 864e5)), RW.length - 1); return (k >= 0 && RW[k]) || ref; };
+  // 실거래 ◆(2026-10-28 사용자 요청): 같은 면적 중개 거래를 그 칸(주·달)에. 1년치(DY)가 있으면 그것, 없으면 90일(DEALS)
+  const d2k = (d) => `20${d.slice(0, 2)}-${d.slice(2, 4)}-${d.slice(4)}`;
+  const dls = (DY[dSeq] || DEALS[dSeq] || []).filter(x => Math.abs(x[2] - ag) <= 1 && !x[5]).map(x => [weeks.indexOf((MO ? month(d2k(x[1])) : monday(d2k(x[1]))).getTime()), x]).filter(([i]) => i >= 0);
   const has = cols.filter(Boolean), tsvg = $('#askTrend'); tsvg.innerHTML = ''; $('#askTrendBox').hidden = !Object.keys(byW).length;
   if (has.length) {
     const W = 340, H = 168, L = 37, R = 4, T = 10, B = 30, cw = (W - L - R) / NW, xs = (i) => L + cw * (i + 0.5);
-    const refs = weeks.map((_, i) => refAt(i)), ps = has.flatMap(c => c.v).concat(refs.filter(Boolean)), lo = Math.min(...ps) * 0.985, hi = Math.max(...ps) * 1.015;
+    const refs = weeks.map((_, i) => refAt(i)), ps = has.flatMap(c => c.v).concat(refs.filter(Boolean), dls.map(([, x]) => x[4])), lo = Math.min(...ps) * 0.985, hi = Math.max(...ps) * 1.015;
     const y = (v) => T + (H - T - B) * (1 - (v - lo) / ((hi - lo) || 1)), cheap = (p, i) => refs[i] && p < refs[i];
     const step = [100, 200, 250, 500, 1000, 2000, 2500, 5000, 10000].find(t => (hi - lo) / t <= 12) || 10000;   // 가격대 막대 한 칸(만원): 세로로 약 8~12칸(굵게)
     [lo, (lo + hi) / 2, hi].forEach(v => { el('line', { x1: L, x2: W - R, y1: y(v), y2: y(v), stroke: 'var(--line)' }, tsvg); txt(tsvg, L - 4, y(v) + 3, eok(v), 'end'); });
@@ -1364,13 +1403,15 @@ function drawAsks() {
       txt(tsvg, x, H - 17, lab(i, c), 'middle', { style: 'font-size:9px;fill:var(--ink-3)' });
       txt(tsvg, x, H - 4, String(c.v.length) + (dn ? (dn > 0 ? '▲' : '▼') : ''), 'middle', { style: `font-size:10.5px;font-weight:700;fill:var(${dn > 0 ? '--up2' : dn < 0 ? '--dn2' : '--ink-2'})` });
     });
+    dls.forEach(([i, x]) => { const cx = xs(i) + cw * 0.36, cy = y(x[4]);
+      hover(el('path', { d: `M${cx},${cy - 4.2}L${cx + 4.2},${cy}L${cx},${cy + 4.2}L${cx - 4.2},${cy}Z`, fill: 'var(--ink)', stroke: 'var(--surface)', 'stroke-width': 1.2 }, tsvg), `실거래 ${dt(d2k(x[1]))} · ${x[3]}층 · ${eok(x[4])}`); });
     const last = has[has.length - 1], first = has[0];
     // 값 이름표는 그래프 오른쪽 대신 위 한 줄에(2026-10-28 사용자: 가로를 끝까지 쓰기). 기준 = 지금 주 기준 시세, 점선 표시와 같은 색
     const rl = refs[refs.length - 1] || refs.filter(Boolean).pop();
     const nw = (h) => `<span style="white-space:nowrap">${h}</span>`;   // 좁은 화면에서 '기준 24.9 / 억'처럼 끊기지 않게 덩어리로 줄바꿈
     $('#askTrendTitle').innerHTML = [has.length > 1 ? nw(`매물 <b>${first.v.length}→${last.v.length}</b>`) : nw(`매물 <b>${last.v.length}</b>`),
       nw(`중간 <b style="color:var(--c1)">${has.length > 1 ? eok(first.m) + '→' : ''}${eok(last.m)}</b>`),
-      rl ? nw(`<span style="color:var(--c1);border-bottom:1.5px dashed var(--c1)">기준 ${eok(rl)}</span>`) : ''].filter(Boolean).join(' · ');
+      rl ? nw(`<span style="color:var(--c1);border-bottom:1.5px dashed var(--c1)">기준 ${eok(rl)}</span>`) : '', dls.length ? nw(`◆ 실거래 <b>${dls.length}</b>`) : ''].filter(Boolean).join(' · ');
   }
   const pn = prevD ? snap(prevD).filter(x => x.t === '매매').length : null, gm = gap(med(sale));
   $('#askSum').innerHTML = !now.length ? '' : `
@@ -1386,6 +1427,7 @@ function drawAsks() {
       + (sale.length > 5 ? `<details class="more-f"><summary>나머지 ${sale.length - 5}개 보기</summary>${sale.slice(5).map(row).join('')}</details>` : '')
     : `<p class="muted">${ag}㎡ 매매 호가 기록이 없습니다${oth ? `(다른 면적 매매: ${oth})` : ''}. 네이버 부동산 단지 화면에서 '호가 저장' 버튼을 누른 뒤 아래 '붙여넣기'에 넣어 주세요.</p>`;
 }
+$('#dSpan').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { store.set('v2-dspan', b.dataset.v); drawDaily(); } });
 $('#askSpan').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { store.set('v2-askspan', b.dataset.v); drawAsks(); } });
 $('#askForm').addEventListener('submit', (e) => { e.preventDefault(); const p = parseFloat(String($('#a_price').value).replace(/,/g, '')); if (!isFinite(p) || !dSeq) return;
   const A = store.get('v2-naver', {}), S = (A[dSeq] = A[dSeq] || {}); (S[D.asof] = S[D.asof] || []).push({ t: '매매', p, ex: +$('#a_area').value, fl: $('#a_floor').value, tot: 0, dir: '', dong: '', conf: '직접' });

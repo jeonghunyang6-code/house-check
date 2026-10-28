@@ -71,3 +71,18 @@ def test_ipju_lines_groups_same_zone():
         def query(self, q): return rows
     out = ipju_lines(Db(), ["a", "b", "c", "d"], {"a": "가", "b": "나", "c": "다단지", "d": "라"})
     assert out == ["▪️ 가, 나: 신혼희망타운 440세대(12월)"]   # 자기 단지(다단지) 입주는 뺌, 입주 없는 라는 안 나옴
+
+
+def test_daily_head_counts_quick_sales(monkeypatch):
+    import jobs.notify as N
+    rows = [{"apt_name": "가", "area_m2": 84, "floor": 10, "price_10k": 130000, "ref_10k": 140000, "prev_high_10k": None, "deal_type": "중개", "cd": "2026-10-27"},
+            {"apt_name": "나", "area_m2": 84, "floor": 10, "price_10k": 141000, "ref_10k": 140000, "prev_high_10k": None, "deal_type": "중개", "cd": "2026-10-27"}]
+    monkeypatch.setattr(N, "watch", lambda db: ["a"])
+    monkeypatch.setattr(N, "deals", lambda db, seqs, days: rows)
+    monkeypatch.setattr(N, "db_mb", lambda db: 100)
+    monkeypatch.setattr(N, "redev_changes", lambda db, seqs: [])
+    monkeypatch.setattr(N, "ops_lines", lambda db: ([], None))
+    monkeypatch.setattr(N, "site", lambda db: "")
+    assert N.daily(None).split("\n")[0] == "🔔 <b>관심 단지 새 거래 2건</b> · 🔻<b>급매 1건</b>"
+    monkeypatch.setattr(N, "deals", lambda db, seqs, days: rows[1:])
+    assert N.daily(None).split("\n")[0] == "🔔 <b>관심 단지 새 거래 1건</b>"

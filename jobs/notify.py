@@ -150,7 +150,9 @@ def daily(db: Db, ops_out: list | None = None) -> str | None:
     if not rows and not warn and not rd:
         return None
     url = site(db)
-    head = [f"🔔 <b>관심 단지 새 거래 {len(rows)}건</b>", *deal_lines(rows)] if rows else []
+    # 급매가 있으면 제목에 먼저(2026-10-28 사용자 요청: 관심 단지 급매 실거래는 바로 눈에)
+    nq = sum("🔻급매" in tag(r) for r in rows)
+    head = [f"🔔 <b>관심 단지 새 거래 {len(rows)}건</b>" + (f" · 🔻<b>급매 {nq}건</b>" if nq else ""), *deal_lines(rows)] if rows else []
     if rd:
         head += [f"🏗️ <b>주변 정비구역 단계 변화 {len(rd)}곳</b>"] + [
             f"{'⏫' if (r['stage_no'] or 0) > (r['prev_no'] or 0) else '🔁'} {html.escape(r['zone_nm'])}({html.escape(r['biz_type'] or '')}) "
