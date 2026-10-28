@@ -679,7 +679,7 @@ function myDeals() {
   // 관심 단지
   const w = [...watch].flatMap(seq => recent(seq).map(x => [seq, x])).sort((a, b) => a[1][1] < b[1][1] ? 1 : -1).slice(0, 5);
   const wHtml = `<div><p style="font-weight:700;font-size:13.5px">관심 단지 <span class="muted" style="font-weight:400">${w.length ? '' : '최근 30일 거래 없음'}</span></p>` + w.map(([seq, x]) => {
-    const g = gapOf(seq, x); return `<div class="deal"><span class="muted num">${x[1].slice(2, 4)}.${x[1].slice(4)}</span><span>${cxName(seq)} <span class="muted">${x[2]}㎡ ${x[3]}층</span>${g != null && g <= -5 ? ' <span class="pill acc">급매</span>' : ''}</span><span class="p">${eok(x[4])} <span class="${g == null ? 'muted' : g <= -5 ? 'dn' : g >= 3 ? 'up' : 'muted'}" style="font-size:12px;font-weight:500">${g == null ? '' : sgn(g, 0)}</span></span></div>`; }).join('') + '</div>';
+    const g = gapOf(seq, x); return `<div class="deal"><span class="muted num">${x[1].slice(2, 4)}.${x[1].slice(4)}</span><span>${cxName(seq)} <span class="muted">${x[2]}㎡ ${x[3]}층</span>${g != null && g <= -5 ? ' <span class="pill acc">급매</span>' : ''}</span><span class="p"><span class="${g == null ? 'muted' : g <= -5 ? 'dn' : g >= 3 ? 'up' : 'muted'}" style="font-size:12px;font-weight:500">${g == null ? '' : sgn(g, 0)}</span> ${eok(x[4])}</span></div>`; }).join('') + '</div>';
   // 내 예산대
   const b = budget.price, rows = b ? CAND.filter(r => r.ref <= b && r.ref >= b * 0.8) : [], seen = new Set(rows.map(r => r.seq + '|' + r.ag));
   let n = 0, cheap = 0, dear = 0;
@@ -1378,7 +1378,7 @@ function drawAsks() {
     <div class="kpi"><span class="k">중간 호가 <span class="pill ${cl(gm)}">${gm == null ? '–' : sgn(gm, 1)}</span></span><span class="v">${sale.length ? eok(med(sale)) : '–'}</span><span class="d">최저 ${sale.length ? eok(sale[0].p) : '–'} · 기준 ${eok(ref)}</span></div>
     <div class="kpi"><span class="k">전세 매물</span><span class="v">${jeon.length}개</span><span class="d">중간 ${jeon.length ? eok(med(jeon)) : '–'}</span></div>`;
   const row = (x) => { const g = gap(x.p);
-    return `<div class="deal"><span class="muted">${x.dong ? x.dong + '동' : ''}</span><span>${x.fl ? x.fl + (x.tot ? '/' + x.tot : '') + '층' : ''} ${x.dir || ''}${x.conf ? `<br><span class="muted" style="font-size:11.5px">${x.conf === '직접' ? '직접 기록' : '확인 ' + x.conf.slice(3)}</span>` : ''}</span><span class="p">${eok(x.p)} <span class="pill ${cl(g)}">${g == null ? '–' : sgn(g, 1)}</span></span></div>`; };
+    return `<div class="deal"><span class="muted">${x.dong ? x.dong + '동' : ''}</span><span>${x.fl ? x.fl + (x.tot ? '/' + x.tot : '') + '층' : ''} ${x.dir || ''}${x.conf ? `<br><span class="muted" style="font-size:11.5px">${x.conf === '직접' ? '직접 기록' : '확인 ' + x.conf.slice(3)}</span>` : ''}</span><span class="p"><span class="pill ${cl(g)}">${g == null ? '–' : sgn(g, 1)}</span> ${eok(x.p)}</span></div>`; };
   const all = last ? A[last] : [], other = {};   // 다른 면적 매매 매물 수
   all.filter(x => x.t === '매매' && x.ex != null && !inArea(x)).forEach(x => { const k = Math.floor(x.ex); other[k] = (other[k] || 0) + 1; });
   const oth = Object.entries(other).sort((a, b) => a[0] - b[0]).map(([k, n]) => `${k}㎡ ${n}개`).join(' · ');
