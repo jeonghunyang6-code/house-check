@@ -95,6 +95,8 @@ def title_of(t: str | None) -> str:
 
 def official_check(db: Db, today) -> None:
     """'auto' 이고 공식 확인 안 된 최근 2주 줄을 정책브리핑 보도자료와 대조(collector/official.py). 피드를 못 받으면 건너뜀."""
+    if not O.FEEDS:   # 정책브리핑 RSS 중단(2026-11-02 확인) → 공식 확인 꺼짐
+        return
     rows = select(db, f"SELECT kind, first_date::text d FROM policy_news WHERE status = 'auto' AND official IS NULL AND first_date > {lit(today)}::date - 14")
     if not rows:
         return

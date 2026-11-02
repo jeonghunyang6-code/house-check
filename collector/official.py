@@ -1,7 +1,9 @@
 """정부 공식 보도자료로 정책 자동 추가 확인 (jobs/policy_news.py, 0082 policy_news.official). 2026-11-02 사용자 요청 ②.
 
 정책브리핑(korea.kr) RSS 의 보도자료 제목에서 같은 종류(collector/policy_news.KINDS)·부동산 말이 있고 날짜가 발표일 ±1일이면 공식 확인.
-이 클라우드 세션에서는 korea.kr 이 막혀 있어 실제 피드 주소·모양은 GitHub Actions 에서 처음 확인한다(못 받으면 확인을 건너뛰고 '자동' 표시가 남는다).
+**2026-11-02 Actions 에서 확인: 정책브리핑 RSS 는 서비스 중단(rssList.do '제공 중단 안내', 피드 주소 404).** 부처 목록 페이지는
+국토부 = 307 리디렉트 반복(자동 접속 차단으로 보고 우회하지 않음), 기재부 = 빈 응답, 금융위 = 열림(대출만 해당). 그래서 FEEDS 를 비워
+공식 확인을 꺼 둔다('자동' 표시가 남는다). 새 공식 경로를 찾으면 FEEDS 에 넣고 policy_news.yml 수동 실행의 점검 로그로 확인한다.
 """
 
 from __future__ import annotations
@@ -14,13 +16,7 @@ from email.utils import parsedate_to_datetime
 
 from collector.policy_news import KINDS
 
-FEEDS = (   # 부처별 브리핑(국토부·금융위·기재부·재경부) + 보도자료 전체. 주소가 바뀌면 여기만
-    "https://www.korea.kr/rss/dept_molit.xml",
-    "https://www.korea.kr/rss/dept_fsc.xml",
-    "https://www.korea.kr/rss/dept_moef.xml",
-    "https://www.korea.kr/rss/dept_mof.xml",
-    "https://www.korea.kr/rss/pressrelease.xml",
-)
+FEEDS: tuple[str, ...] = ()   # 정책브리핑 RSS 중단(위). 예전 주소: https://www.korea.kr/rss/dept_molit.xml 등 → 404
 HOUSING = re.compile(r"주택|부동산|아파트|토지거래|택지|주담대|주택담보|가계대출|양도세|양도소득세|종부세|보유세|취득세|규제지역|조정대상|투기과열")
 NEAR = 1   # 발표일 ±1일
 
@@ -63,7 +59,26 @@ def match(kind: str, first: date, items: list[dict]) -> dict | None:
     return None
 
 
+LISTS = ("https://www.molit.go.kr/USR/NEWS/m_71/lst.jsp", "https://www.fsc.go.kr/no010101", "https://www.moef.go.kr/nw/nes/nesdta.do")
+
+
+def probe(opener=urllib.request.urlopen) -> None:
+    """부처 보도자료 목록 페이지가 열리는지·제목 모양(점검용, RSS 가 2026 중단됨)."""
+    for u in LISTS:
+        try:
+            with opener(urllib.request.Request(u, headers={"User-Agent": "house-check/1.0 (+personal)"}), timeout=20) as r:
+                body = r.read().decode("utf-8", "replace")
+            print(f"  {u}: {len(body):,}자")
+            for m in re.findall(r"<a[^>]+href=\"([^\"]{5,200})\"[^>]*>\s*([^<]{8,120})</a>", body)[:25]:
+                print("    …", m[1].strip()[:70], "|", m[0][:100])
+            for m in sorted(set(re.findall(r"20\d\d[.-]\d\d[.-]\d\d", body)))[-5:]:
+                print("    날짜", m)
+        except Exception as e:
+            print(f"  {u}: {type(e).__name__} {str(e)[:80]}")
+
+
 if __name__ == "__main__":   # 피드 점검(policy_news.yml 수동 실행 때): 피드마다 받은 건수와 최근 제목
+    probe()
     got, bad = fetch()
     print(f"보도자료 {len(got)}건, 못 받은 피드 {len(bad)}")
     for e in bad:
