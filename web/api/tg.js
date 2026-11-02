@@ -17,7 +17,7 @@ module.exports = async (req, res) => {
     if (!c || String(c.v) !== String(msg.chat.id)) return res.status(200).end();
     const site = ((await db.query("SELECT v #>> '{}' v FROM user_state WHERE k = 'site_url'")).rows[0] || {}).v;
     let text;
-    try { text = await reply((sql, p) => db.query(sql, p), msg.text, site); } catch (e) { text = '찾는 중 오류가 났습니다. 잠시 뒤 다시 보내 주세요.'; }
+    try { text = await reply((sql, p) => db.query(sql, p), msg.text, site, (msg.reply_to_message || {}).text); } catch (e) { text = '찾는 중 오류가 났습니다. 잠시 뒤 다시 보내 주세요.'; }
     await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, { method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ chat_id: msg.chat.id, text, parse_mode: 'HTML', disable_web_page_preview: true }) });
     return res.status(200).end();

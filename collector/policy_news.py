@@ -120,7 +120,7 @@ def candidates(articles: list[dict], today: date, days: int = 3) -> list[Cand]:
             if p in c.press:
                 continue
             c.press.add(p)
-            c.titles.append((a["pub"], a["text"][:160], a["id"]))
+            c.titles.append((a["pub"], (a.get("title") or a["text"])[:160], a["id"]))   # 화면·알림은 기사 제목만(2026-11-02)
             for r in regs:
                 c.region_hits[r] += 1
     out = []
