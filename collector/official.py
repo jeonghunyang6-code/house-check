@@ -63,7 +63,7 @@ def match(kind: str, first: date, items: list[dict]) -> dict | None:
     return None
 
 
-INDEX = ("https://www.korea.kr/etc/rss.do", "https://www.korea.kr/etc/rssList.do", "https://www.korea.kr/rss/rssList.do", "https://www.korea.kr/")
+INDEX = ("https://www.korea.kr/etc/rssList.do",)
 
 
 def discover(opener=urllib.request.urlopen) -> list[str]:
@@ -75,6 +75,9 @@ def discover(opener=urllib.request.urlopen) -> list[str]:
                 body = r.read().decode("utf-8", "replace")
             hits = sorted(set(re.findall(r"""(?:https?://www\.korea\.kr)?/[\w/.\-]*rss[\w/.\-]*\.(?:xml|do)[^"'\s<>]*""", body)))
             print(f"  {u}: {len(body):,}자, RSS 후보 {len(hits)}")
+            if "rssList" in u:   # 주소 모양을 모를 때: xml·rss 가 들어간 조각을 보여 준다
+                for m in sorted(set(re.findall(r".{0,60}(?:\.xml|rss/|Rss|RSS).{0,60}", body)))[:40]:
+                    print("    …", m.strip()[:140])
             out += hits
         except Exception as e:
             print(f"  {u}: {type(e).__name__} {str(e)[:80]}")
