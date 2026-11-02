@@ -63,7 +63,27 @@ def match(kind: str, first: date, items: list[dict]) -> dict | None:
     return None
 
 
+INDEX = ("https://www.korea.kr/etc/rss.do", "https://www.korea.kr/etc/rssList.do", "https://www.korea.kr/rss/rssList.do", "https://www.korea.kr/")
+
+
+def discover(opener=urllib.request.urlopen) -> list[str]:
+    """정책브리핑 안내 페이지에서 RSS 주소(…xml) 후보를 모은다(피드 주소가 바뀌었을 때 점검용)."""
+    out = []
+    for u in INDEX:
+        try:
+            with opener(urllib.request.Request(u, headers={"User-Agent": "house-check/1.0 (+personal)"}), timeout=20) as r:
+                body = r.read().decode("utf-8", "replace")
+            hits = sorted(set(re.findall(r"""(?:https?://www\.korea\.kr)?/[\w/.\-]*rss[\w/.\-]*\.(?:xml|do)[^"'\s<>]*""", body)))
+            print(f"  {u}: {len(body):,}자, RSS 후보 {len(hits)}")
+            out += hits
+        except Exception as e:
+            print(f"  {u}: {type(e).__name__} {str(e)[:80]}")
+    return sorted(set(out))
+
+
 if __name__ == "__main__":   # 피드 점검(policy_news.yml 수동 실행 때): 피드마다 받은 건수와 최근 제목
+    for h in discover()[:80]:
+        print("   후보", h)
     got, bad = fetch()
     print(f"보도자료 {len(got)}건, 못 받은 피드 {len(bad)}")
     for e in bad:
