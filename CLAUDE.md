@@ -12,6 +12,7 @@
 | `docs/insights/indicators.md` | 지표 구현 명세 (정의·계산식·기준선·데이터) |
 | `docs/LISTING_DATA.md`, `docs/AUCTION_DATA.md` | 매물·호가, 경매 낙찰가율 데이터 확보 방안 |
 | `docs/INSIGHT_SOURCES.md` | 출처 등급 정책 |
+| `docs/BENCHMARK_GAP.md` | 외부 서비스(집의 기준) 기능 148개 대조·보강 우선순위 (2026-11-02) |
 
 ## 규칙
 
