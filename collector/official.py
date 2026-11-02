@@ -63,30 +63,26 @@ def match(kind: str, first: date, items: list[dict]) -> dict | None:
     return None
 
 
-INDEX = ("https://www.korea.kr/etc/rssList.do",)
+LISTS = ("https://www.molit.go.kr/USR/NEWS/m_71/lst.jsp", "https://www.fsc.go.kr/no010101", "https://www.moef.go.kr/nw/nes/nesdta.do")
 
 
-def discover(opener=urllib.request.urlopen) -> list[str]:
-    """정책브리핑 안내 페이지에서 RSS 주소(…xml) 후보를 모은다(피드 주소가 바뀌었을 때 점검용)."""
-    out = []
-    for u in INDEX:
+def probe(opener=urllib.request.urlopen) -> None:
+    """부처 보도자료 목록 페이지가 열리는지·제목 모양(점검용, RSS 가 2026 중단됨)."""
+    for u in LISTS:
         try:
             with opener(urllib.request.Request(u, headers={"User-Agent": "house-check/1.0 (+personal)"}), timeout=20) as r:
                 body = r.read().decode("utf-8", "replace")
-            hits = sorted(set(re.findall(r"""(?:https?://www\.korea\.kr)?/[\w/.\-]*rss[\w/.\-]*\.(?:xml|do)[^"'\s<>]*""", body)))
-            print(f"  {u}: {len(body):,}자, RSS 후보 {len(hits)}")
-            if "rssList" in u:   # 주소 모양을 모를 때: xml·rss 가 들어간 조각을 보여 준다
-                for m in sorted(set(re.findall(r".{0,60}(?:\.xml|rss/|Rss|RSS).{0,60}", body)))[:40]:
-                    print("    …", m.strip()[:140])
-            out += hits
+            print(f"  {u}: {len(body):,}자")
+            for m in re.findall(r"<a[^>]+href=\"([^\"]{5,200})\"[^>]*>\s*([^<]{8,120})</a>", body)[:25]:
+                print("    …", m[1].strip()[:70], "|", m[0][:100])
+            for m in sorted(set(re.findall(r"20\d\d[.-]\d\d[.-]\d\d", body)))[-5:]:
+                print("    날짜", m)
         except Exception as e:
             print(f"  {u}: {type(e).__name__} {str(e)[:80]}")
-    return sorted(set(out))
 
 
 if __name__ == "__main__":   # 피드 점검(policy_news.yml 수동 실행 때): 피드마다 받은 건수와 최근 제목
-    for h in discover()[:80]:
-        print("   후보", h)
+    probe()
     got, bad = fetch()
     print(f"보도자료 {len(got)}건, 못 받은 피드 {len(bad)}")
     for e in bad:
