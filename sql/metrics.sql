@@ -200,6 +200,7 @@ WHERE jeonse_24m_10k IS NOT NULL;
 WITH tv AS (
   SELECT d.apt_seq, count(*) / 12.0 AS per_month FROM deals d
   WHERE NOT d.is_cancelled
+    AND NOT (d.deal_type = '직거래' AND (d.apt_seq, d.contract_date) IN (SELECT apt_seq, contract_date FROM deal_bulk_days))   -- 일괄 매매 제외(0081)
     AND d.contract_month BETWEEN to_char(date_trunc('month', {TODAY}::date) - INTERVAL '13 month', 'YYYYMM')
                              AND to_char(date_trunc('month', {TODAY}::date) - INTERVAL '2 month', 'YYYYMM')
   GROUP BY 1
@@ -449,6 +450,7 @@ WITH tv AS (
   SELECT d.apt_seq, CASE WHEN d.area_group < 60 THEN 1 WHEN d.area_group < 85 THEN 2 WHEN d.area_group < 135 THEN 3 ELSE 4 END AS band,
          count(*) / 12.0 AS per_month FROM deals d
   WHERE NOT d.is_cancelled
+    AND NOT (d.deal_type = '직거래' AND (d.apt_seq, d.contract_date) IN (SELECT apt_seq, contract_date FROM deal_bulk_days))   -- 일괄 매매 제외(0081)
     AND d.contract_month BETWEEN to_char(date_trunc('month', {TODAY}::date) - INTERVAL '13 month', 'YYYYMM')
                              AND to_char(date_trunc('month', {TODAY}::date) - INTERVAL '2 month', 'YYYYMM')
   GROUP BY 1, 2

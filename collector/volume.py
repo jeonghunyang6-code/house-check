@@ -23,6 +23,12 @@ BOOT = 200
 SHOW_SHARE = 0.8
 
 
+def not_bulk(t: str = "") -> str:
+    """일괄 매매가 아닌 거래(SQL 조건). 일괄 매매 = 같은 단지·같은 날 직거래 🔧5건 이상(0081 deal_bulk_days, 2026-11-02).
+    민간임대·도시형 일괄 매입이 한 달 거래량·직거래 비중·회전율을 부풀려서 뺀다. t = 테이블 별칭('d.' 등)"""
+    return f"NOT ({t}deal_type = '직거래' AND ({t}apt_seq, {t}contract_date) IN (SELECT apt_seq, contract_date FROM deal_bulk_days))"
+
+
 def lag_cdf(lags: list[int], max_lag: int = MAX_LAG) -> list[float]:
     """F[d] = 지연 d일 이하 비율 (d = 0..max_lag). 지연이 max_lag 를 넘거나 음수인 것은 뺀다."""
     cnt = [0] * (max_lag + 1)
