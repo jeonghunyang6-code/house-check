@@ -40,4 +40,5 @@ def search(query: str, display: int = 100, start: int = 1, sleep=time.sleep, sor
 
 def item(it: dict) -> dict:
     text = html.unescape(re.sub(r"<[^>]+>", "", f"{it.get('title', '')} {it.get('description', '')}"))
-    return {"id": it.get("originallink") or it.get("link"), "text": text, "pub": parsedate_to_datetime(it["pubDate"]).date()}
+    title = html.unescape(re.sub(r"<[^>]+>", "", it.get("title", "")))
+    return {"id": it.get("originallink") or it.get("link"), "text": text, "title": title, "pub": parsedate_to_datetime(it["pubDate"]).date()}

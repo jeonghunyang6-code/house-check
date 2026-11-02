@@ -301,7 +301,8 @@ json.dump({'monthly': monthly, 'cx': cx, 'today': today,
            'macro': {k: [[r['period'], float(r['value'])] for r in d['macro'] if r['series'] == k] for k in {r['series'] for r in d['macro']}},
            'g1': g1(), 'g2': g2(), 'e6': e6(),
            'unsold': [{k: (float(r[k]) if isinstance(r[k], str) and k in ('r', 'rn') else r[k]) for k in r} for r in d.get('unsold', [])],
-           'policy': [[r['d'], r['kind'], r['title']] for r in d.get('policy_events', [])],
+           'policy': [[r['d'], r['kind'], r['title']] for r in d.get('policy_events', [])]
+                     + [[r['d'], r['kind'], r['title'], 'ok' if r['ok'] in (True, 't', 'true', 1) else 'auto'] for r in d.get('policy_auto', [])],   # 자동 추가(0082)
            'sentiment': {k: v for (sr, k), v in RM.items() if sr == 'sentiment'},
            'reg_now': regulated_now(TODAY),
            # H4 호재 단계 [이름, 단계, 단계 날짜, 전망, 업무지구, 시군구들, 출처] (collector/projects.py)

@@ -171,6 +171,8 @@ out['balloon_path'] = select(db, "SELECT event_date::text e, grp, week, median_c
 from collector.policy import upcoming as _upcoming   # 다가오는 정책 일정(만료·마감)
 out['v2_upcoming'] = [[d.isoformat(), k, t] for d, k, t, _ in _upcoming(__import__('datetime').date.today(), 400)]
 out['policy_events'] = select(db, "SELECT event_date::text d, kind, title, source FROM policy_events ORDER BY event_date")
+# 뉴스로 자동 추가한 정책(0082, status='auto'): 정책 목록에 같이. official 이 있으면 공식 보도자료 확인됨
+out['policy_auto'] = select(db, "SELECT first_date::text d, kind, title, (official IS NOT NULL) ok FROM policy_news WHERE status = 'auto' ORDER BY first_date")
 # 정책 발표 감지(0067): 확인 대기 후보(정책 이력에 없는 것)
 out['v2_pnews'] = select(db, "SELECT kind, first_date::text d, n_press n, regions, articles->0 a FROM policy_news "
                              "WHERE status = 'new' AND known IS NULL AND first_date > current_date - 30 ORDER BY first_date DESC")

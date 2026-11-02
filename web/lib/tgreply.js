@@ -47,9 +47,29 @@ async function summary(q, row, watch, asks) {
   return out.join('\n');
 }
 
-async function reply(q, text, site) {
+// 정책 자동 추가 취소(2026-11-02, jobs/policy_news.py auto_msg): '빼줘'를 그 알림에 답장으로 보내거나 '빼줘 공급 10/29'.
+// 알림 글의 '• MM/DD 종류' 줄을 읽어 policy_news status='auto' → 'removed'. 다음 사이트 갱신부터 목록에서 빠진다
+const KINDS = ['토허', '규제지역', '대출', '세금', '공급'];
+function policyRefs(s) {
+  const out = [], re = new RegExp(`(\\d{1,2})/(\\d{1,2})\\s*(${KINDS.join('|')})|(${KINDS.join('|')})\\s*(\\d{1,2})/(\\d{1,2})`, 'g');
+  let m; while ((m = re.exec(String(s || '')))) out.push(m[3] ? { kind: m[3], mm: +m[1], dd: +m[2] } : { kind: m[4], mm: +m[5], dd: +m[6] });
+  return out;
+}
+async function removePolicy(q, text, replyTo, today = new Date()) {
+  let refs = policyRefs(text);
+  if (!refs.length) refs = policyRefs(replyTo);
+  if (!refs.length) return "어느 정책인지 모르겠어요. 자동 추가 알림에 답장으로 '빼줘'를 보내거나 '빼줘 공급 10/29'처럼 보내 주세요.";
+  if (refs.length > 1 && !policyRefs(text).length) return '알림에 정책이 여러 개예요. 하나만 골라 주세요:\n' + refs.map(r => `• 빼줘 ${r.kind} ${r.mm}/${r.dd}`).join('\n');
+  const r = refs[0], y = today.getFullYear(), ds = [y, y - 1].map(yy => `${yy}-${String(r.mm).padStart(2, '0')}-${String(r.dd).padStart(2, '0')}`);
+  const got = await q("UPDATE policy_news SET status = 'removed', updated_at = now() WHERE status = 'auto' AND kind = $1 AND first_date = ANY($2::date[]) RETURNING title", [r.kind, ds]);
+  return got.rows.length ? `뺐어요: ${r.mm}/${r.dd} ${r.kind} · ${esc(got.rows[0].title || '')}\n다음 사이트 갱신부터 정책 목록에서 빠져요.`
+    : `${r.mm}/${r.dd} ${r.kind} 자동 추가 정책을 찾지 못했어요(이미 뺐거나 없음).`;
+}
+
+async function reply(q, text, site, replyTo) {
   const t = String(text || '').trim();
   if (!t || /^\/(start|help)|^도움/.test(t)) return HELP;
+  if (/^빼(줘|주세요|기|라)?(\s|$)/.test(t)) return removePolicy(q, t, replyTo);
   const { list, watch, asks } = await find(q, t);
   if (!list.length) return `'${esc(t)}' 단지를 찾지 못했습니다. 이름 일부만 보내도 됩니다(예: 그라시움).`;
   const one = list.length === 1 || list[0].exact || (watch.includes(list[0].apt_seq) && !watch.includes((list[1] || {}).apt_seq));
@@ -57,4 +77,4 @@ async function reply(q, text, site) {
   return (await summary(q, list[0], watch, asks)) + (site ? `\n${site}` : '');
 }
 
-module.exports = { reply, norm, askLine, HELP };
+module.exports = { reply, norm, askLine, HELP, policyRefs, removePolicy };

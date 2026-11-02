@@ -3,19 +3,25 @@
 새 후보(이미 아는 사건과 겹치지 않고, 같은 종류로 ±3일 안에 올린 적 없는 것)가 있으면 --issue-file 에 알림 글을 쓴다
 → 워크플로가 GitHub 이슈로 올려 사용자에게 알림. 확인 뒤 collector/policy.py 에 넣고 status='added'.
 
+자동 추가(2026-11-02 사용자 요청, 0082): 후보가 언론사 🔧5곳 이상·이틀 이상 보도되면 status='auto' → 화면 정책 목록에 '자동' 표시로 바로 들어가고
+텔레그램으로 알린다(틀리면 답장 '빼줘' → web/lib/tgreply.js 가 'removed'). 정책브리핑 보도자료와 맞으면 official 을 채워 '자동' 표시를 뗀다.
+
     python -m jobs.policy_news [--issue-file new.md] [--days 3]
 """
 
 from __future__ import annotations
 
 import argparse
+import html
 import json
+import re
 import sys
 import time
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from collector import newtown_news as N
+from collector import official as O
 from collector import policy_news as P
 from collector import telegram as T
 from collector.db import Db, DbError, connect, lit, select
@@ -24,6 +30,8 @@ from collector.sources.naver_news import NewsBlocked, search
 
 KST = ZoneInfo("Asia/Seoul")
 SAME = 3   # 같은 종류로 이 날짜 차이 안이면 같은 후보로 본다
+AUTO_PRESS = 5   # 🔧 자동 추가: 서로 다른 언론사 수(후보 기준 3곳보다 높게)
+AUTO_DAYS = 2    # 🔧 자동 추가: 결정 기사가 나온 날 수(첫날 ~ 마지막 날)
 
 
 def fetch(pages: int = 2, queries=P.QUERIES) -> list[dict]:
@@ -49,12 +57,61 @@ def save(db: Db, cands: list[P.Cand]) -> list[P.Cand]:
     def seen(c): return any(o["kind"] == c.kind and abs((datetime.fromisoformat(o["d"]).date() - c.first).days) <= SAME for o in old)
     new = [c for c in cands if not seen(c)]
     rows = [f"({lit(c.kind)}, {lit(c.first)}, {len(c.press)}, {lit(','.join(c.region_codes()) or None)}, "
-            f"{lit(json.dumps([{'d': str(d), 't': t, 'u': u} for d, t, u in c.titles[:8]], ensure_ascii=False))}::jsonb, {lit(c.known)})"
+            f"{lit(json.dumps([{'d': str(d), 't': t, 'u': u} for d, t, u in c.titles[:8]], ensure_ascii=False))}::jsonb, {lit(c.known)}, "
+            f"{lit(max(d for d, _, _ in c.titles))})"
             for c in cands]
-    db.query("INSERT INTO policy_news (kind, first_date, n_press, regions, articles, known) VALUES " + ", ".join(rows)
-             + " ON CONFLICT (kind, first_date) DO UPDATE SET n_press = EXCLUDED.n_press, regions = EXCLUDED.regions, "
-               "articles = EXCLUDED.articles, known = EXCLUDED.known, updated_at = now();")
+    # 다시 볼 때마다 최근 days 일 기사만 세므로 언론사 수가 줄어든다(12곳 → 4곳, 2026-11-02) → 가장 컸던 값을 남긴다
+    db.query("INSERT INTO policy_news (kind, first_date, n_press, regions, articles, known, last_date) VALUES " + ", ".join(rows)
+             + " ON CONFLICT (kind, first_date) DO UPDATE SET n_press = GREATEST(policy_news.n_press, EXCLUDED.n_press), "
+               "regions = coalesce(EXCLUDED.regions, policy_news.regions), "
+               "articles = CASE WHEN jsonb_array_length(EXCLUDED.articles) >= jsonb_array_length(policy_news.articles) THEN EXCLUDED.articles ELSE policy_news.articles END, "
+               "known = EXCLUDED.known, last_date = GREATEST(policy_news.last_date, EXCLUDED.last_date), updated_at = now();")
     return new
+
+
+def promote(db: Db, today) -> list[dict]:
+    """status='new' 후보 중 언론사 AUTO_PRESS 곳·AUTO_DAYS 일 이상이면 'auto'. 같은 종류 ±SAME 일에 이미 auto·added·removed 가 있으면 건너뜀."""
+    rows = select(db, f"""SELECT kind, first_date::text d, n_press n, articles->0->>'t' head FROM policy_news p
+      WHERE status = 'new' AND known IS NULL AND n_press >= {AUTO_PRESS} AND last_date >= first_date + {AUTO_DAYS - 1}
+        AND first_date > {lit(today)}::date - 30
+        AND NOT EXISTS (SELECT 1 FROM policy_news o WHERE o.kind = p.kind AND o.status IN ('auto', 'added', 'removed')
+                        AND abs(o.first_date - p.first_date) <= {SAME})
+      ORDER BY first_date""")
+    out = []
+    for r in rows:
+        if any(o["kind"] == r["kind"] and abs((datetime.fromisoformat(o["d"]) - datetime.fromisoformat(r["d"])).days) <= SAME for o in out):
+            continue   # 같은 사건이 첫날만 달리 두 줄로 쌓인 경우 앞의 것만
+        r["title"] = title_of(r["head"])
+        db.query(f"UPDATE policy_news SET status = 'auto', title = {lit(r['title'])}, auto_at = now() WHERE kind = {lit(r['kind'])} AND first_date = {lit(r['d'])};")
+        out.append(r)
+    return out
+
+
+def title_of(t: str | None) -> str:
+    """기사 제목 → 화면 제목: 머리말([단독] 등)·콜론을 빼고 🔧50자."""
+    t = re.sub(r"\s*:\s*", " ", re.sub(r"^\s*(\[[^\]]*\]|【[^】]*】|<[^>]*>)\s*", "", (t or "").strip())).strip()
+    return t[:50] + ("…" if len(t) > 50 else "")
+
+
+def official_check(db: Db, today) -> None:
+    """'auto' 이고 공식 확인 안 된 최근 2주 줄을 정책브리핑 보도자료와 대조(collector/official.py). 피드를 못 받으면 건너뜀."""
+    rows = select(db, f"SELECT kind, first_date::text d FROM policy_news WHERE status = 'auto' AND official IS NULL AND first_date > {lit(today)}::date - 14")
+    if not rows:
+        return
+    items, errs = O.fetch()
+    print(f"  공식 보도자료 {len(items)}건" + (f", 못 받은 피드 {len(errs)}: " + "; ".join(errs) if errs else ""))
+    for r in rows:
+        m = O.match(r["kind"], datetime.fromisoformat(r["d"]).date(), items)
+        if m:
+            db.query(f"UPDATE policy_news SET official = {lit(json.dumps(m, ensure_ascii=False))}::jsonb WHERE kind = {lit(r['kind'])} AND first_date = {lit(r['d'])};")
+            print(f"   공식 확인 {r['kind']} {r['d']}: {m['t'][:60]}")
+
+
+def auto_msg(rows: list[dict]) -> str:
+    """텔레그램 알림. 'MM/DD 종류' 꼴을 tgreply.js 의 '빼줘' 처리가 읽는다."""
+    return ("<b>📌 정책 자동 추가</b>(언론사 5곳+·이틀 이상 보도)\n" + "\n".join(
+        f"• {r['d'][5:].replace('-', '/')} {r['kind']} · 언론사 {r['n']}곳: {html.escape(r['title'])}" for r in rows)
+        + "\n틀리면 이 메시지에 답장으로 '빼줘'")
 
 
 def issue_md(new: list[P.Cand]) -> str:
@@ -90,6 +147,15 @@ def run(db: Db, days: int, issue_file: str | None) -> int:
     if issue_file:
         with open(issue_file, "w", encoding="utf-8") as f:
             f.write(issue_md(new) if new else "")
+    auto = promote(db, today)
+    if auto:
+        print("  자동 추가:", ", ".join(f"{r['kind']} {r['d']}" for r in auto))
+        if T.enabled():
+            try:
+                print("  텔레그램:", T.send(db, auto_msg(auto)))
+            except T.TelegramError as e:
+                print(f"  텔레그램 실패: {e}", file=sys.stderr)
+    official_check(db, today)
     newtown(db, today, days)
     return 0
 
