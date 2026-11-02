@@ -20,7 +20,8 @@ def _db():
               "0009_rone_weekly.sql", "0011_market.sql", "0012_macro.sql", "0013_macro_annual.sql", "0014_complex_phase.sql", "0015_quadrant_strength.sql",
               "0016_reverse_real.sql", "0008_complexes.sql", "0019_deal_anchor.sql", "0020_turnover_e3.sql",
               "0022_complex_geo.sql", "0023_adm_dong.sql", "0030_lifezone.sql", "0031_e2.sql", "0032_e4_e5_e7.sql", "0034_presale.sql", "0035_presale_total.sql", "0037_ipju_plan.sql",
-              "0039_rent_j24.sql", "0040_ref_spread.sql", "0047_d4_a5.sql", "0051_c6_band.sql", "0064_complex_region_phase.sql"):
+              "0039_rent_j24.sql", "0040_ref_spread.sql", "0047_d4_a5.sql", "0051_c6_band.sql", "0064_complex_region_phase.sql",
+              "0081_deal_bulk_days.sql"):
         db.query((ROOT / "db" / "migrations" / m).read_text(encoding="utf-8"))
     return db
 
@@ -114,6 +115,8 @@ def test_metrics_turnover_e3():
         y, mm = 2025 + (mth - 1) // 12, (mth - 1) % 12 + 1
         _deal(db, "A", f"{y}-{mm:02d}-10", 100000)
     _deal(db, "A", "2026-08-11", 100000, cancelled=True)
+    for _ in range(5):                 # 같은 날 직거래 5건 = 일괄 매매(0081) → 회전율에서 뺀다
+        _deal(db, "A", "2026-05-20", 90000, dtype="직거래")
     for d in ("2026-09-01", "2026-09-10", "2026-10-01"):
         _deal(db, "A", d, 100000)
         _deal(db, "B", d, 120000)      # B: ㎡당 20% 비쌈 → A 의 E3

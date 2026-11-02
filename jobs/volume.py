@@ -22,7 +22,7 @@ CHECK_AFTER = 90     # 계약 달이 끝나고 이만큼 지나면 거의 다 �
 def lags(db: Db, today: date) -> tuple[list[int], int]:
     rows = select(db, f"""SELECT first_seen_date - contract_date AS l, first_seen_date::text AS f FROM deals
 WHERE first_seen_date > {lit(today)}::date - {LAG_DAYS} AND first_seen_date <= {lit(today)}::date
-  AND contract_month IN (to_char(first_seen_date, 'YYYYMM'), to_char(first_seen_date - interval '1 month', 'YYYYMM'))""")
+  AND contract_month IN (to_char(first_seen_date, 'YYYYMM'), to_char(first_seen_date - interval '1 month', 'YYYYMM')) AND {V.not_bulk()}""")
     return [r["l"] for r in rows], len({r["f"] for r in rows})
 
 
@@ -39,7 +39,7 @@ def run(db: Db, today: date) -> int:
     else:
         wk = weekday(db)
         months = default_months(today)
-        obs = select(db, f"""SELECT left(region_code, 2) AS r, contract_month AS m, count(*) FILTER (WHERE NOT is_cancelled) AS n
+        obs = select(db, f"""SELECT left(region_code, 2) AS r, contract_month AS m, count(*) FILTER (WHERE NOT is_cancelled AND {V.not_bulk()}) AS n
 FROM deals WHERE contract_month IN ({', '.join(lit(m) for m in months)}) GROUP BY 1, 2""")
         cnt: dict[tuple[str, str], int] = {}
         for r in obs:
@@ -66,7 +66,7 @@ est_full = EXCLUDED.est_full, n_lags = EXCLUDED.n_lags;""")
   SELECT DISTINCT contract_month FROM volume_nowcast
   WHERE actual IS NULL AND (to_date(contract_month, 'YYYYMM') + interval '1 month' + make_interval(days => {CHECK_AFTER}))::date <= {lit(today)}::date
 ), c AS (
-  SELECT left(region_code, 2) AS r, contract_month, count(*) FILTER (WHERE NOT is_cancelled) AS n
+  SELECT left(region_code, 2) AS r, contract_month, count(*) FILTER (WHERE NOT is_cancelled AND {V.not_bulk()}) AS n
   FROM deals WHERE contract_month IN (SELECT contract_month FROM due) GROUP BY 1, 2
 ), c2 AS (
   SELECT r, contract_month, n FROM c WHERE r IN ('11', '28', '41')

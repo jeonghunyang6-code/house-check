@@ -13,6 +13,7 @@ import sys
 from datetime import date, timedelta
 
 from collector.db import Db, DbError, connect, lit, select
+from collector.volume import not_bulk
 from collector.market import (_shift, B5_HOT, B5_SPREAD, B5_WATCH, b4_applies, b5_state, rebound_state, DOWN_RATIO, JEONSE_WEEKS, SUPPLY_WEEKS, UNEMP_JUMP, b4, loan_growth, new_jeonse, rate_price_relation, yoy_series, monthly, mortgage_band, phase, run_length,
                              unemployment)
 
@@ -211,10 +212,11 @@ def run(db: Db) -> dict[str, tuple]:
                                 + ". 급매가 소진되고 하단이 오르면 반등(📖 p.245~247). 최근 거래는 신고 기한(30일) 전이라 더 늘어난다")
     else:
         sig["a4_quick_sale"] = (None, "데이터 없음", "서울 급매 체결 비중")
-    # C5 직거래 비중 (📖 하락기에 늘어남 p.404, 보조): 서울, 신고 기한이 지난 마지막 달 vs 그 전 12개월 평균
-    c5 = select(db, """SELECT contract_month AS m, count(*) FILTER (WHERE deal_type = '직거래') * 100.0 / count(*) AS r, count(*) AS n
+    # C5 직거래 비중 (📖 하락기에 늘어남 p.404, 보조): 서울, 신고 기한이 지난 마지막 달 vs 그 전 12개월 평균.
+    # 일괄 매매(같은 단지·같은 날 직거래 5건+)는 하락기 가족 간 거래와 다른 것이라 뺀다(2026-11-02)
+    c5 = select(db, f"""SELECT contract_month AS m, count(*) FILTER (WHERE deal_type = '직거래') * 100.0 / count(*) AS r, count(*) AS n
         FROM deals WHERE region_code LIKE '11%' AND NOT is_cancelled AND contract_month >= to_char(now() - interval '15 months', 'YYYYMM')
-        GROUP BY 1 ORDER BY 1""")
+        AND {not_bulk()} GROUP BY 1 ORDER BY 1""")
     c5 = [r for r in c5 if r["m"] <= last_complete.strftime("%Y%m")]
     if len(c5) >= 13:
         lastr, avg = float(c5[-1]["r"]), sum(float(r["r"]) for r in c5[-13:-1]) / 12
