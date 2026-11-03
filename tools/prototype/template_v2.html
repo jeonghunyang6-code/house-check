@@ -1308,15 +1308,18 @@ function parseLines(text) {   // 북마크(tools/pc/naver_ask_bookmarklet.js)와
   const TY = /^(매매|전세|월세)$/, PR = /^(매매|전세|월세)\s*([0-9][0-9억만,\s/]*)$/, NUM = /^[0-9][0-9억만,\s/]*$/;
   const area = (w) => { const e = w.match(/전용\s*(?:면적)?\s*(\d+(?:\.\d+)?)\s*(?:㎡|m²|m2)/); if (e) return +e[1];
     const p = w.match(/(\d+(?:\.\d+)?)[A-Z]*\s*\/\s*(\d+(?:\.\d+)?)\s*(?:㎡|m²|m2)/); if (p) return Math.min(+p[1], +p[2]);
-    const o = w.match(/(\d+(?:\.\d+)?)\s*(?:㎡|m²|m2)/); return o ? +o[1] : null; };
+    const o = w.match(/(\d+(?:\.\d+)?)\s*(?:㎡|m²|m2)/); if (o) return +o[1];
+    const t = w.match(/(?:^|[\s|·,])(\d{2,3})[A-Z]{1,2}(?=$|[\s|·,])/); return t ? +t[1] : null; };   // 주택형 '84A'(㎡ 없이) = 전용면적 정수
   for (let i = 0; i < L.length; i++) {
     let ty, pr, j = i; const a = L[i].match(PR);
     if (a) { ty = a[1]; pr = a[2]; } else if (TY.test(L[i]) && i + 1 < L.length && NUM.test(L[i + 1])) { ty = L[i]; pr = L[i + 1]; j = i + 1; } else continue;
+    if (ty !== '월세' && !/억/.test(pr) && +pr.replace(/[^0-9]/g, '') < 1000) continue;   // '매매 36' = 매물 개수 탭
     let k = j + 1; while (k < L.length && k < j + 12 && !PR.test(L[k]) && !(TY.test(L[k]) && NUM.test(L[k + 1] || ''))) k++;
     const w = L.slice(j + 1, k).join(' | '), before = L.slice(Math.max(0, i - 3), i).join(' | ');
     const fl = w.match(/([0-9저중고]+)\s*\/\s*(\d+)\s*층/), dir = w.match(/([동서남북]{1,2})향/), d = (before + ' | ' + w).match(/(\d+)\s*동(?![가-힣])/);
     const c = w.match(/확인(?:매물)?\s*(\d{2}\.\d{2}\.\d{2})/) || w.match(/(\d{2}\.\d{2}\.\d{2})\.?\s*확인/);
-    items.push({ type: ty, price: pr.trim(), ex: area(w), fl: fl ? fl[1] : '', tot: fl ? +fl[2] : 0, dir: dir ? dir[1] + '향' : '', spec: w.slice(0, 120), conf: c ? c[1] : '', dong: d ? d[1] : '' });
+    const ex0 = area(w);
+    items.push({ type: ty, price: pr.trim(), ex: ex0 && ex0 >= 15 ? ex0 : null, fl: fl ? fl[1] : '', tot: fl ? +fl[2] : 0, dir: dir ? dir[1] + '향' : '', spec: w.slice(0, 120), conf: c ? c[1] : '', dong: d ? d[1] : '' });
     i = k - 1;
   }
   return { src: 'text', no: null, at: D.asof, items };
@@ -1332,7 +1335,8 @@ function saveAsk(d, seq) {
   const at = d.at || D.asof, A = store.get('v2-naver', {}); (A[seq] = A[seq] || {})[at] = items; store.set('v2-naver', A);   // 같은 날 다시 저장하면 덮어씀
   const c = (t) => items.filter(x => x.t === t).length;
   if (!watch.has(seq)) toggleWatch(seq);
-  return `${cxName(seq)}: 매매 ${c('매매')} · 전세 ${c('전세')} · 월세 ${c('월세')}건 저장 (${dt(at)})`;
+  const nx = items.filter(x => !x.ex).length;   // 면적을 못 읽은 매물은 그래프에서 빠진다(2026-11-03 새 화면에서 겪음)
+  return `${cxName(seq)}: 매매 ${c('매매')} · 전세 ${c('전세')} · 월세 ${c('월세')}건 저장 (${dt(at)})${nx ? ` · 면적 못 읽음 ${nx}건(그래프에서 빠짐)` : ''}`;
 }
 $('#askSave').addEventListener('click', () => {
   const raw = $('#askPaste').value.trim(); if (!raw) return;
