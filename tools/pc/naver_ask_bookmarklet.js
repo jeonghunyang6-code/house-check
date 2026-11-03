@@ -10,31 +10,33 @@
    북마크 주소로 쓰는 한 줄은 tools/pc/README.md (만드는 법도 거기) */
 (() => { try {
   const L = document.body.innerText.split('\n').map(s => s.replace(/\s+/g, ' ').trim()).filter(Boolean);
-  const TY = /^(매매|전세|월세)$/, PR = /^(매매|전세|월세)\s*([0-9][0-9억만,\s/]*)$/, NUM = /^[0-9][0-9억만,\s/]*$/;
+  const TY = /^(매매|전세|월세)$/, PR = /^(매매|전세|월세)\s*([0-9][0-9억만,\s/]*?)\s*(?:~.*)?$/, NUM = /^[0-9][0-9억만,\s/]*(?:~.*)?$/;
   const q = new URLSearchParams(location.search), href = location.pathname + location.search;
   const no = (location.pathname.match(/complexes\/(\d+)/) || [])[1] || q.get('complexNumber') || q.get('complexNo') || q.get('complex')
     || (href.match(/complex(?:es|No|Number)?[=/](\d+)/i) || [])[1] || null;
-  const area = (w) => { const e = w.match(/전용\s*(?:면적)?\s*(\d+(?:\.\d+)?)\s*(?:㎡|m²|m2)/); if (e) return +e[1];
-    const p = w.match(/(\d+(?:\.\d+)?)[A-Z]*\s*\/\s*(\d+(?:\.\d+)?)\s*(?:㎡|m²|m2)/); if (p) return Math.min(+p[1], +p[2]);
-    const o = w.match(/(\d+(?:\.\d+)?)\s*(?:㎡|m²|m2)/); if (o) return +o[1];
-    const t = w.match(/(?:^|[\s|·,])(\d{2,3})[A-Z]{1,2}(?=$|[\s|·,])/); return t ? +t[1] : null; };   /* 주택형 '84A'(㎡ 없이) = 전용면적 정수 */
+  /* 전용면적: 새 화면 '아파트116B1㎡ (전용84.62B1)'(2026-11-03, 'B1㎡' 의 1 을 면적으로 읽던 것) > '공급/전용㎡' 작은 값 > 'N㎡' > 주택형 '84A'. '평' 단위 화면이면 ㎡ 로 */
+  const area = (w) => { let v = null; const e = w.match(/전용\s*(?:면적)?\s*(\d+(?:\.\d+)?)/); if (e) v = +e[1];
+    if (v == null) { const p = w.match(/(\d+(?:\.\d+)?)[A-Z0-9]*\s*\/\s*(\d+(?:\.\d+)?)[A-Z0-9]*\s*(?:㎡|m²|m2)/); if (p) v = Math.min(+p[1], +p[2]); }
+    if (v == null) { const o = w.match(/(?:^|[^0-9A-Z.])(\d+(?:\.\d+)?)\s*(?:㎡|m²|m2)/); if (o) v = +o[1]; }
+    if (v == null) { const t = w.match(/(?:^|[\s|·,])(\d{2,3})[A-Z]{1,2}(?=$|[\s|·,])/); if (t) v = +t[1]; }
+    return v != null && /평/.test(w) && !/㎡|m²|m2/.test(w) ? Math.round(v * 330.58) / 100 : v; };
   const items = [];
   for (let i = 0; i < L.length; i++) {
     let ty, pr, j = i;
     const a = L[i].match(PR);
     if (a) { ty = a[1]; pr = a[2]; } else if (TY.test(L[i]) && i + 1 < L.length && NUM.test(L[i + 1])) { ty = L[i]; pr = L[i + 1]; j = i + 1; } else continue;
-    if (ty !== '월세' && !/억/.test(pr) && +pr.replace(/[^0-9]/g, '') < 1000) continue;   /* '매매 36' = 매물 개수 탭 */
+    if (!/억|\//.test(pr) && +pr.replace(/[^0-9]/g, '') < 1000) continue;   /* '매매 36'·'월세 6' = 매물 개수 탭 */
     let k = j + 1; while (k < L.length && k < j + 12 && !PR.test(L[k]) && !(TY.test(L[k]) && NUM.test(L[k + 1] || ''))) k++;
     const w = L.slice(j + 1, k).join(' | '), before = L.slice(Math.max(0, i - 3), i).join(' | ');
     const fl = w.match(/([0-9저중고]+)\s*\/\s*(\d+)\s*층/), dir = w.match(/([동서남북]{1,2})향/), d = (before + ' | ' + w).match(/(\d+)\s*동(?![가-힣])/);
-    const c = w.match(/확인(?:매물)?\s*(\d{2}\.\d{2}\.\d{2})/) || w.match(/(\d{2}\.\d{2}\.\d{2})\.?\s*확인/);
+    const c = w.match(/확인(?:매물)?\s*(?:\d\d)?(\d{2}\.\d{2}\.\d{2})/) || w.match(/(?:\d\d)?(\d{2}\.\d{2}\.\d{2})\.?\s*확인/);   /* 새 화면 '집주인확인매물 2026.11.03' */
     const ex0 = area(w), ex = ex0 && ex0 >= 15 ? ex0 : null;
     items.push({ type: ty, price: pr.trim(), ex, fl: fl ? fl[1] : '', tot: fl ? +fl[2] : 0, dir: dir ? dir[1] + '향' : '', spec: w.slice(0, 120), conf: c ? c[1] : '', dong: d ? d[1] : '' });
     i = k - 1;
   }
-  /* 단지 이름: 옛 화면 '아파트 / 1541세대' 위 줄, 새 화면은 '세대' 가 든 줄 위 또는 문서 제목 앞부분 */
-  const hi = L.findIndex(x => /^아파트\s*\/\s*[\d,]+세대/.test(x) || /^[\d,]+세대/.test(x));
-  const nm = (hi > 0 ? L[hi - 1] : document.title.split(/\s[-|:]\s/)[0]).replace(/[★☆]/g, '').trim();
+  /* 단지 이름: 새 화면은 문서 제목 '망월동 미사강변골든센트로 시세/실거래, …'(동 이름 뺌), 옛 화면은 '아파트 / 1541세대' 위 줄 */
+  const tm = document.title.match(/^(?:\S+[동읍면리가]\s)?(.+?)\s시세/), hi = L.findIndex(x => /^아파트\s*\/\s*[\d,]+세대/.test(x));
+  const nm = (tm ? tm[1] : hi > 0 ? L[hi - 1] : document.title.split(/\s[-|:]\s/)[0]).replace(/[★☆]/g, '').trim();
   let s, msg;
   /* 2026-11-03: 새 화면에서 면적을 1·2·3 으로 잘못 읽어 저장됨 → 절반 넘게 면적을 못 읽으면 저장하지 않고 확인용(매물 주변 글자)을 복사 */
   const miss = items.filter(x => !x.ex).length;
