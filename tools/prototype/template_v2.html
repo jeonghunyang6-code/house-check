@@ -1406,14 +1406,15 @@ function drawAsks() {
       const cnt = {}; c.v.forEach(p => { const key = Math.round(y(p) / 3); cnt[key] = (cnt[key] || 0) + 1; });
       if (Math.max(...Object.values(cnt)) <= 5) {   // 점이 한 줄에 5개 넘게 몰리지 않으면 점 하나 = 매물 하나
         const off0 = {};
-        c.v.forEach(p => { const key = Math.round(y(p) / 3), off = (off0[key] = (off0[key] || 0) + 1) - 1, cx = x + (off % 2 ? 1 : -1) * Math.ceil(off / 2) * 5.5;
-          const dot = el('circle', { cx, cy: y(p), r: 2.8, fill: cheap(p, i) ? 'var(--good)' : 'var(--ink-3)', 'fill-opacity': cheap(p, i) ? 1 : 0.5 }, tsvg);
+        c.v.forEach(p => { const key = Math.round(y(p) / 3), off = (off0[key] = (off0[key] || 0) + 1) - 1, cx = x + (off % 2 ? 1 : -1) * Math.ceil(off / 2) * 4.6;   // 2026-11-03 점·간격도 작게(막대와 같이)
+          const dot = el('circle', { cx, cy: y(p), r: 2.2, fill: cheap(p, i) ? 'var(--good)' : 'var(--ink-3)', 'fill-opacity': cheap(p, i) ? 1 : 0.5 }, tsvg);
           hover(dot, `${dt(c.d)} · 호가 ${eok(p)}${refs[i] ? ` · ${MO ? '그 달' : '그 주'} 기준 ${eok(refs[i])}(${sgn((p / refs[i] - 1) * 100)})` : ''}`); });
       } else {   // 매물이 많으면(고덕그라시움 66개 등, 2026-10-28 사용자) 가격대 막대: 가로 길이 = 그 가격대 매물 수(가장 많은 가격대 = 칸 폭의 60%, 칸 사이 여백)
         const bins = {}; c.v.forEach(p => { const b = Math.floor((p - lo) / step); bins[b] = (bins[b] || 0) + 1; });
         const mx = Math.max(...Object.values(bins));
-        Object.entries(bins).forEach(([b, n]) => { const p0 = lo + b * step, p1 = p0 + step, w = Math.max(2.5, cw * 0.6 * n / mx), green = refs[i] && p1 <= refs[i] + step * 0.5 && (p0 + p1) / 2 < refs[i];
-          const r = el('rect', { x: x - w / 2, y: y(p1) + 0.6, width: w, height: Math.max(y(p0) - y(p1) - 1.2, 1.5), rx: 1.2, fill: green ? 'var(--good)' : 'var(--ink-3)', 'fill-opacity': green ? 0.95 : 0.3 }, tsvg);
+        // 2026-11-03 사용자: 뚱뚱해 보여 가로(칸 폭 60% → 44%)·세로(가격대 칸의 55%, 가운데) 모두 줄임
+        Object.entries(bins).forEach(([b, n]) => { const p0 = lo + b * step, p1 = p0 + step, w = Math.max(2.5, cw * 0.44 * n / mx), green = refs[i] && p1 <= refs[i] + step * 0.5 && (p0 + p1) / 2 < refs[i];
+          const bh = Math.max((y(p0) - y(p1)) * 0.55, 1.5), r = el('rect', { x: x - w / 2, y: (y(p0) + y(p1) - bh) / 2, width: w, height: bh, rx: 1.2, fill: green ? 'var(--good)' : 'var(--ink-3)', 'fill-opacity': green ? 0.95 : 0.3 }, tsvg);
           hover(r, `${dt(c.d)} · ${eok(p0)}~${eok(p1)} · ${n}개${refs[i] ? ` · ${MO ? '그 달' : '그 주'} 기준 ${eok(refs[i])}` : ''}`); });
       }
       el('rect', { x: x - cw * 0.34, y: y(c.m) - 1.5, width: cw * 0.68, height: 3, rx: 1.5, fill: 'var(--c1)' }, tsvg);
