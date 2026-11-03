@@ -1389,7 +1389,10 @@ function drawAsks() {
     const refs = weeks.map((_, i) => refAt(i)), ps = has.flatMap(c => c.v).concat(refs.filter(Boolean), dls.map(([, x]) => x[4])), lo = Math.min(...ps) * 0.985, hi = Math.max(...ps) * 1.015;
     const y = (v) => T + (H - T - B) * (1 - (v - lo) / ((hi - lo) || 1)), cheap = (p, i) => refs[i] && p < refs[i];
     const step = [100, 200, 250, 500, 1000, 2000, 2500, 5000, 10000].find(t => (hi - lo) / t <= 12) || 10000;   // 가격대 막대 한 칸(만원): 세로로 약 8~12칸(굵게)
-    const STY = store.get('v2-askstyle', 'bar'), qt = (v, f) => { const k = (v.length - 1) * f, a = Math.floor(k); return v[a] + (v[Math.ceil(k)] - v[a]) * (k - a); };
+    const STY = store.get('v2-askstyle', 'bar'), NL = 48, bwk = (hi - lo) / 22;   // violin: 가격 축을 NL 칸, 매물마다 bwk 폭의 종 모양을 더한 밀도
+    const dens = (v) => [...Array(NL + 1)].map((_, k) => { const pk = lo + (hi - lo) * k / NL; return [pk, v.reduce((a, p) => a + Math.exp(-0.5 * ((p - pk) / bwk) ** 2), 0)]; });
+    const DN = STY === 'violin' ? cols.map(c => c ? dens(c.v) : null) : [], DMX = Math.max(1e-9, ...DN.filter(Boolean).flatMap(d => d.map(x => x[1])));
+    const qt = (v, f) => { const k = (v.length - 1) * f, a = Math.floor(k); return v[a] + (v[Math.ceil(k)] - v[a]) * (k - a); };
     [lo, (lo + hi) / 2, hi].forEach(v => { el('line', { x1: L, x2: W - R, y1: y(v), y2: y(v), stroke: 'var(--line)' }, tsvg); txt(tsvg, L - 4, y(v) + 3, eok(v), 'end'); });
     // 기준 시세 계단선(주마다 그때 값): 점선, 칸을 누르면 그 주 값
     if (refs.some(Boolean)) {
@@ -1410,7 +1413,13 @@ function drawAsks() {
     }
     if (STY !== 'line' && mp.length > 1) el('path', { d: mp.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(''), fill: 'none', stroke: 'var(--c1)', 'stroke-width': 1.2, 'stroke-opacity': 0.5 }, tsvg);
     cols.forEach((c, i) => { if (!c) return; const x = xs(i);
-      if (STY === 'box') {   // 시안 A: 최저~최고 선 + 가운데 절반 상자 + 중간 호가, 기준보다 싼 쪽 선은 초록
+      if (STY === 'violin') {   // 시안 C: 가격대별 물량을 매끄러운 모양 하나로(폭 = 그 가격대 매물 수, 모든 칸 같은 눈금), 기준 시세보다 싼 쪽은 초록
+        const d = DN[i].filter(([, w]) => w > DMX * 0.02), half = (w) => cw * 0.36 * w / DMX, rf = refs[i];
+        const shape = (pts) => pts.length < 2 ? '' : 'M' + pts.map(([pk, w]) => `${(x - half(w)).toFixed(1)},${y(pk).toFixed(1)}`).join('L') + 'L' + pts.slice().reverse().map(([pk, w]) => `${(x + half(w)).toFixed(1)},${y(pk).toFixed(1)}`).join('L') + 'Z';
+        el('path', { d: shape(d), fill: 'var(--ink-3)', 'fill-opacity': 0.3 }, tsvg);
+        if (rf) { const g = d.filter(([pk]) => pk <= rf); if (g.length > 1) el('path', { d: shape(g), fill: 'var(--good)', 'fill-opacity': 0.9 }, tsvg); }
+        el('rect', { x: x - cw * 0.34, y: y(c.m) - 1.5, width: cw * 0.68, height: 3, rx: 1.5, fill: 'var(--c1)' }, tsvg);
+      } else if (STY === 'box') {   // 시안 A: 최저~최고 선 + 가운데 절반 상자 + 중간 호가, 기준보다 싼 쪽 선은 초록
         const bw = Math.min(cw * 0.42, 16), q1 = qt(c.v, 0.25), q3 = qt(c.v, 0.75), lo0 = c.v[0], hi0 = c.v[c.v.length - 1], rf = refs[i];
         el('line', { x1: x, x2: x, y1: y(hi0), y2: y(lo0), stroke: 'var(--ink-3)', 'stroke-opacity': 0.55, 'stroke-width': 1.4 }, tsvg);
         if (rf && lo0 < rf) el('line', { x1: x, x2: x, y1: y(Math.min(rf, hi0)), y2: y(lo0), stroke: 'var(--good)', 'stroke-width': 2.6, 'stroke-linecap': 'round' }, tsvg);
