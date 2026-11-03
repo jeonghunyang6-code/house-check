@@ -16,17 +16,19 @@
     || (href.match(/complex(?:es|No|Number)?[=/](\d+)/i) || [])[1] || null;
   const area = (w) => { const e = w.match(/전용\s*(?:면적)?\s*(\d+(?:\.\d+)?)\s*(?:㎡|m²|m2)/); if (e) return +e[1];
     const p = w.match(/(\d+(?:\.\d+)?)[A-Z]*\s*\/\s*(\d+(?:\.\d+)?)\s*(?:㎡|m²|m2)/); if (p) return Math.min(+p[1], +p[2]);
-    const o = w.match(/(\d+(?:\.\d+)?)\s*(?:㎡|m²|m2)/); return o ? +o[1] : null; };
+    const o = w.match(/(\d+(?:\.\d+)?)\s*(?:㎡|m²|m2)/); if (o) return +o[1];
+    const t = w.match(/(?:^|[\s|·,])(\d{2,3})[A-Z]{1,2}(?=$|[\s|·,])/); return t ? +t[1] : null; };   /* 주택형 '84A'(㎡ 없이) = 전용면적 정수 */
   const items = [];
   for (let i = 0; i < L.length; i++) {
     let ty, pr, j = i;
     const a = L[i].match(PR);
     if (a) { ty = a[1]; pr = a[2]; } else if (TY.test(L[i]) && i + 1 < L.length && NUM.test(L[i + 1])) { ty = L[i]; pr = L[i + 1]; j = i + 1; } else continue;
+    if (ty !== '월세' && !/억/.test(pr) && +pr.replace(/[^0-9]/g, '') < 1000) continue;   /* '매매 36' = 매물 개수 탭 */
     let k = j + 1; while (k < L.length && k < j + 12 && !PR.test(L[k]) && !(TY.test(L[k]) && NUM.test(L[k + 1] || ''))) k++;
     const w = L.slice(j + 1, k).join(' | '), before = L.slice(Math.max(0, i - 3), i).join(' | ');
     const fl = w.match(/([0-9저중고]+)\s*\/\s*(\d+)\s*층/), dir = w.match(/([동서남북]{1,2})향/), d = (before + ' | ' + w).match(/(\d+)\s*동(?![가-힣])/);
     const c = w.match(/확인(?:매물)?\s*(\d{2}\.\d{2}\.\d{2})/) || w.match(/(\d{2}\.\d{2}\.\d{2})\.?\s*확인/);
-    const ex = area(w);
+    const ex0 = area(w), ex = ex0 && ex0 >= 15 ? ex0 : null;
     items.push({ type: ty, price: pr.trim(), ex, fl: fl ? fl[1] : '', tot: fl ? +fl[2] : 0, dir: dir ? dir[1] + '향' : '', spec: w.slice(0, 120), conf: c ? c[1] : '', dong: d ? d[1] : '' });
     i = k - 1;
   }
@@ -34,7 +36,12 @@
   const hi = L.findIndex(x => /^아파트\s*\/\s*[\d,]+세대/.test(x) || /^[\d,]+세대/.test(x));
   const nm = (hi > 0 ? L[hi - 1] : document.title.split(/\s[-|:]\s/)[0]).replace(/[★☆]/g, '').trim();
   let s, msg;
-  if (items.length) {
+  /* 2026-11-03: 새 화면에서 면적을 1·2·3 으로 잘못 읽어 저장됨 → 절반 넘게 면적을 못 읽으면 저장하지 않고 확인용(매물 주변 글자)을 복사 */
+  const miss = items.filter(x => !x.ex).length;
+  if (items.length && miss * 2 > items.length) {
+    s = '[house-check 면적 확인용]\n' + href + '\n' + document.title + '\n' + items.slice(0, 8).map(x => `${x.type} ${x.price} ⇒ ${x.spec}`).join('\n') + '\n---\n' + L.slice(0, 120).join('\n');
+    msg = `매물 ${items.length}건 중 ${miss}건의 면적을 못 읽어 저장하지 않았습니다. 확인용 글자를 복사했으니 Claude 채팅에 붙여넣어 주세요.`;
+  } else if (items.length) {
     s = JSON.stringify({ src: 'naver', v: 2, no, nm, at: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10), n: items.length, items });
     /* 주소 # 뒤는 서버로 안 감. 팝업이 막히면 복사. 한 줄 북마크라 // 주석 금지 */
     const w = window.open('https://house-check-brown.vercel.app/#ask=' + encodeURIComponent(s), 'house-check');
