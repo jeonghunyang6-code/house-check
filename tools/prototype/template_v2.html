@@ -1301,24 +1301,30 @@ function drawDaily() {
 }
 /* 호가: 네이버 부동산 '호가 저장' 버튼(tools/pc/naver_ask_bookmarklet.js) 붙여넣기 + 직접 기록. 단지 → 날짜 → 매물 목록 */
 const NMAP = Object.assign({ '105286': '41450-298' }, store.get('v2-nmap', {}));   // 네이버 단지 번호 → 우리 단지 (105286 = 사용자가 준 미사강변 골든센트로 주소)
-function manOf(t) { const x = String(t).split('/')[0].replace(/[,\s]/g, ''); const m = x.match(/^(?:(\d+)억)?(\d+)?$/); return m && (m[1] || m[2]) ? (+(m[1] || 0)) * 10000 + (+(m[2] || 0)) : null; }
+function manOf(t) { const x = String(t).split('/')[0].replace(/[,\s]/g, '').replace(/만$/, ''); const m = x.match(/^(?:(\d+)억)?(\d+)?$/); return m && (m[1] || m[2]) ? (+(m[1] || 0)) * 10000 + (+(m[2] || 0)) : null; }
 function specOf(t) { const m = (t || '').match(/(\d+)[A-Z]*\/(\d+(?:\.\d+)?)(?:㎡|m²|m2),\s*([0-9저중고]+)\/(\d+)층(?:,\s*(\S+향))?/); return m ? { ex: +m[2], fl: m[3], tot: +m[4], dir: m[5] || '' } : {}; }
-function parseLines(text) {   // 북마크와 같은 규칙. 화면 글자를 통째로 붙여넣어도 읽는다
-  const L = text.split('\n').map(x => x.trim()).filter(Boolean), items = [];
+function parseLines(text) {   // 북마크(tools/pc/naver_ask_bookmarklet.js)와 같은 규칙. 화면 글자를 통째로(Ctrl+A·Ctrl+C) 붙여넣어도 읽는다(2026-11-03 새 화면)
+  const L = text.split('\n').map(x => x.replace(/\s+/g, ' ').trim()).filter(Boolean), items = [];
+  const TY = /^(매매|전세|월세)$/, PR = /^(매매|전세|월세)\s*([0-9][0-9억만,\s/]*)$/, NUM = /^[0-9][0-9억만,\s/]*$/;
+  const area = (w) => { const e = w.match(/전용\s*(?:면적)?\s*(\d+(?:\.\d+)?)\s*(?:㎡|m²|m2)/); if (e) return +e[1];
+    const p = w.match(/(\d+(?:\.\d+)?)[A-Z]*\s*\/\s*(\d+(?:\.\d+)?)\s*(?:㎡|m²|m2)/); if (p) return Math.min(+p[1], +p[2]);
+    const o = w.match(/(\d+(?:\.\d+)?)\s*(?:㎡|m²|m2)/); return o ? +o[1] : null; };
   for (let i = 0; i < L.length; i++) {
-    const p = L[i].match(/^(매매|전세|월세)\s*([0-9][0-9억,\s/]*)$/); if (!p) continue; let spec = '', conf = '', dong = '';
-    for (let k = Math.max(0, i - 3); k < Math.min(L.length, i + 8); k++) {
-      if (k > i && /^(매매|전세|월세)\s*[0-9]/.test(L[k])) break;
-      if (k < i) { const d = L[k].match(/(\d+)동$/); if (d) dong = d[1]; }
-      if (k > i && !spec && /㎡|m²|m2/.test(L[k]) && /층/.test(L[k])) spec = L[k];
-      if (k > i && !conf) { const c = L[k].match(/확인매물\s*(\d{2}\.\d{2}\.\d{2})/); if (c) conf = c[1]; }
-    }
-    items.push({ type: p[1], price: p[2].trim(), spec, conf, dong });
+    let ty, pr, j = i; const a = L[i].match(PR);
+    if (a) { ty = a[1]; pr = a[2]; } else if (TY.test(L[i]) && i + 1 < L.length && NUM.test(L[i + 1])) { ty = L[i]; pr = L[i + 1]; j = i + 1; } else continue;
+    let k = j + 1; while (k < L.length && k < j + 12 && !PR.test(L[k]) && !(TY.test(L[k]) && NUM.test(L[k + 1] || ''))) k++;
+    const w = L.slice(j + 1, k).join(' | '), before = L.slice(Math.max(0, i - 3), i).join(' | ');
+    const fl = w.match(/([0-9저중고]+)\s*\/\s*(\d+)\s*층/), dir = w.match(/([동서남북]{1,2})향/), d = (before + ' | ' + w).match(/(\d+)\s*동(?![가-힣])/);
+    const c = w.match(/확인(?:매물)?\s*(\d{2}\.\d{2}\.\d{2})/) || w.match(/(\d{2}\.\d{2}\.\d{2})\.?\s*확인/);
+    items.push({ type: ty, price: pr.trim(), ex: area(w), fl: fl ? fl[1] : '', tot: fl ? +fl[2] : 0, dir: dir ? dir[1] + '향' : '', spec: w.slice(0, 120), conf: c ? c[1] : '', dong: d ? d[1] : '' });
+    i = k - 1;
   }
   return { src: 'text', no: null, at: D.asof, items };
 }
 /* 호가 저장: 붙여넣기·북마크 바로 열기(#ask=) 공통. seq 를 모르면 null 을 돌려줌 */
-function askItems(d) { return (d.items || []).map(x => ({ t: x.type, p: manOf(x.price), ...specOf(x.spec), dong: x.dong || '', conf: x.conf || '' })).filter(x => x.p); }
+function askItems(d) {   // 새 북마크(v2)·붙여넣기는 전용면적·층을 따로 준다. 옛 북마크는 spec 글자('112/84㎡, 12/25층, 남향')에서
+  return (d.items || []).map(x => ({ t: x.type, p: manOf(x.price), ...(x.ex != null ? { ex: +x.ex, fl: x.fl || '', tot: x.tot || 0, dir: x.dir || '' } : specOf(x.spec)), dong: x.dong || '', conf: x.conf || '' })).filter(x => x.p);
+}
 function saveAsk(d, seq) {
   const items = askItems(d), no = d.no ? String(d.no) : null;
   if (!items.length || !seq) return null;
