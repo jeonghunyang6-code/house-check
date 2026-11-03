@@ -1305,7 +1305,7 @@ function manOf(t) { const x = String(t).split('/')[0].replace(/[,\s]/g, '').repl
 function specOf(t) { const m = (t || '').match(/(\d+)[A-Z]*\/(\d+(?:\.\d+)?)(?:㎡|m²|m2),\s*([0-9저중고]+)\/(\d+)층(?:,\s*(\S+향))?/); return m ? { ex: +m[2], fl: m[3], tot: +m[4], dir: m[5] || '' } : {}; }
 function parseLines(text) {   // 북마크(tools/pc/naver_ask_bookmarklet.js)와 같은 규칙. 화면 글자를 통째로(Ctrl+A·Ctrl+C) 붙여넣어도 읽는다(2026-11-03 새 화면)
   const L = text.split('\n').map(x => x.replace(/\s+/g, ' ').trim()).filter(Boolean), items = [];
-  const TY = /^(매매|전세|월세)$/, PR = /^(매매|전세|월세)\s*([0-9][0-9억만,\s/]*?)\s*(?:~.*)?$/, NUM = /^[0-9][0-9억만,\s/]*(?:~.*)?$/;
+  const TY = /^(매매|전세|월세)$/, PR = /^(매매|전세|월세)\s*([0-9][0-9억만,\s/]*?)\s*(?:~.*|\s+[가-힣]{1,4})?$/, NUM = /^[0-9][0-9억만,\s/]*(?:~.*)?$/;
   // 전용면적: 새 화면 '아파트116B1㎡ (전용84.62B1)'(2026-11-03, 'B1㎡' 의 1 을 면적으로 읽던 것) > '공급/전용㎡' 작은 값 > 'N㎡' > 주택형 '84A'. '평' 단위 화면이면 ㎡ 로
   const area = (w) => { let v = null; const e = w.match(/전용\s*(?:면적)?\s*(\d+(?:\.\d+)?)/); if (e) v = +e[1];
     if (v == null) { const p = w.match(/(\d+(?:\.\d+)?)[A-Z0-9]*\s*\/\s*(\d+(?:\.\d+)?)[A-Z0-9]*\s*(?:㎡|m²|m2)/); if (p) v = Math.min(+p[1], +p[2]); }
@@ -1339,7 +1339,9 @@ function saveAsk(d, seq) {
   const c = (t) => items.filter(x => x.t === t).length;
   if (!watch.has(seq)) toggleWatch(seq);
   const nx = items.filter(x => !x.ex).length;   // 면적을 못 읽은 매물은 그래프에서 빠진다(2026-11-03 새 화면에서 겪음)
-  return `${cxName(seq)}: 매매 ${c('매매')} · 전세 ${c('전세')} · 월세 ${c('월세')}건 저장 (${dt(at)})${nx ? ` · 면적 못 읽음 ${nx}건(그래프에서 빠짐)` : ''}`;
+  const np = (d.items || []).length - items.length, W = d.want || {};   // 가격을 못 읽어 빠진 매물, 북마크가 읽은 네이버 개수 탭(2026-11-03)
+  const diff = Object.keys(W).filter(t => W[t] !== c(t)).map(t => `${t} 네이버 ${W[t]}건 중 ${c(t)}건`);
+  return `${cxName(seq)}: 매매 ${c('매매')} · 전세 ${c('전세')} · 월세 ${c('월세')}건 저장 (${dt(at)})${nx ? ` · 면적 못 읽음 ${nx}건(그래프에서 빠짐)` : ''}${np ? ` · 가격 못 읽음 ${np}건` : ''}${diff.length ? ` · ${diff.join(', ')}` : ''}`;
 }
 $('#askSave').addEventListener('click', () => {
   const raw = $('#askPaste').value.trim(); if (!raw) return;
