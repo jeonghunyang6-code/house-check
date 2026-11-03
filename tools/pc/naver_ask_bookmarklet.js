@@ -31,6 +31,7 @@
     const fl = w.match(/([0-9저중고]+)\s*\/\s*(\d+)\s*층/), dir = w.match(/([동서남북]{1,2})향/), d = (before + ' | ' + w).match(/(\d+)\s*동(?![가-힣])/);
     const c = w.match(/확인(?:매물)?\s*(?:\d\d)?(\d{2}\.\d{2}\.\d{2})/) || w.match(/(?:\d\d)?(\d{2}\.\d{2}\.\d{2})\.?\s*확인/);   /* 새 화면 '집주인확인매물 2026.11.03' */
     const ex0 = area(w), ex = ex0 && ex0 >= 15 ? ex0 : null;
+    if (!ex && !fl && !c) { i = k - 1; continue; }   /* 면적·층·확인일이 다 없으면 매물 칸이 아님(시세 요약 '매매 12억' 등, 2026-11-03) */
     items.push({ type: ty, price: pr.trim(), ex, fl: fl ? fl[1] : '', tot: fl ? +fl[2] : 0, dir: dir ? dir[1] + '향' : '', spec: w.slice(0, 120), conf: c ? c[1] : '', dong: d ? d[1] : '' });
     i = k - 1;
   }
