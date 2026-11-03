@@ -474,7 +474,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
 const D = /*DATA*/null;
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
-const eok = (v) => v == null ? '–' : (v / 10000).toFixed(v >= 100000 ? 1 : 2).replace(/\.?0+$/, '') + '억';
+const eok = (v) => v == null ? '–' : (v / 10000).toFixed(Math.abs(v) >= 100000 ? 1 : 2) + '억';   // 자릿수 고정(15억 → 15.0억, 9.5억 → 9.50억): 목록에서 칸이 맞게(2026-11-03 사용자)
 const man = (v) => Math.abs(v) >= 10000 ? (v / 10000).toFixed(2).replace(/\.?0+$/, '') + '억' : Math.round(v).toLocaleString() + '만';
 const sgn = (v, d = 1) => v == null || isNaN(v) ? '–' : (v > 0 ? '+' : '') + Number(v).toFixed(d) + '%';
 const NS = 'http://www.w3.org/2000/svg';
