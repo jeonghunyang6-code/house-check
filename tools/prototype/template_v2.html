@@ -184,6 +184,11 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
 .deal .p { font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
 .lmap { width: 100%; height: auto; display: block; background: var(--sunk); border-radius: 12px; }
 .lmap text { font-family: var(--font); font-size: 100px; fill: var(--ink-2); paint-order: stroke; stroke: var(--sunk); stroke-width: 22px; stroke-linejoin: round; }
+/* 입지 사실표(2026-11-09 사용자 요청 시안): 점수·가중치 없이 항목 · 값 · 송희구 기준 */
+.fact { display: grid; grid-template-columns: 84px 1fr; gap: 1px 10px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.fact .k { color: var(--ink-2); font-size: 12.5px; padding-top: 1px; }
+.fact .v b { font-variant-numeric: tabular-nums; }
+.fact .o { grid-column: 2; font-size: 11.5px; color: var(--ink-3); line-height: 1.4; }
 .proj .pill { align-self: start; }
 .proj { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; }
 .proj .o { grid-column: 2; font-size: 12px; color: var(--ink-3); }
@@ -395,6 +400,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
           </form></div></details>
         <p class="src">호가 ÷ 최근 실거래 기준 시세: 3% 이내 초록, 3~5% 노랑, 5% 넘으면 빨강, 5% 이상 싸면 파랑. 시안에서는 이 기기에만 저장됩니다.</p>
       </div>
+      <div class="card"><h2>입지 사실표 <small>점수 없이 숫자 그대로</small></h2><div id="dFacts"></div></div>
       <div class="card"><h2>주변 지도 <small id="dMapSub">반경 1.5km</small><button type="button" class="icon-btn" id="dMapType" hidden style="margin-left:auto;font-size:12.5px">위성</button></h2><div class="src" id="dNear" hidden style="margin:0 0 8px;line-height:1.6"></div><div class="nmap" id="dNmap" hidden></div><svg class="lmap" id="dMap" viewBox="-1600 -1600 3200 3200" role="img" aria-label="단지 주변 역·병원·마트·중학교"></svg><div class="legend" id="dMapLg"></div>
         <div class="legend" id="dMapZ" hidden style="margin-top:6px">더 보기 <label class="chk"><input type="checkbox" data-z="after"> 정비 조합설립 뒤</label><label class="chk"><input type="checkbox" data-z="before"> 정비 그 전</label><label class="chk"><input type="checkbox" data-z="proj"> 개통 예정 역</label></div></div>
       <div class="card"><h2>개발 호재 · 주변 정비사업</h2><div id="dDev"></div></div>
@@ -976,6 +982,38 @@ function redevNote(z) {
   if (y && (z.stage_no || 0) <= 2) { const age = YEAR - Math.max(...y.map(Number)); out.push(`기존 주택 ${z.old_built}년 준공${age >= 30 ? '(모두 30년+)' : `(일부 30년 미만)`}`); }
   return out.join(' · ');
 }
+/* 입지 사실표: 📖 p.356(M3) 실거래가가 입지를 다 반영한 최종 점수 → 점수·순위를 만들지 않고 "왜 이 가격인가" 설명용 숫자만. 기준은 송희구가 숫자로 말한 것만 표시 */
+function factsHtml(seq) {
+  const inf = infoOf(seq), la = inf[3], lo = inf[4], rc = inf[1] || (main(seq) || {}).rc, row = (k, v, o) => `<div class="fact"><span class="k">${k}</span><span class="v">${v}</span>${o ? `<span class="o">${o}</span>` : ''}</div>`;
+  const out = [];
+  if (inf[5] && inf[6] != null) out.push(row('가까운 역', `<b>${inf[5]}역 ${inf[6].toLocaleString()}m</b> <span class="pill ${inf[6] <= 700 ? 'good' : 'none'}">${inf[6] <= 700 ? '역세권' : '700m 밖'}</span>`, '단지 중심에서 직선거리 · 역세권 = 평지 700m·도보 10분 (📖 p.220~228)'));
+  const wk = [['강남', inf[9]], ['여의도', inf[8]], ['사대문', inf[7]]].filter(x => x[1] != null);
+  if (wk.length) { const mn = Math.min(...wk.map(x => x[1]));
+    out.push(row('업무지구까지', wk.map(([n, m]) => m === mn ? `<b>${n} ${m}분</b>` : `${n} ${m}분`).join(' · '), '대중교통, 가까운 역 → 업무지구 역(걷는 시간 제외) · 입지 = 업무지구와의 절대거리 (📖 p.85~103)')); }
+  if (la) {
+    const pj = (D.v2_proj || []).filter(p => !['개통', '취소', '예타 탈락'].includes(p.status)).map(p => { let best = null;
+      (p.stations || '').split(',').filter(Boolean).forEach(n => (STBY[n] || []).forEach(x => { const d = distM(la, lo, x[2], x[3]); if (!best || d < best[1]) best = [n, d]; }));
+      return best && best[1] <= 1500 ? [p, best] : null; }).filter(Boolean).sort((a, b) => a[1][1] - b[1][1]);
+    out.push(row('철도 호재', pj.length ? pj.slice(0, 2).map(([p, b]) => `<span class="pill ${PST[p.status] || 'none'}">${p.status}</span> ${p.name.split(' ')[0]} ${b[0]}역 <b>${Math.round(b[1]).toLocaleString()}m</b>`).join('<br>') : '<span class="muted">1.5km 안 없음</span>',
+      '착공 뒤 들어가도 늦지 않다, 진짜 악재는 취소 (📖 p.279~280) · 역 좌표 있는 사업만'));
+  }
+  const e = (POI.elem || [])[(D.v2_elemz || {})[seq]];
+  if (e && la) out.push(row('배정 초등학교', `<b>${sname(e[0])} ${Math.round(distM(la, lo, e[1], e[2])).toLocaleString()}m</b>${e[3] ? ` · 학생 ${e[3].toLocaleString()}명` : ''}`,
+    `${e[3] ? `1년 전입 ${e[4]} · 전출 ${e[5]} · ` : ''}학교알리미 · 학령인구가 줄면 최상위 학군만 견고 (📖 p.89~95)`));
+  const m = (POI.mid || [])[(D.v2_midz || {})[seq]];
+  if (m && la) out.push(row('가까운 중학교', `<b>${sname(m[0])} ${Math.round(distM(la, lo, m[1], m[2])).toLocaleString()}m</b>${m[3] ? ` · 학생 ${m[3].toLocaleString()}명` : ''}`,
+    `${m[3] ? `1년 전입 ${m[4]} · 전출 ${m[5]} · ` : ''}${inf[14] ? inf[14] + ' 추첨 배정이라 \'가까운\'' : '추첨 배정이라 \'가까운\''}`));
+  const z = (D.v2_lz || {})[seq], me = cxName(seq).replace(/\s/g, ''), ip = ((z && (D.v2_ipz || {})[z]) || []).filter(x => x[0].replace(/\s/g, '') !== me);
+  out.push(row('6개월 입주', ip.length ? `<b>${ip.reduce((a, x) => a + x[1], 0).toLocaleString()}세대</b> · ${ip.slice(0, 2).map(x => x[0]).join(', ')}${ip.length > 2 ? ` 외 ${ip.length - 2}곳` : ''}` : '<span class="muted">없음</span>',
+    '같은 생활권 입주 예정 · 입주장엔 전세가 눌림 (📖 p.153~154, 6개월 🔧)'));
+  const nm = rn(rc), u = (D.unsold || []).find(x => x.name === nm || x.name === nm.split(' ')[0]);
+  if (u) out.push(row('미분양', `<b>${u.name} ${u.unsold.toLocaleString()}호</b>${u.u0 != null ? ` (1년 전 ${u.u0.toLocaleString()})` : ''} · 준공 후 ${(u.unsold_done || 0).toLocaleString()}`,
+    `${u.hh ? `2년 안 입주 예정 ${u.hh.toLocaleString()}세대 · ` : ''}국토부 미분양 ${u.period.slice(0, 4)}.${u.period.slice(4)}${u.name !== nm ? ' · 시 전체(구별 집계 없음)' : ''}`));
+  const by = inf[15], hh = inf[16];
+  if (by || hh) out.push(row('단지', `<b>${hh ? hh.toLocaleString() + '세대' : ''}${hh && by ? ' · ' : ''}${by ? YEAR - by + '년차' : ''}</b>`, 'K-apt 세대수 · 준공 연도'));
+  return (out.join('') || '<p class="muted">이 단지는 입지 자료가 없습니다.</p>')
+    + '<p class="src">점수·가중치·순위를 매기지 않습니다. 실거래가가 역·학군·인프라를 다 반영한 최종 점수라(📖 p.356) 이 표는 "왜 이 가격인가"를 보는 설명용입니다. 학원가·특목고 진학률·공원은 아직 화면 자료에 없습니다.</p>';
+}
 function devHtml(seq) {
   const inf = infoOf(seq), rc = inf[1] || (main(seq) || {}).rc, umd = inf[2] || (main(seq) || {}).umd, la = inf[3], lo = inf[4];
   let near = (D.v2_proj || []).map(p => {
@@ -1299,7 +1337,7 @@ function drawDaily() {
   $('#dDeals').innerHTML = clist.slice(0, 12).map(drow).join('')
     + (clist.length > 12 ? `<details class="more-f"><summary>나머지 ${clist.length - 12}건 보기</summary>${clist.slice(12).map(drow).join('')}</details>` : '')
     || `<p class="muted">최근 ${SPN} 거래가 없습니다.</p>`;
-  drawAsks(); drawMap(seq); $('#dDev').innerHTML = devHtml(seq);
+  drawAsks(); drawMap(seq); $('#dDev').innerHTML = devHtml(seq); $('#dFacts').innerHTML = factsHtml(seq);
 }
 /* 호가: 네이버 부동산 '호가 저장' 버튼(tools/pc/naver_ask_bookmarklet.js) 붙여넣기 + 직접 기록. 단지 → 날짜 → 매물 목록 */
 const NMAP = Object.assign({ '105286': '41450-298' }, store.get('v2-nmap', {}));   // 네이버 단지 번호 → 우리 단지 (105286 = 사용자가 준 미사강변 골든센트로 주소)
