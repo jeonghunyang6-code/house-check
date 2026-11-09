@@ -990,12 +990,15 @@ function factsHtml(seq) {
   const wk = [['강남', inf[9]], ['여의도', inf[8]], ['사대문', inf[7]]].filter(x => x[1] != null);
   if (wk.length) { const mn = Math.min(...wk.map(x => x[1]));
     out.push(row('업무지구까지', wk.map(([n, m]) => m === mn ? `<b>${n} ${m}분</b>` : `${n} ${m}분`).join(' · '), '대중교통, 가까운 역 → 업무지구 역(걷는 시간 제외) · 입지 = 업무지구와의 절대거리 (📖 p.85~103)')); }
-  if (la) {
-    const pj = (D.v2_proj || []).filter(p => !['개통', '취소', '예타 탈락'].includes(p.status)).map(p => { let best = null;
-      (p.stations || '').split(',').filter(Boolean).forEach(n => (STBY[n] || []).forEach(x => { const d = distM(la, lo, x[2], x[3]); if (!best || d < best[1]) best = [n, d]; }));
-      return best && best[1] <= 1500 ? [p, best] : null; }).filter(Boolean).sort((a, b) => a[1][1] - b[1][1]);
-    out.push(row('철도 호재', pj.length ? pj.slice(0, 2).map(([p, b]) => `<span class="pill ${PST[p.status] || 'none'}">${p.status}</span> ${p.name.split(' ')[0]} ${b[0]}역 <b>${Math.round(b[1]).toLocaleString()}m</b>`).join('<br>') : '<span class="muted">1.5km 안 없음</span>',
-      '착공 뒤 들어가도 늦지 않다, 진짜 악재는 취소 (📖 p.279~280) · 역 좌표 있는 사업만'));
+  if (la) {   /* 기존 역(STBY) + 새 역(가칭, 기사 지명으로 잡은 근사 좌표). 새 역 좌표가 아예 없는 사업은 같은 시군구면 '위치 미확인'으로 따로 */
+    const all = (D.v2_proj || []).filter(p => !['개통', '취소', '예타 탈락'].includes(p.status)).map(p => { let best = null;
+      const cand = (p.stations || '').split(',').filter(Boolean).flatMap(n => (STBY[n] || []).map(x => [n, x[2], x[3], false])).concat((p.new_stations || []).map(x => [x[0], x[1], x[2], true]));
+      cand.forEach(([n, a, o, nw]) => { const d = distM(la, lo, a, o); if (!best || d < best[1]) best = [n, d, nw]; });
+      return { p, best, inReg: (p.region_codes || '').split(',').includes(rc) }; });
+    const pj = all.filter(x => x.best && x.best[1] <= 1500).sort((a, b) => a.best[1] - b.best[1]), far = all.filter(x => !x.best && x.inReg);
+    out.push(row('철도 호재', (pj.length ? pj.slice(0, 2).map(({ p, best: b }) => `<span class="pill ${PST[p.status] || 'none'}">${p.status}</span> ${p.name.split(/[ (]/)[0]} ${b[0]}역${b[2] ? '(가칭)' : ''} <b>${Math.round(b[1]).toLocaleString()}m</b>`).join('<br>') : '<span class="muted">1.5km 안 없음</span>')
+      + far.map(({ p }) => `<br><span class="pill ${PST[p.status] || 'none'}">${p.status}</span> ${p.name.split(/[ (]/)[0]} <span class="muted">${rn(rc).split(' ').pop()}를 지나지만 새 역 위치 미확인</span>`).join(''),
+      '착공 뒤 들어가도 늦지 않다, 진짜 악재는 취소 (📖 p.279~280) · 새 역(가칭)은 기사에 나온 지명으로 잡은 대략 위치'));
   }
   const e = (POI.elem || [])[(D.v2_elemz || {})[seq]];
   if (e && la) out.push(row('배정 초등학교', `<b>${sname(e[0])} ${Math.round(distM(la, lo, e[1], e[2])).toLocaleString()}m</b>${e[3] ? ` · 학생 ${e[3].toLocaleString()}명` : ''}`,
@@ -1006,9 +1009,6 @@ function factsHtml(seq) {
   const z = (D.v2_lz || {})[seq], me = cxName(seq).replace(/\s/g, ''), ip = ((z && (D.v2_ipz || {})[z]) || []).filter(x => x[0].replace(/\s/g, '') !== me);
   out.push(row('6개월 입주', ip.length ? `<b>${ip.reduce((a, x) => a + x[1], 0).toLocaleString()}세대</b> · ${ip.slice(0, 2).map(x => x[0]).join(', ')}${ip.length > 2 ? ` 외 ${ip.length - 2}곳` : ''}` : '<span class="muted">없음</span>',
     '같은 생활권 입주 예정 · 입주장엔 전세가 눌림 (📖 p.153~154, 6개월 🔧)'));
-  const nm = rn(rc), u = (D.unsold || []).find(x => x.name === nm || x.name === nm.split(' ')[0]);
-  if (u) out.push(row('미분양', `<b>${u.name} ${u.unsold.toLocaleString()}호</b>${u.u0 != null ? ` (1년 전 ${u.u0.toLocaleString()})` : ''} · 준공 후 ${(u.unsold_done || 0).toLocaleString()}`,
-    `${u.hh ? `2년 안 입주 예정 ${u.hh.toLocaleString()}세대 · ` : ''}국토부 미분양 ${u.period.slice(0, 4)}.${u.period.slice(4)}${u.name !== nm ? ' · 시 전체(구별 집계 없음)' : ''}`));
   const by = inf[15], hh = inf[16];
   if (by || hh) out.push(row('단지', `<b>${hh ? hh.toLocaleString() + '세대' : ''}${hh && by ? ' · ' : ''}${by ? YEAR - by + '년차' : ''}</b>`, 'K-apt 세대수 · 준공 연도'));
   return (out.join('') || '<p class="muted">이 단지는 입지 자료가 없습니다.</p>')
