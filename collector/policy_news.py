@@ -35,6 +35,8 @@ STALE = re.compile(r"앞서|지난해|작년|지난\s?\d+월|올해\s?\d+월|지
 SOON = re.compile(r"오늘|내일|이날|부터")
 # 아파트 실수요와 먼 토허(외국인·그린벨트·산단 개발 예정지)는 문장째 뺀다
 OFF = re.compile(r"외국인|그린벨트|자연녹지|산단|산업단지|사업지구|개발\s?예정지|개발사업|경제자유구역|국방")
+# 2026-11-09: '25억 초과 대출 금지?…국토부 "허위 사실, 수사 의뢰"' 같은 소문 해명 기사가 대출·토허·규제지역 후보 3건으로 잡힘 → 기사째 뺀다
+DENY = re.compile(r"허위|사실\s?무근|사실\s?(이\s?)?아니|사실\s?아냐|가짜\s?뉴스|지라시|루머|풍문|괴담|수사\s?의뢰")
 SPLIT = re.compile(r"(?<=[.!?])\s+|\.\.\.|…")
 MIN_PRESS = 3        # 🔧 서로 다른 언론사 수
 NEAR_KNOWN = 10      # 이미 아는 사건(EVENTS)과 같은 종류로 ±10일 안이면 '이미 있음'
@@ -114,6 +116,8 @@ def candidates(articles: list[dict], today: date, days: int = 3) -> list[Cand]:
         if not today - timedelta(days=days - 1) <= a["pub"] <= today or a["id"] in seen:
             continue
         seen.add(a["id"])
+        if DENY.search(a.get("title") or "") or DENY.search(a["text"]):
+            continue
         for k, regs in decisions(a["text"], a["pub"]).items():
             c = by.setdefault(k, Cand(k, a["pub"]))
             p = press_of(a["id"])

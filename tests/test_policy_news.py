@@ -37,6 +37,15 @@ def test_candidates_threshold_and_known():
     assert "규제지역 · 2027-03-03 · 언론사 3곳" in md and "경기 구리시" in md
 
 
+def test_rumor_denial_skipped():
+    # 2026-11-06: 소문 해명 기사(허위 사실·수사 의뢰)는 결정 문장이 있어도 후보가 아니다
+    rumor = "25억 초과 주택 대출 전면 금지?…국토부 \"허위 사실, 수사 의뢰\" " + FRESH
+    arts = [{"id": f"https://{p}/a", "pub": PUB, "text": rumor} for p in ("a.kr", "b.kr", "c.kr")]
+    assert candidates(arts, PUB) == []
+    assert candidates([{**a, "text": FRESH, "title": "대출규제 풍문에 국토부 사실 아냐"} for a in arts], PUB) == []
+    assert candidates([{**a, "text": FRESH} for a in arts], PUB)       # 해명 말이 없으면 그대로 후보
+
+
 def test_off_topic_and_non_capital():
     # 외국인·그린벨트 토허, 수도권 지역이 안 나오는 토허는 후보가 아니다
     assert decisions("포천시 전역을 외국인 토지거래허가구역으로 26일부터 지정한다고 밝혔다.", date(2025, 8, 26)) == {}
