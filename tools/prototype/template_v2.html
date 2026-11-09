@@ -1294,8 +1294,10 @@ function drawDaily() {
   }
   const drow = (x) => { const g = ref ? (x[4] / ref - 1) * 100 : null, cl = g == null ? '' : g <= -5 ? 'dn' : g >= 3 ? 'up' : 'muted';
     return `<div class="deal"${Math.abs(x[2] - mainAg) <= 1 ? '' : ' style="opacity:.45"'}><span class="muted num">${dt(d2(x[1]))}</span><span>${x[2]}㎡ · ${x[3]}층${x[5] ? ' · 직거래' : ''}${x[6] ? ` <span class="pill none">${x[6]}</span>` : ''}${g != null && g <= -5 && Math.abs(x[2] - mainAg) <= 1 ? ' <span class="pill acc">급매</span>' : ''}</span><span class="p"><span class="${cl}" style="font-size:12px;font-weight:500">${Math.abs(x[2] - mainAg) <= 1 && g != null ? sgn(g, 0) : ''}</span> ${eok(x[4])}</span></div>`; };
-  $('#dDeals').innerHTML = cdeals.slice(0, 12).map(drow).join('')
-    + (cdeals.length > 12 ? `<details class="more-f"><summary>나머지 ${cdeals.length - 12}건 보기</summary>${cdeals.slice(12).map(drow).join('')}</details>` : '')
+  // 2026-11-09 사용자: 59㎡ 를 골랐으면 목록도 59㎡ 만(다른 면적 흐리게 보여 주던 것 뺌)
+  const clist = cdeals.filter(x => Math.abs(x[2] - mainAg) <= 1);
+  $('#dDeals').innerHTML = clist.slice(0, 12).map(drow).join('')
+    + (clist.length > 12 ? `<details class="more-f"><summary>나머지 ${clist.length - 12}건 보기</summary>${clist.slice(12).map(drow).join('')}</details>` : '')
     || `<p class="muted">최근 ${SPN} 거래가 없습니다.</p>`;
   drawAsks(); drawMap(seq); $('#dDev').innerHTML = devHtml(seq);
 }
