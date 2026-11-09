@@ -1347,8 +1347,8 @@ function parseLines(text) {   // 북마크(tools/pc/naver_ask_bookmarklet.js)와
   const L = text.split('\n').map(x => x.replace(/\s+/g, ' ').trim()).filter(Boolean), items = [];
   const TY = /^(매매|전세|월세)$/, PR = /^(매매|전세|월세)\s*([0-9][0-9억만,\s/]*?)\s*(?:~.*|\s*(?![억만])[가-힣]{1,4})?$/, NUM = /^[0-9][0-9억만,\s/]*(?:~.*)?$/;
   // 전용면적: 새 화면 '아파트116B1㎡ (전용84.62B1)'(2026-11-03, 'B1㎡' 의 1 을 면적으로 읽던 것) > '공급/전용㎡' 작은 값 > 'N㎡' > 주택형 '84A'. '평' 단위 화면이면 ㎡ 로
-  const area = (w) => { let v = null; const e = w.match(/전용\s*(?:면적)?\s*(\d+(?:\.\d+)?)/); if (e) v = +e[1];
-    if (v == null) { const p = w.match(/(\d+(?:\.\d+)?)[A-Z0-9]*\s*\/\s*(\d+(?:\.\d+)?)[A-Z0-9]*\s*(?:㎡|m²|m2)/); if (p) v = Math.min(+p[1], +p[2]); }
+  const area = (w) => { let v = null; const e = w.match(/(?:^|[^/])전용\s*(?:면적)?\s*(\d+(?:\.\d+)?)/); if (e) v = +e[1];
+    if (v == null) { const p = w.match(/(?:^|[^0-9.\-])(\d+(?:\.\d+)?)[A-Z]*(?:-\d+)?\s*\/\s*(\d+(?:\.\d+)?)[A-Z0-9]*\s*(?:㎡|m²|m2)/); if (p) v = Math.min(+p[1], +p[2]); }
     if (v == null) { const o = w.match(/(?:^|[^0-9A-Z.])(\d+(?:\.\d+)?)\s*(?:㎡|m²|m2)/); if (o) v = +o[1]; }
     if (v == null) { const t = w.match(/(?:^|[\s|·,])(\d{2,3})[A-Z]{1,2}(?=$|[\s|·,])/); if (t) v = +t[1]; }
     return v != null && /평/.test(w) && !/㎡|m²|m2/.test(w) ? Math.round(v * 330.58) / 100 : v; };
