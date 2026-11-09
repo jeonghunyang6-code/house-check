@@ -1413,8 +1413,10 @@ function drawAsks() {
   const span = store.get('v2-askspan', '8w'), MO = span === '6m', NW = MO ? 6 : 8;
   $$('#askSpan button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === span));
   const monday = (d) => { const t = new Date(d + 'T00:00:00'); t.setDate(t.getDate() - (t.getDay() + 6) % 7); return t; };
-  const now0 = new Date(D.asof + 'T00:00:00'), month = (d) => { const t = new Date(d + 'T00:00:00'); return new Date(t.getFullYear(), t.getMonth(), 1); };
-  const w0 = monday(D.asof), weeks = [...Array(NW)].map((_, i) => MO ? new Date(now0.getFullYear(), now0.getMonth() - (NW - 1 - i), 1).getTime()
+  // 칸의 끝 = 화면 기준일과 마지막 저장일 중 늦은 날(2026-11-09: 아침 화면 갱신이 실패해 기준일이 일요일에 멈추자 월요일 저장이 그래프에 안 보임)
+  const base = last && last > D.asof ? last : D.asof;
+  const now0 = new Date(base + 'T00:00:00'), month = (d) => { const t = new Date(d + 'T00:00:00'); return new Date(t.getFullYear(), t.getMonth(), 1); };
+  const w0 = monday(base), weeks = [...Array(NW)].map((_, i) => MO ? new Date(now0.getFullYear(), now0.getMonth() - (NW - 1 - i), 1).getTime()
     : (t => { t.setDate(t.getDate() - 7 * (NW - 1 - i)); return t.getTime(); })(new Date(w0)));   // 칸마다 시작 시각(주 = 월요일, 달 = 1일)
   const byW = {}; dates.forEach(d => { const v = snap(d).filter(x => x.t === '매매').map(x => x.p).sort((a, b) => a - b); if (v.length) byW[(MO ? month(d) : monday(d)).getTime()] = [d, v]; });
   const cols = weeks.map(w => byW[w] ? { d: byW[w][0], v: byW[w][1], m: (byW[w][1][(byW[w][1].length - 1) >> 1] + byW[w][1][byW[w][1].length >> 1]) / 2 } : null);
