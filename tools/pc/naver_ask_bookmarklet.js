@@ -15,9 +15,10 @@
   const q = new URLSearchParams(location.search), href = location.pathname + location.search;
   const no = (location.pathname.match(/complexes\/(\d+)/) || [])[1] || q.get('complexNumber') || q.get('complexNo') || q.get('complex')
     || (href.match(/complex(?:es|No|Number)?[=/](\d+)/i) || [])[1] || null;
-  /* 전용면적: 새 화면 '아파트116B1㎡ (전용84.62B1)'(2026-11-03, 'B1㎡' 의 1 을 면적으로 읽던 것) > '공급/전용㎡' 작은 값 > 'N㎡' > 주택형 '84A'. '평' 단위 화면이면 ㎡ 로 */
-  const area = (w) => { let v = null; const e = w.match(/전용\s*(?:면적)?\s*(\d+(?:\.\d+)?)/); if (e) v = +e[1];
-    if (v == null) { const p = w.match(/(\d+(?:\.\d+)?)[A-Z0-9]*\s*\/\s*(\d+(?:\.\d+)?)[A-Z0-9]*\s*(?:㎡|m²|m2)/); if (p) v = Math.min(+p[1], +p[2]); }
+  /* 2026-11-09 옛 화면 new.land '아파트83A-2/59m²'(래미안솔베뉴 84건 중 51건) 의 '-2' 를 공급면적으로 읽던 것 → 주택형 뒤 '-숫자' 는 건너뜀.
+     전용면적: 새 화면 '아파트116B1㎡ (전용84.62B1)'(2026-11-03, 'B1㎡' 의 1 을 면적으로 읽던 것) > '공급/전용㎡' 작은 값 > 'N㎡' > 주택형 '84A'. '평' 단위 화면이면 ㎡ 로 */
+  const area = (w) => { let v = null; const e = w.match(/(?:^|[^/])전용\s*(?:면적)?\s*(\d+(?:\.\d+)?)/); if (e) v = +e[1];
+    if (v == null) { const p = w.match(/(?:^|[^0-9.\-])(\d+(?:\.\d+)?)[A-Z]*(?:-\d+)?\s*\/\s*(\d+(?:\.\d+)?)[A-Z0-9]*\s*(?:㎡|m²|m2)/); if (p) v = Math.min(+p[1], +p[2]); }
     if (v == null) { const o = w.match(/(?:^|[^0-9A-Z.])(\d+(?:\.\d+)?)\s*(?:㎡|m²|m2)/); if (o) v = +o[1]; }
     if (v == null) { const t = w.match(/(?:^|[\s|·,])(\d{2,3})[A-Z]{1,2}(?=$|[\s|·,])/); if (t) v = +t[1]; }
     return v != null && /평/.test(w) && !/㎡|m²|m2/.test(w) ? Math.round(v * 330.58) / 100 : v; };
