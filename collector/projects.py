@@ -28,6 +28,13 @@ class Project:
     # 새로 생기는 역(가칭): (이름, 위도, 경도). 역 위치가 공개되지 않아 기사에 나온 지명(교차로·학교·광장)의 좌표로 대략 잡음(2026-10-26, 카카오 장소 검색).
     # 지도 표시용. H4 역세권(700m) 계산에는 쓰지 않는다
     new_stations: tuple[tuple[str, float, float], ...] = ()
+    # 교차 확인(collector/provenance.py, 2026-11-10~): 다른 출처, 확인한 날. 그 전 사업은 2026-10-18 웹 검색 확인(출처 1곳)
+    more: tuple[str, ...] = ()
+    checked: date = date(2026, 10, 18)
+
+    @property
+    def sources(self) -> tuple[str, ...]:
+        return (self.source, *self.more)
 
 
 PROJECTS: tuple[Project, ...] = (
@@ -66,7 +73,8 @@ PROJECTS: tuple[Project, ...] = (
     # 2026-11-09 추가(사용자 질문: 골든센트로 9호선 연장): 고덕강일 → 신강일(943, 강동) → 신미사(944, 하남) → 왕숙·진접2, 정거장 8곳(서울 1·하남 1·남양주 6).
     # 944 위치 = '미사강변 4·7·8단지 사이 미사강변대로 교차로'(기사)인데 좌표를 잡을 도구가 없어 new_stations 비움(구산성지 쪽 주민이 위치 변경 요구 중)
     Project("강동하남남양주선(9호선 고덕강일~미사~진접2)", "확정", date(2024, 12, 24), "기본계획 승인. 2026 착공·2031 개통 목표, 2026-05 하남 미사 구간 유찰로 입찰 조건 완화(시공사 선정 중)",
-            ("강남", "여의도"), ("11740", "41450", "41360"), "https://www.sijung.co.kr/news/articleView.html?idxno=405579"),
+            ("강남", "여의도"), ("11740", "41450", "41360"), "https://www.sijung.co.kr/news/articleView.html?idxno=405579",
+            more=("https://www.seouland.com/arti/society/society_general/19684.html", "https://www.munhwa.com/article/11474788"), checked=date(2026, 11, 9)),
     Project("서부선 새절~서울대입구", "계획", None, "2026-07 민자 우선협상대상자 지위 취소, 재공고 중(안 되면 재정 전환 검토)", ("여의도",),
             ("11380", "11410", "11440", "11560", "11590", "11620"), "https://www.fnnews.com/news/202610100050441724",
             stations=('새절', '신촌', '여의도', '노량진', '장승배기', '서울대입구')),

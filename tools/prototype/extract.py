@@ -338,6 +338,9 @@ out['v2_e6t'] = [[r['apt_seq'], r['target_seq'], float(r['ratio_now']), float(r[
 out['v2_drive'] = {}
 for r in select(db, "SELECT apt_seq, dest, minutes FROM complex_drive WHERE minutes IS NOT NULL"):
     out['v2_drive'].setdefault(r['apt_seq'], {})[r['dest']] = float(r['minutes'])
+# 신도시 일정 교차 확인(collector/newtowns.py, 2026-11-10): 청약홈 입주자모집공고 입주 예정 월 [첫, 마지막, 공고 수, 세대 합]
+from collector.newtowns import presale_sql as _nt_sql, presale_rows as _nt_rows
+out['v2_newtown_ps'] = _nt_rows(select(db, _nt_sql())) if _nt_sql() else {}
 out['v2_proj'] = select(db, "SELECT name, status, status_date::text, outlook, cbd, region_codes, stations, new_stations FROM transit_projects")
 out['seqs'] = SEQS
 out['regions'] = {k: v for k, v in REGIONS.items()}
