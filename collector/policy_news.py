@@ -37,6 +37,9 @@ SOON = re.compile(r"오늘|내일|이날|부터")
 OFF = re.compile(r"외국인|그린벨트|자연녹지|산단|산업단지|사업지구|개발\s?예정지|개발사업|경제자유구역|국방")
 # 2026-11-09: '25억 초과 대출 금지?…국토부 "허위 사실, 수사 의뢰"' 같은 소문 해명 기사가 대출·토허·규제지역 후보 3건으로 잡힘 → 기사째 뺀다
 DENY = re.compile(r"허위|사실\s?무근|사실\s?(이\s?)?아니|사실\s?아냐|가짜\s?뉴스|지라시|루머|풍문|괴담|수사\s?의뢰")
+# 2026-11-09: 신도시 예정지 주변 '땅' 허가구역(11-03 경기 89% 해제)이 토허 후보로 잡힘 → 토허 종류에서만 뺀다(공급 신규택지 발표는 그대로).
+# '택지' 하나로는 안 거른다: 목동 택지개발지구처럼 진짜 아파트 토허 이름에도 들어감
+TOH_OFF = re.compile(r"공공주택\s?지구|택지\s?(?:예정지|주변|인근)")
 SPLIT = re.compile(r"(?<=[.!?])\s+|\.\.\.|…")
 MIN_PRESS = 3        # 🔧 서로 다른 언론사 수
 NEAR_KNOWN = 10      # 이미 아는 사건(EVENTS)과 같은 종류로 ±10일 안이면 '이미 있음'
@@ -84,6 +87,8 @@ def decisions(text: str, pub: date) -> dict[str, set[str]]:
         if any(int(m) not in months for m in re.findall(r"(\d{1,2})월\s?\d{1,2}일", s)):   # '7월 1일부터 지정했다'(10월 기사) = 지난 일
             continue
         for k, pat in KINDS.items():
+            if k == "토허" and TOH_OFF.search(s):
+                continue
             if re.search(pat, s):
                 out.setdefault(k, set()).update(regions(s))
     return out
