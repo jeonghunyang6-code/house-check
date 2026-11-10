@@ -134,8 +134,6 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
 .cmp th { font-weight: 500; color: var(--ink-3); font-size: 11.5px; text-align: center; padding: 4px 2px; }
 .cmp td { padding: 8px 2px; border-top: 1px solid var(--line); text-align: center; }
 .cmp td:first-child, .cmp th:first-child { text-align: left; }
-.cmp.sbs td:first-child { color: var(--ink-3); font-size: 12px; white-space: nowrap; }
-.cmp.sbs td { vertical-align: top; }
 .cmp .sc { font-weight: 700; }
 .tg { background: var(--sunk); border-radius: 14px; padding: 12px; display: grid; gap: 6px; font-size: 13.5px; }
 .tg .bubble { background: var(--surface); border-radius: 12px 12px 12px 4px; padding: 10px 12px; box-shadow: 0 1px 1px rgba(0,0,0,.06); white-space: pre-line; line-height: 1.5; }
@@ -325,7 +323,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
         </div></details>
         <div class="list" id="cList"></div>
         <button type="button" class="more" id="cMore">20곳 더 보기</button>
-        <p class="src">기준 시세가 예산의 80~100%인 단지. ♡를 누르면 관심 단지에 담깁니다. 세대수·출퇴근 시간을 모르는 단지는 그 조건을 고르면 빠집니다.</p>
+        <p class="src">기준 시세가 예산의 80~100%인 단지. ♡를 누르면 관심 단지에 담깁니다.<br>세대수·출퇴근 시간을 모르는 단지는 그 조건을 고르면 빠집니다.</p>
       </div>
     </div>
   </section>
@@ -340,11 +338,6 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
         <div class="dotlegend"><span><i style="background:var(--good)"></i>충족</span><span><i style="background:var(--warn)"></i>미충족</span><span><i style="background:var(--line)"></i>자료 없음</span></div>
         <div style="overflow-x:auto"><table class="cmp" id="cmpT"></table></div>
         <p class="src">전세가율: 가격대별 정상 범위 안이고 80% 이하. 거래: 월 회전율 0.5% 이상. 하락기: 2022~23 하락 구간 거래가 같은 구 가운데 이상.</p>
-      </div>
-      <div class="card">
-        <h2>나란히 보기 <small>최대 3곳</small></h2>
-        <div class="row" id="sbsPick" style="gap:6px;flex-wrap:wrap;margin-bottom:8px"></div>
-        <div style="overflow-x:auto"><table class="cmp sbs" id="sbsT"></table></div>
       </div>
       <div class="card">
         <h2>임장 기록 <span class="pill ex">시안: 이 기기에만 저장</span></h2>
@@ -402,7 +395,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
       </div>
       <div class="card"><h2>입지 사실표 <small>점수 없이 숫자 그대로</small></h2><div id="dFacts"></div></div>
       <div class="card"><h2>주변 지도 <small id="dMapSub">반경 1.5km</small><button type="button" class="icon-btn" id="dMapType" hidden style="margin-left:auto;font-size:12.5px">위성</button></h2><div class="src" id="dNear" hidden style="margin:0 0 8px;line-height:1.6"></div><div class="nmap" id="dNmap" hidden></div><svg class="lmap" id="dMap" viewBox="-1600 -1600 3200 3200" role="img" aria-label="단지 주변 역·병원·마트·중학교"></svg><div class="legend" id="dMapLg"></div>
-        <div class="legend" id="dMapZ" hidden style="margin-top:6px">더 보기 <label class="chk"><input type="checkbox" data-z="after"> 정비 조합설립 뒤</label><label class="chk"><input type="checkbox" data-z="before"> 정비 그 전</label><label class="chk"><input type="checkbox" data-z="proj"> 개통 예정 역</label></div></div>
+        <div class="legend" id="dMapZ" hidden style="margin-top:6px"><label class="chk"><input type="checkbox" data-z="after"> 정비 조합설립 뒤</label><label class="chk"><input type="checkbox" data-z="before"> 정비 그 전</label><label class="chk"><input type="checkbox" data-z="proj"> 개통 예정 역</label></div></div>
       <div class="card"><h2>개발 호재 · 주변 정비사업</h2><div id="dDev"></div></div>
     </div>
   </section>
@@ -446,7 +439,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
         <div class="kpis" id="fundKpis"></div>
         <div class="stack" id="fundStack" aria-hidden="true"></div>
         <div class="legend" id="fundLegend"></div>
-        <p class="src">쓸 수 있는 돈 = 판 돈 − 매도 중개보수 − 남은 대출 + 현금. 1주택 갈아타기(양도세 비과세 가정), 목표 집 부대비용 포함. 대출 가능 여부는 찾기 탭 규칙과 은행 확인.</p>
+        <p class="src">쓸 수 있는 돈 = 판 돈 − 매도 중개보수 − 남은 대출 + 현금.<br>1주택 갈아타기(양도세 비과세 가정), 목표 집 부대비용 포함.</p>
       </div>
       <div class="card">
         <h2>재개발로 분리하면 <small>지금 집에 살면서</small></h2>
@@ -459,7 +452,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
           <label for="r_new" style="grid-column:1/-1">입주 뒤 예상 새 아파트 시세 (만원)<input id="r_new" inputmode="numeric" value="150000"></label>
         </form>
         <div class="kpis" id="rdKpis"></div>
-        <p class="src">지금 들어갈 현금 = 매수가 − 보증금 + 취득세 + 중개·법무. 취득세 8.4% = 조정지역 2주택 중과(지방교육세 포함) 가정 — 물건 종류(주택·입주권)·지역에 따라 다르니 세무 확인. 기다리는 해 = 서울 재개발 단계 사이 중앙값 합 + 착공 뒤 3년. 이주비 대출·이자는 넣지 않음.</p>
+        <p class="src">지금 들어갈 현금 = 매수가 − 보증금 + 취득세 + 중개·법무.<br>취득세 8.4% = 물건 종류(주택·입주권)·지역에 따라 다르니 세무 확인.<br>기다리는 해 = 서울 재개발 단계 사이 중앙값 합 + 착공 뒤 3년.<br>이주비 대출·이자는 넣지 않음.</p>
       </div>
     </div>
   </section>
@@ -606,7 +599,7 @@ function labelPt(k, g) {
   const short = (k) => names[k].replace(/^(서울|경기|인천) /, '').replace(/시 (.+구)$/, ' $1');
   const tiny = (k) => short(k).replace(/(.{2,})[구시]$/, '$1');   // 관심권 지도 글씨: '강남' '성남 분당' '하남'(구·시 뺌)
   $('#mapScale').innerHTML = '<span>-0.3%</span>' + BINS.map(b => `<span class="sw" style="background:var(${b[2]})"></span>`).join('') + '<span>+0.3%</span><span style="flex-basis:100%">파랑 하락 · 회색 보합(±0.02%) · 빨강 상승</span>';
-  $('#wkSrc').textContent = `한국부동산원 R-ONE 주간 아파트 가격지수, ${dt(W.prev_date)} 주 대비. 빗금은 주간 조사 대상 아님. 지역을 누르면 1년 변화도 보입니다. 관심권 = 서울 25개 구 + 경기 15곳(분당·수정·중원·과천·광명·하남·의왕·안양 동안·수원 영통·장안·팔달·용인 수지·기흥·화성 동탄·구리).`;
+  $('#wkSrc').innerHTML = '한국부동산원 R-ONE 주간 아파트 가격지수<br>관심권 = 서울 25개 구 + 경기 15곳';   // 2026-11-10 사용자: 두 줄로
   function draw() {
     const keys = Object.keys(G).filter(k => st.scope === 'sudo' || (st.scope === 'mine' ? MINE.has(k) : k.startsWith('11')));
     const vb = VB[st.scope], u = vb[2] / 346;   // u = 서울 보기 대비 배율(글씨·선 굵기)
@@ -881,8 +874,8 @@ const budget = { price: 0 };
     const tot = seed + mort + other, parts = [['종잣돈', seed, 'var(--c1)'], ['주담대', mort, 'var(--c2)'], ['그 밖 대출', other, 'var(--c3)']].filter(x => x[1] > 0);
     $('#bStack').innerHTML = parts.map(([n, v, c]) => `<span style="width:${v / tot * 100}%;background:${c}">${v / tot > 0.16 ? n + ' ' + man(v) : ''}</span>`).join('');
     $('#bLegend').innerHTML = parts.map(([n, v, c]) => `<span><i style="background:${c};height:8px"></i>${n} ${man(v)}</span>`).join('');
-    $('#bRule').textContent = `${RULE.name}(${RULE.from}~) 기준: 주담대 상한 15억 이하 6억·25억 이하 4억·초과 2억. LTV 규제지역 40%·그 밖 70%, 생애최초 70%(6개월 안 전입). 은행 DSR(그 밖 대출 합산)과 생애최초 취득세 감면은 계산하지 않음 → 은행·세무 확인.`
-      + (p > 140000 && p <= 160000 ? ' 15억 경계 근처라 은행 시세(KB) 기준 구간 확인 필요.' : '');
+    $('#bRule').innerHTML = `${RULE.name}(${RULE.from}~) 기준: 주담대 상한 15억 이하 6억·25억 이하 4억·초과 2억.<br>LTV 규제지역 40%·그 밖 70%, 생애최초 70%(6개월 안 전입).<br>은행 DSR(그 밖 대출 합산)과 생애최초 취득세 감면은 계산하지 않음 → 은행·세무 확인.`
+      + (p > 140000 && p <= 160000 ? '<br>15억 경계 근처라 은행 시세(KB) 기준 구간 확인 필요.' : '');
     drawCand(); myDeals();
   }
   ['input', 'change'].forEach(ev => $('#budgetForm').addEventListener(ev, calc)); $('#budgetForm').addEventListener('submit', e => e.preventDefault());
@@ -986,10 +979,10 @@ function redevNote(z) {
 function factsHtml(seq) {
   const inf = infoOf(seq), la = inf[3], lo = inf[4], rc = inf[1] || (main(seq) || {}).rc, row = (k, v, o) => `<div class="fact"><span class="k">${k}</span><span class="v">${v}</span>${o ? `<span class="o">${o}</span>` : ''}</div>`;
   const out = [];
-  if (inf[5] && inf[6] != null) out.push(row('가까운 역', `<b>${inf[5]}역 ${inf[6].toLocaleString()}m</b> <span class="pill ${inf[6] <= 700 ? 'good' : 'none'}">${inf[6] <= 700 ? '역세권' : '700m 밖'}</span>`, '단지 중심에서 직선거리 · 역세권 = 평지 700m·도보 10분 (📖 p.220~228)'));
+  if (inf[5] && inf[6] != null) out.push(row('가까운 역', `<b>${inf[5]}역 ${inf[6].toLocaleString()}m</b> <span class="pill ${inf[6] <= 700 ? 'good' : 'none'}">${inf[6] <= 700 ? '역세권' : '700m 밖'}</span>`, '단지 중심에서 직선거리 · 역세권 = 평지 700m·도보 10분'));   // 📖 p.220~228 (2026-11-10 사용자: 화면에서 쪽수는 빼되 원칙은 그대로)
   const wk = [['강남', inf[9]], ['여의도', inf[8]], ['사대문', inf[7]]].filter(x => x[1] != null);
   if (wk.length) { const mn = Math.min(...wk.map(x => x[1]));
-    out.push(row('업무지구까지', wk.map(([n, m]) => m === mn ? `<b>${n} ${m}분</b>` : `${n} ${m}분`).join(' · '), '대중교통, 가까운 역 → 업무지구 역(걷는 시간 제외) · 입지 = 업무지구와의 절대거리 (📖 p.85~103)')); }
+    out.push(row('업무지구까지', wk.map(([n, m]) => m === mn ? `<b>${n} ${m}분</b>` : `${n} ${m}분`).join(' · '))); }   // 대중교통, 가까운 역 → 업무지구 역(걷는 시간 제외). 입지 = 업무지구와의 절대거리 📖 p.85~103
   if (la) {   /* 기존 역(STBY) + 새 역(가칭, 기사 지명으로 잡은 근사 좌표). 새 역 좌표가 아예 없는 사업은 같은 시군구면 '위치 미확인'으로 따로 */
     const all = (D.v2_proj || []).filter(p => !['개통', '취소', '예타 탈락'].includes(p.status)).map(p => { let best = null;
       const cand = (p.stations || '').split(',').filter(Boolean).flatMap(n => (STBY[n] || []).map(x => [n, x[2], x[3], false])).concat((p.new_stations || []).map(x => [x[0], x[1], x[2], true]));
@@ -997,29 +990,27 @@ function factsHtml(seq) {
       return { p, best, inReg: (p.region_codes || '').split(',').includes(rc) }; });
     const pj = all.filter(x => x.best && x.best[1] <= 1500).sort((a, b) => a.best[1] - b.best[1]), far = all.filter(x => !x.best && x.inReg);
     out.push(row('철도 호재', (pj.length ? pj.slice(0, 2).map(({ p, best: b }) => `<span class="pill ${PST[p.status] || 'none'}">${p.status}</span> ${p.name.split(/[ (]/)[0]} ${b[0]}역${b[2] ? '(가칭)' : ''} <b>${Math.round(b[1]).toLocaleString()}m</b>`).join('<br>') : '<span class="muted">1.5km 안 없음</span>')
-      + far.map(({ p }) => `<br><span class="pill ${PST[p.status] || 'none'}">${p.status}</span> ${p.name.split(/[ (]/)[0]} <span class="muted">${rn(rc).split(' ').pop()}를 지나지만 새 역 위치 미확인</span>`).join(''),
-      '착공 뒤 들어가도 늦지 않다, 진짜 악재는 취소 (📖 p.279~280) · 새 역(가칭)은 기사에 나온 지명으로 잡은 대략 위치'));
+      + far.map(({ p }) => `<br><span class="pill ${PST[p.status] || 'none'}">${p.status}</span> ${p.name.split(/[ (]/)[0]}`).join(''),   // 같은 시군구, 새 역 위치 미확인
+      '착공 뒤 들어가도 늦지 않다, 진짜 악재는 취소 · 새 역(가칭)은 기사에 나온 지명으로 잡은 대략 위치'));   // 📖 p.279~280
   }
   const e = (POI.elem || [])[(D.v2_elemz || {})[seq]];
   if (e && la) out.push(row('배정 초등학교', `<b>${sname(e[0])} ${Math.round(distM(la, lo, e[1], e[2])).toLocaleString()}m</b>${e[3] ? ` · 학생 ${e[3].toLocaleString()}명` : ''}`,
-    `${e[3] ? `1년 전입 ${e[4]} · 전출 ${e[5]} · ` : ''}학교알리미 · 학령인구가 줄면 최상위 학군만 견고 (📖 p.89~95)`));
+    e[3] ? `1년 전입 ${e[4]} · 전출 ${e[5]}` : ''));   // 학교알리미. 학령인구가 줄면 최상위 학군만 견고 📖 p.89~95
   const m = (POI.mid || [])[(D.v2_midz || {})[seq]];
   if (m && la) out.push(row('가까운 중학교', `<b>${sname(m[0])} ${Math.round(distM(la, lo, m[1], m[2])).toLocaleString()}m</b>${m[3] ? ` · 학생 ${m[3].toLocaleString()}명` : ''}`,
-    `${m[3] ? `1년 전입 ${m[4]} · 전출 ${m[5]} · ` : ''}${inf[14] ? inf[14] + ' 추첨 배정이라 \'가까운\'' : '추첨 배정이라 \'가까운\''}`));
+    m[3] ? `1년 전입 ${m[4]} · 전출 ${m[5]}` : ''));   // 학교군 안 추첨 배정이라 '가까운'
   const z = (D.v2_lz || {})[seq], me = cxName(seq).replace(/\s/g, ''), ip = ((z && (D.v2_ipz || {})[z]) || []).filter(x => x[0].replace(/\s/g, '') !== me);
-  out.push(row('6개월 입주', ip.length ? `<b>${ip.reduce((a, x) => a + x[1], 0).toLocaleString()}세대</b> · ${ip.slice(0, 2).map(x => x[0]).join(', ')}${ip.length > 2 ? ` 외 ${ip.length - 2}곳` : ''}` : '<span class="muted">없음</span>',
-    '같은 생활권 입주 예정 · 입주장엔 전세가 눌림 (📖 p.153~154, 6개월 🔧)'));
+  out.push(row('6개월 입주', ip.length ? `<b>${ip.reduce((a, x) => a + x[1], 0).toLocaleString()}세대</b> · ${ip.slice(0, 2).map(x => x[0]).join(', ')}${ip.length > 2 ? ` 외 ${ip.length - 2}곳` : ''}` : '<span class="muted">없음</span>'));   // 같은 생활권 입주 예정. 입주장엔 전세가 눌림 📖 p.153~154, 6개월 🔧
   // 같은 시군구 신도시·신규택지(D7 추가 공급 토지 📖 p.218~219). 공급 효과는 입주 때(📖 p.54~56)라 입주·착공 목표를 같이
   const NTS = { '입주': 'acc', '착공': 'good', '지구지정': 'warn', '발표': 'none' }, nt = (D.v2_newtown || []).filter(t => t[1].includes(rc));
   // 일정은 청약홈 입주자모집공고 입주 예정 월(v2_newtown_ps, 2026-11-10 교차 확인: 기사 일정이 틀린 곳이 있음). 공고가 없으면 기사 일정
   const NPS = D.v2_newtown_ps || {}, ym = (v) => v.slice(0, 4) + '.' + v.slice(4);
   const ntWhen = (t) => { const q = NPS[t[0]]; return q ? `첫 입주 <b>${ym(q[0])}</b>${q[1] !== q[0] ? `~${ym(q[1])}` : ''} · 분양 공고 ${q[2]}건 ${q[3].toLocaleString()}세대` : t[4]; };
-  if (rc) out.push(row('신도시·택지', nt.length ? nt.map(t => `<span class="pill ${NTS[t[3]] || 'none'}">${t[3]}</span> ${t[0]} <b>${t[2]}호</b> <span class="muted" style="font-size:11px">${t[6] ? t[6] + ' 발표' : ''}</span><br><span class="muted" style="font-size:12px">${t[5]} · ${ntWhen(t)}</span>`).join('<br>') : `<span class="muted">${rn(rc).split(' ').pop()}에 없음</span>`,
-    '같은 시군구(지구 위치가 없어 거리는 못 잼) · 입주 = 청약홈 입주자모집공고, 공고 전이면 기사 일정 · 추가 공급될 땅 (📖 p.218~219) · 공급 효과는 입주 때 (📖 p.54~56)'));
+  if (rc) out.push(row('신도시·택지', nt.length ? nt.map(t => `<span class="pill ${NTS[t[3]] || 'none'}">${t[3]}</span> ${t[0]} <b>${t[2]}호</b> <span class="muted" style="font-size:11px">${t[6] ? t[6] + ' 발표' : ''}</span><br><span class="muted" style="font-size:12px">${t[5]} · ${ntWhen(t)}</span>`).join('<br>') : `<span class="muted">${rn(rc).split(' ').pop()}에 없음</span>`));   // 같은 시군구(지구 좌표 없음). 입주 = 청약홈 공고, 공고 전이면 기사 일정
   const by = inf[15], hh = inf[16];
   if (by || hh) out.push(row('단지', `<b>${hh ? hh.toLocaleString() + '세대' : ''}${hh && by ? ' · ' : ''}${by ? YEAR - by + '년차' : ''}</b>`, 'K-apt 세대수 · 준공 연도'));
-  return (out.join('') || '<p class="muted">이 단지는 입지 자료가 없습니다.</p>')
-    + '<p class="src">점수·가중치·순위를 매기지 않습니다. 실거래가가 역·학군·인프라를 다 반영한 최종 점수라(📖 p.356) 이 표는 "왜 이 가격인가"를 보는 설명용입니다. 학원가·특목고 진학률·공원은 아직 화면 자료에 없습니다.</p>';
+  // 점수·가중치·순위를 매기지 않는다(M3 📖 p.356: 실거래가가 최종 점수). 화면 문구는 2026-11-10 사용자 요청으로 뺐지만 원칙은 그대로
+  return out.join('') || '<p class="muted">이 단지는 입지 자료가 없습니다.</p>';
 }
 function devHtml(seq) {
   const inf = infoOf(seq), rc = inf[1] || (main(seq) || {}).rc, umd = inf[2] || (main(seq) || {}).umd, la = inf[3], lo = inf[4];
@@ -1027,18 +1018,22 @@ function devHtml(seq) {
     const sts = (p.stations || '').split(',').filter(Boolean);
     let best = null;
     if (la) sts.forEach(n => (STBY[n] || []).forEach(s => { const d = distM(la, lo, s[2], s[3]); if (!best || d < best[1]) best = [n, d]; }));
+    // 2026-11-10: 입지 사실표와 같게 새 역(가칭, 기사 지명 근사 좌표)도 거리 계산에 넣음(9호선 4단계 고덕강일1지구역 등)
+    if (la) (p.new_stations || []).forEach(x => { const d = distM(la, lo, x[1], x[2]); if (!best || d < best[1]) best = [x[0], d, true]; });
     const inReg = (p.region_codes || '').split(',').includes(rc);
     return { p, best, inReg };
   });
   // 역 좌표가 있으면 반경 1.5km 안만. 새 역 좌표가 없는 사업(위례신사선 등)은 같은 시군구여도 거리를 몰라 따로 흐리게
-  const far = near.filter(x => !x.best && x.inReg).map(x => x.p.name);
+  const far = near.filter(x => !x.best && x.inReg).map(x => x.p);
   near = near.filter(x => x.best && x.best[1] <= 1500).sort((a, b) => a.best[1] - b.best[1]);
   const zones = (D.v2_redev || []).filter(z => z.rc === rc);
   const sameDong = zones.filter(z => z.umd === umd), byStage = {};
   zones.forEach(z => { byStage[z.stage] = (byStage[z.stage] || 0) + 1; });
   return `<p style="font-weight:700;font-size:13.5px">교통 호재</p>` + (near.length ? near.map(({ p, best }) => `<div class="proj"><span class="pill ${PST[p.status] || 'none'}">${p.status}</span><span><b>${p.name}</b>${p.cbd ? ` → ${p.cbd.replace(/,/g, '·')}` : ''}</span>
-      <span class="o">${best[0]}역 ${Math.round(best[1]).toLocaleString()}m · ${p.status_date ? dt(p.status_date) + ' · ' : ''}${p.outlook || ''}</span></div>`).join('') : '<p class="muted">반경 1.5km 안에 역이 생기거나 지나는 철도 사업이 없습니다.</p>')
-    + (far.length ? `<p class="muted" style="font-size:12.5px">같은 시군구지만 새 역 위치가 없어 거리를 확인하지 못한 사업: ${far.join(', ')}</p>` : '')
+      <span class="o">${best[0]}역${best[2] ? '(가칭)' : ''} ${Math.round(best[1]).toLocaleString()}m · ${p.status_date ? dt(p.status_date) + ' · ' : ''}${p.outlook || ''}</span></div>`).join('') : '<p class="muted">반경 1.5km 안에 역이 생기거나 지나는 철도 사업이 없습니다.</p>')
+    // 같은 시군구인데 새 역 좌표가 없는 사업도 단계·전망을 같이(2026-11-10 사용자: 사실표엔 '확정'이 있는데 여기는 왜 없나)
+    + far.map(p => `<div class="proj"><span class="pill ${PST[p.status] || 'none'}">${p.status}</span><span><b>${p.name}</b>${p.cbd ? ` → ${p.cbd.replace(/,/g, '·')}` : ''}</span>
+      <span class="o">새 역 위치 미확인 · ${p.status_date ? dt(p.status_date) + ' · ' : ''}${p.outlook || ''}</span></div>`).join('')
     + `<p style="font-weight:700;font-size:13.5px;margin-top:10px">주변 정비사업 <span class="muted" style="font-weight:400">${rn(rc)} ${zones.length}곳</span></p>`
     + (zones.length ? `<div class="row">${Object.entries(byStage).sort((a, b) => b[1] - a[1]).map(([k, n]) => `<span class="pill none">${k} ${n}</span>`).join('')}</div>` : '')
     + (sameDong.length ? sameDong.slice(0, 6).map(z => `<div class="proj"><span class="pill ${z.stage_no >= 3 ? 'acc' : 'warn'}">${z.stage}</span><span>${z.zone_nm} <span class="muted">${z.biz_type || ''}</span></span><span class="o">${redevNote(z)}</span></div>`).join('')
@@ -1195,31 +1190,6 @@ function drawWatch() {
   // 임장 기록 단지 목록
   const vs = $('#v_cx'), cur = vs.value; vs.innerHTML = seqs.map(s => `<option value="${s}">${cxName(s)}</option>`).join(''); if (seqs.includes(cur)) vs.value = cur;
 }
-/* 나란히 보기(2026-10-27 사용자 요청): 관심 단지 최대 3곳을 같은 항목으로. 판정 없이 숫자만, 고른 단지는 기기에 기억 */
-function drawSbs() {
-  const all = [...watch].filter(s => CXS[s] || main(s) || SR[s]);
-  let pick = store.get('v2-sbs', []).filter(s => all.includes(s)); if (!pick.length) pick = all.filter(s => !light(s)).slice(0, 3);
-  $('#sbsPick').innerHTML = all.map(s => `<label class="chip"><input type="checkbox" data-s="${s}"${pick.includes(s) ? ' checked' : ''}><span>${cxName(s)}</span></label>`).join('');
-  const nm = (n) => n.length > 8 ? n.slice(0, 8) + '…' : n;
-  const ROWS = [
-    ['기준 시세', s => { const r = main(s); if (light(s)) { const lp = lastPx(s); return lp ? `${eok(lp.p)}<br><span class="muted">최근 ${lp.k}</span>` : '–'; } return `${eok(cxRef(s))}<br><span class="muted">${r ? r.ag : 84}㎡</span>`; }],
-    ['1년 변화', s => { const c = useFull(s) ? CXS[s] : null, ch = c && c.phase ? +c.phase.chg_12m : q1y(s); return ch == null ? '–' : `<span class="${ch >= 0 ? 'up' : 'dn'}">${sgn(ch)}</span>`; }],
-    ['전세가율', s => { const r = main(s); return r && r.js && r.ref ? Math.round(r.js / r.ref * 100) + '%' : '–'; }],
-    ['역', s => { const i = infoOf(s); return i[5] ? `${i[5]}<br><span class="muted">${i[6]}m</span>` : '–'; }],
-    ['강남(대중교통)', s => { const i = infoOf(s); return i[9] != null ? i[9] + '분' : '–'; }],
-    ['차 출퇴근', s => { const d = DRIVE[s]; return d ? `이천 ${Math.round(d.skh_icheon)}분<br>용인 ${Math.round(d.yongin_cluster)}분` : '–'; }],
-    ['배정 초', s => { const i = infoOf(s), e = (POI.elem || [])[(D.v2_elemz || {})[s]]; return e && i[3] ? `${sname(e[0])} ${Math.round(distM(i[3], i[4], e[1], e[2]))}m${e[3] ? `<br><span class="muted">전입 ${e[4]}<br>전출 ${e[5]}</span>` : ''}` : '–'; }],
-    ['6개월 입주', s => { const z = (D.v2_lz || {})[s], ip = ((z && (D.v2_ipz || {})[z]) || []).filter(x => x[0].replace(/\s/g, '') !== cxName(s).replace(/\s/g, '')); return ip.length ? ip.reduce((a, x) => a + x[1], 0).toLocaleString() + '세대' : '없음'; }],
-    ['준공·세대', s => { const i = infoOf(s); return `${i[15] || '–'}년<br><span class="muted">${i[16] ? i[16].toLocaleString() + '세대' : ''}</span>`; }],
-    ['정비', s => { const c = useFull(s) ? CXS[s] : null, r = main(s); return c && (c.redev || []).length ? c.redev[0].stage : r && r.stage ? r.stage : '–'; }],
-  ];
-  $('#sbsT').innerHTML = pick.length ? `<thead><tr><th></th>${pick.map(s => `<th><b>${nm(cxName(s))}</b></th>`).join('')}</tr></thead><tbody>`
-    + ROWS.map(([k, f]) => `<tr><td>${k}</td>${pick.map(s => `<td>${f(s)}</td>`).join('')}</tr>`).join('') + '</tbody>' : '<tbody><tr><td class="muted">위에서 단지를 고르세요</td></tr></tbody>';
-}
-$('#sbsPick').addEventListener('change', (e) => { const box = e.target.closest('input'); if (!box) return;
-  let pick = [...$$('#sbsPick input:checked')].map(x => x.dataset.s); if (pick.length > 3) { box.checked = false; pick = pick.filter(s => s !== box.dataset.s); toast('최대 3곳까지 고를 수 있습니다'); }
-  store.set('v2-sbs', pick); drawSbs(); });
-watchChanged.push(drawSbs);
 $('#wList').addEventListener('click', (e) => { const h = e.target.closest('.heart'); if (h) { toggleWatch(h.dataset.s); return; } const o = e.target.closest('.open'); if (o) openCx(o.dataset.s); });
 watchChanged.push(drawWatch);
 
@@ -1250,7 +1220,7 @@ watchChanged.push(drawWatch);
         ${good.length ? `<span>좋음: ${good.join(', ')}</span>` : ''}${bad.length ? `<span style="color:var(--bad)">아쉬움: ${bad.join(', ')}</span>` : ''}
         ${v.pro ? `<span>＋ ${v.pro}</span>` : ''}${v.con ? `<span>－ ${v.con}</span>` : ''}${v.ok != null ? `<span class="pill ${['good', 'warn', 'bad'][v.ok]}">${OK[v.ok]}</span>` : ''}
         ${v.n ? `<span class="muted">${v.n}</span>` : ''}</div>`; }).join('')
-      : '<p class="muted">아직 기록이 없습니다. 다녀온 날 위에 남겨 보세요. 모든 조건을 갖춘 집은 없으니, 장점과 감내할 단점을 함께 적어 두세요.</p>';
+      : '<p class="muted">모든 조건을 갖춘 집은 없으니, 장점과 감내할 단점을 함께 적어 두세요.</p>';
   };
   $('#visitForm').addEventListener('submit', (e) => { e.preventDefault();
     const env = {}; $('#v_env').querySelectorAll('button[aria-pressed="true"]').forEach(b => env[b.dataset.i] = +b.dataset.v);
@@ -1488,12 +1458,9 @@ function drawAsks() {
     <div class="kpi"><span class="k">전세 매물</span><span class="v">${jeon.length}개</span><span class="d">중간 ${jeon.length ? eok(med(jeon)) : '–'}</span></div>`;
   const row = (x) => { const g = gap(x.p);
     return `<div class="deal"><span class="muted">${x.dong ? x.dong + '동' : ''}</span><span>${x.fl ? x.fl + (x.tot ? '/' + x.tot : '') + '층' : ''} ${x.dir || ''}${x.conf ? `<br><span class="muted" style="font-size:11.5px">${x.conf === '직접' ? '직접 기록' : '확인 ' + x.conf.slice(3)}</span>` : ''}</span><span class="p"><span class="pill ${cl(g)}">${g == null ? '–' : sgn(g, 1)}</span> ${eok(x.p)}</span></div>`; };
-  const all = last ? A[last] : [], other = {};   // 다른 면적 매매 매물 수
-  all.filter(x => x.t === '매매' && x.ex != null && !inArea(x)).forEach(x => { const k = Math.floor(x.ex); other[k] = (other[k] || 0) + 1; });
-  const oth = Object.entries(other).sort((a, b) => a[0] - b[0]).map(([k, n]) => `${k}㎡ ${n}개`).join(' · ');
-  $('#askList').innerHTML = sale.length ? `<p class="muted" style="font-size:12.5px;margin:6px 0 0">싼 순서${oth ? ` · 다른 면적 매매: ${oth}` : ''}</p>` + sale.slice(0, 5).map(row).join('')
+  $('#askList').innerHTML = sale.length ? sale.slice(0, 5).map(row).join('')
       + (sale.length > 5 ? `<details class="more-f"><summary>나머지 ${sale.length - 5}개 보기</summary>${sale.slice(5).map(row).join('')}</details>` : '')
-    : `<p class="muted">${ag}㎡ 매매 호가 기록이 없습니다${oth ? `(다른 면적 매매: ${oth})` : ''}. 네이버 부동산 단지 화면에서 '호가 저장' 버튼을 누른 뒤 아래 '붙여넣기'에 넣어 주세요.</p>`;
+    : `<p class="muted">${ag}㎡ 매매 호가 기록이 없습니다. 네이버 부동산 단지 화면에서 '호가 저장' 버튼을 누른 뒤 아래 '붙여넣기'에 넣어 주세요.</p>`;
 }
 $('#dSpan').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { store.set('v2-dspan', b.dataset.v); drawDaily(); } });
 $('#askSpan').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { store.set('v2-askspan', b.dataset.v); drawAsks(); } });
@@ -1739,6 +1706,6 @@ $('#fundForm').addEventListener('input', () => { fundTouched = true; drawFund();
 watchChanged.push(drawMove);
 
 /* 처음 열 때 */
-syncArea(); drawWatch(); drawSbs(); window.runBudget(); drawMove();
+syncArea(); drawWatch(); window.runBudget(); drawMove();
 if (location.hash.startsWith('#ask=')) importAskHash(); else go((location.hash || '').slice(1) || store.get('v2-tab', 'home'));
 </script>
