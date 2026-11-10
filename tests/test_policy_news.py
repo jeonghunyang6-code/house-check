@@ -46,6 +46,14 @@ def test_rumor_denial_skipped():
     assert candidates([{**a, "text": FRESH} for a in arts], PUB)       # 해명 말이 없으면 그대로 후보
 
 
+def test_land_permit_near_new_town_skipped():
+    # 2026-11-03 경기 택지 주변 땅 허가구역 해제: 토허 후보 아님. 같은 문장의 공급(신규택지)은 그대로, 목동 택지개발지구 아파트 토허는 그대로
+    d = date(2026, 11, 3)
+    assert decisions("국토부는 김포아라 공공주택지구 일대 토지거래허가구역을 3일 재지정했다.", d) == {}
+    assert "토허" not in decisions("정부는 신규 택지 주변 토지거래허가구역 324㎢를 3일 해제했다.", d)
+    assert "토허" in decisions("서울시는 목동 택지개발지구 아파트를 토지거래허가구역으로 3일 재지정했다.", d)
+
+
 def test_off_topic_and_non_capital():
     # 외국인·그린벨트 토허, 수도권 지역이 안 나오는 토허는 후보가 아니다
     assert decisions("포천시 전역을 외국인 토지거래허가구역으로 26일부터 지정한다고 밝혔다.", date(2025, 8, 26)) == {}
