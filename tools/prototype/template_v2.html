@@ -979,6 +979,17 @@ function redevNote(z) {
   return out.join(' · ');
 }
 /* 입지 사실표: 📖 p.356(M3) 실거래가가 입지를 다 반영한 최종 점수 → 점수·순위를 만들지 않고 "왜 이 가격인가" 설명용 숫자만. 기준은 송희구가 숫자로 말한 것만 표시 */
+let HAN_ = null;
+const HANK = Math.cos(37.5 * Math.PI / 180);
+/* 한강 가운데 선까지 직선거리(m). 선은 tools/prototype/han_river.py 화면 좌표: x = (경도 − 126) × cos37.5° × 1000, y = (38.4 − 위도) × 1000 → 1칸 ≈ 110.95m */
+function hanM(la, lo) {
+  const ch = HAN_ || (HAN_ = String(D.han || '').split('M').filter(Boolean).map(c => c.split('L').map(q => q.split(',').map(Number))));
+  if (!ch.length) return null;
+  const x = (lo - 126) * HANK * 1000, y = (38.4 - la) * 1000; let best = Infinity;
+  ch.forEach(c => { for (let i = 1; i < c.length; i++) { const [ax, ay] = c[i - 1], [bx, by] = c[i], dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy;
+    const t = L ? Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / L)) : 0; best = Math.min(best, Math.hypot(x - ax - t * dx, y - ay - t * dy)); } });
+  return best * 110.95;
+}
 function factsHtml(seq) {
   const inf = infoOf(seq), la = inf[3], lo = inf[4], rc = inf[1] || (main(seq) || {}).rc, row = (k, v, o) => `<div class="fact"><span class="k">${k}</span><span class="v">${v}</span>${o ? `<span class="o">${o}</span>` : ''}</div>`;
   const out = [];
@@ -986,6 +997,10 @@ function factsHtml(seq) {
   const wk = [['강남', inf[9]], ['여의도', inf[8]], ['사대문', inf[7]]].filter(x => x[1] != null);
   if (wk.length) { const mn = Math.min(...wk.map(x => x[1]));
     out.push(row('업무지구까지', wk.map(([n, m]) => m === mn ? `<b>${n} ${m}분</b>` : `${n} ${m}분`).join(' · '))); }   // 대중교통, 가까운 역 → 업무지구 역(걷는 시간 제외). 입지 = 업무지구와의 절대거리 📖 p.85~103
+  // 한강(2026-11-10 사용자 요청): data/geo/han_river_2025.json = 한강 북쪽·남쪽 시군구 동 경계가 맞닿는 선(한강 가운데 선, 단순화 약 28m).
+  // 단지 → 그 선까지 직선거리. 3km 🔧 넘으면 줄을 안 보임(한강과 상관없는 곳). 강변까지가 아니라 가운데 선까지라 강폭 절반(약 0.4~0.6km)이 더해짐
+  const hm = la ? hanM(la, lo) : null;
+  if (hm != null && hm <= 3000) out.push(row('한강', `가운데 선까지 <b>${hm >= 1000 ? (hm / 1000).toFixed(1) + 'km' : Math.round(hm / 10) * 10 + 'm'}</b>`));
   if (la) {   /* 기존 역(STBY) + 새 역(가칭, 기사 지명으로 잡은 근사 좌표). 새 역 좌표가 아예 없는 사업은 같은 시군구면 '위치 미확인'으로 따로 */
     const all = (D.v2_proj || []).filter(p => !['개통', '취소', '예타 탈락'].includes(p.status)).map(p => { let best = null;
       const cand = (p.stations || '').split(',').filter(Boolean).flatMap(n => (STBY[n] || []).map(x => [n, x[2], x[3], false])).concat((p.new_stations || []).map(x => [x[0], x[1], x[2], true]));
@@ -1001,6 +1016,9 @@ function factsHtml(seq) {
   const m = (POI.mid || [])[(D.v2_midz || {})[seq]];
   if (m && la) out.push(row('가까운 중학교', `<b>${sname(m[0])} ${Math.round(distM(la, lo, m[1], m[2])).toLocaleString()}m</b>${m[3] ? ` · 학생 ${m[3].toLocaleString()}명` : ''}`,
     m[3] ? `1년 전입 ${m[4]} · 전출 ${m[5]}` : ''));   // 학교군 안 추첨 배정이라 '가까운'
+  // 학원가(H3, 2026-11-10 사용자 요청): 같은 법정동 입시·보습 학원+교습소 수와 수도권 동 순위(extract v2_acad). 학군지 판정은 안 함(학원 수만으로는 못 봄 📖 p.89~95)
+  const AC = D.v2_acad || {}, ac = (AC.d || {})[`${rc}|${inf[2] || (main(seq) || {}).umd}`];
+  if (ac) out.push(row('학원가', `입시·보습 <b>${ac[0].toLocaleString()}곳</b> · 수도권 ${AC.n.toLocaleString()}개 동 중 ${ac[1].toLocaleString()}위`));
   const z = (D.v2_lz || {})[seq], me = cxName(seq).replace(/\s/g, ''), ip = ((z && (D.v2_ipz || {})[z]) || []).filter(x => x[0].replace(/\s/g, '') !== me);
   out.push(row('6개월 입주', ip.length ? `<b>${ip.reduce((a, x) => a + x[1], 0).toLocaleString()}세대</b> · ${ip.slice(0, 2).map(x => x[0]).join(', ')}${ip.length > 2 ? ` 외 ${ip.length - 2}곳` : ''}` : '<span class="muted">없음</span>'));   // 같은 생활권 입주 예정. 입주장엔 전세가 눌림 📖 p.153~154, 6개월 🔧
   // 같은 시군구 신도시·신규택지(D7 추가 공급 토지 📖 p.218~219). 공급 효과는 입주 때(📖 p.54~56)라 입주·착공 목표를 같이
