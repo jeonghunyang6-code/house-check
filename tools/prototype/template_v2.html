@@ -323,7 +323,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
         </div></details>
         <div class="list" id="cList"></div>
         <button type="button" class="more" id="cMore">20곳 더 보기</button>
-        <p class="src">기준 시세가 예산의 80~100%인 단지. ♡를 누르면 관심 단지에 담깁니다.<br>세대수·출퇴근 시간을 모르는 단지는 그 조건을 고르면 빠집니다.</p>
+        <p class="src">기준 시세가 예산의 80~100%인 단지.<br>세대수·출퇴근 시간을 모르는 단지는 조건 선택 시 제외.</p>
       </div>
     </div>
   </section>
@@ -874,7 +874,7 @@ const budget = { price: 0 };
     const tot = seed + mort + other, parts = [['종잣돈', seed, 'var(--c1)'], ['주담대', mort, 'var(--c2)'], ['그 밖 대출', other, 'var(--c3)']].filter(x => x[1] > 0);
     $('#bStack').innerHTML = parts.map(([n, v, c]) => `<span style="width:${v / tot * 100}%;background:${c}">${v / tot > 0.16 ? n + ' ' + man(v) : ''}</span>`).join('');
     $('#bLegend').innerHTML = parts.map(([n, v, c]) => `<span><i style="background:${c};height:8px"></i>${n} ${man(v)}</span>`).join('');
-    $('#bRule').innerHTML = `${RULE.name}(${RULE.from}~) 기준: 주담대 상한 15억 이하 6억·25억 이하 4억·초과 2억.<br>LTV 규제지역 40%·그 밖 70%, 생애최초 70%(6개월 안 전입).<br>은행 DSR(그 밖 대출 합산)과 생애최초 취득세 감면은 계산하지 않음 → 은행·세무 확인.`
+    $('#bRule').innerHTML = `${RULE.name}: 15억 이하(6억)·25억 이하(4억)·초과(2억).<br>LTV 규제지역 40%·그 밖 70%, 생애최초 70%.<br>은행 DSR과 생애최초 취득세 감면은 계산하지 않음.`   // 2026-11-10 사용자 문구. 생애최초 70% = 6개월 안 전입, DSR = 그 밖 대출 합산(은행·세무 확인)
       + (p > 140000 && p <= 160000 ? '<br>15억 경계 근처라 은행 시세(KB) 기준 구간 확인 필요.' : '');
     drawCand(); myDeals();
   }
@@ -990,8 +990,7 @@ function factsHtml(seq) {
       return { p, best, inReg: (p.region_codes || '').split(',').includes(rc) }; });
     const pj = all.filter(x => x.best && x.best[1] <= 1500).sort((a, b) => a.best[1] - b.best[1]), far = all.filter(x => !x.best && x.inReg);
     out.push(row('철도 호재', (pj.length ? pj.slice(0, 2).map(({ p, best: b }) => `<span class="pill ${PST[p.status] || 'none'}">${p.status}</span> ${p.name.split(/[ (]/)[0]} ${b[0]}역${b[2] ? '(가칭)' : ''} <b>${Math.round(b[1]).toLocaleString()}m</b>`).join('<br>') : '<span class="muted">1.5km 안 없음</span>')
-      + far.map(({ p }) => `<br><span class="pill ${PST[p.status] || 'none'}">${p.status}</span> ${p.name.split(/[ (]/)[0]}`).join(''),   // 같은 시군구, 새 역 위치 미확인
-      '착공 뒤 들어가도 늦지 않다, 진짜 악재는 취소 · 새 역(가칭)은 기사에 나온 지명으로 잡은 대략 위치'));   // 📖 p.279~280
+      + far.map(({ p }) => `<br><span class="pill ${PST[p.status] || 'none'}">${p.status}</span> ${p.name.split(/[ (]/)[0]}`).join('')));   // 같은 시군구, 새 역 위치 미확인. 착공 뒤 들어가도 늦지 않다, 진짜 악재는 취소 📖 p.279~280. 새 역(가칭)은 기사에 나온 지명으로 잡은 대략 위치
   }
   const e = (POI.elem || [])[(D.v2_elemz || {})[seq]];
   if (e && la) out.push(row('배정 초등학교', `<b>${sname(e[0])} ${Math.round(distM(la, lo, e[1], e[2])).toLocaleString()}m</b>${e[3] ? ` · 학생 ${e[3].toLocaleString()}명` : ''}`,

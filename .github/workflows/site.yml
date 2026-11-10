@@ -18,7 +18,8 @@ concurrency:
 
 jobs:
   site:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    # 2026-11-10: 수집이 부분 실패(전월세 재확인 HTTP 500 등)로 끝나도 아침 화면은 갱신한다. 실패 알림은 notify 가 따로 보냄
+    if: github.event_name != 'workflow_run' || contains(fromJSON('["success", "failure"]'), github.event.workflow_run.conclusion)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:

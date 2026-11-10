@@ -201,3 +201,25 @@ def test_roll_sums_moves_old_months_to_files():
     assert list(iter_sums(store, ["11680"], "202505"))[0]["contract_month"] == "202505"
     assert select(db, "SELECT count(*) AS n FROM rent_region_month")[0]["n"] == 3   # 지역 합계는 DB 에 계속
     assert roll_sums(db, store, date(2026, 10, 19)) == 0           # 옮길 것 없음
+
+
+def test_fetch_retry_only_5xx():
+    """2026-11-10: 공공데이터포털 HTTP 500 → 30초 쉬고 한 번 더. 그 밖 오류는 그대로."""
+    from collector.sources.molit import ApiError
+    from jobs.rent_archive import fetch_retry
+    calls, waits = [], []
+
+    def flaky(c, m):
+        calls.append(c)
+        if len(calls) == 1:
+            raise ApiError("HTTP 500")
+        return ["ok"]
+    assert fetch_retry(flaky, "11680", "202609", waits.append) == ["ok"] and len(calls) == 2 and waits == [30]
+
+    def bad(c, m):
+        raise ApiError("HTTP 400")
+    try:
+        fetch_retry(bad, "11680", "202609", waits.append)
+        assert False
+    except ApiError as e:
+        assert str(e) == "HTTP 400" and waits == [30]      # 4xx 는 다시 안 함
