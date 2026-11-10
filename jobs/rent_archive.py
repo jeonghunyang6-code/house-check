@@ -272,7 +272,22 @@ def recheck_rows(old: list[dict], got: list, code: str, month: str, today: date)
     return out + [{**r, "disappeared": True} for r in gone], added, newly
 
 
-def recheck(db: Db, store: Store, today: date, fetch=fetch_rents) -> int:
+RETRY_WAIT = 30      # 🔧 공공데이터포털 HTTP 5xx(서버 오류)면 이만큼 쉬고 한 번 더(2026-11-10 재확인 83곳 중 58곳 HTTP 500)
+STOP_AFTER = 5       # 🔧 다시 해도 5곳 연속 서버 오류면 서버가 내려간 것으로 보고 재확인을 멈춤(다음 차례에 다시 받는다)
+
+
+def fetch_retry(fetch, code: str, month: str, wait=time.sleep):
+    """HTTP 5xx 만 한 번 다시. 429·403(한도·차단)은 molit._get 이 따로 멈춘다(접근 제한 우회 금지)."""
+    try:
+        return fetch(code, month)
+    except ApiError as e:
+        if not str(e).startswith("HTTP 5"):
+            raise
+        wait(RETRY_WAIT)
+        return fetch(code, month)
+
+
+def recheck(db: Db, store: Store, today: date, fetch=fetch_rents, wait=time.sleep) -> int:
     month = recheck_month(today)
     data = store.get(asset_name("rent", month))
     if data is None:
@@ -283,17 +298,22 @@ def recheck(db: Db, store: Store, today: date, fetch=fetch_rents) -> int:
         by_region.setdefault(r["region_code"], []).append(r)
     rows: list[dict] = []
     counts: dict[str, int] = {}
-    failures = added = gone = 0
+    failures = added = gone = streak = 0
     for code in sorted(by_region):
         try:
-            got = fetch(code, month)
+            got = fetch_retry(fetch, code, month, wait)
         except QuotaExceeded as e:
             print(f"  전월세 재확인 {code} {month}: 호출 한도 초과로 중단: {e}", file=sys.stderr)
             return 2
         except ApiError as e:
             failures += 1
+            streak = streak + 1 if str(e).startswith("HTTP 5") else 0
             print(f"  전월세 재확인 {code} {month}: 실패 {e}", file=sys.stderr)
+            if streak >= STOP_AFTER:
+                print(f"  전월세 재확인 {month}: 서버 오류가 {streak}곳 연속(다시 해도) → 멈춤, 받은 곳만 반영", file=sys.stderr)
+                break
             continue
+        streak = 0
         if not got:  # 빈 응답으로 한 시군구 전체를 지우지 않는다
             print(f"  전월세 재확인 {code} {month}: 0건 응답, 기존 유지", file=sys.stderr)
             continue
