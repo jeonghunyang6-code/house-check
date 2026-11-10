@@ -46,7 +46,10 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .lead b { color: var(--accent); }
 p { margin: 0; }
 .muted { color: var(--ink-3); font-size: 13px; }
-.src { color: var(--ink-3); font-size: 12px; line-height: 1.5; }
+/* 주석·설명 글씨 하나로(2026-11-10 사용자: 탭마다 크기가 뒤죽박죽): 12px · 회색 · 줄 간격 1.5 */
+:root { --fs-note: 12px; }
+.src, p.muted, .fact .o, .proj .o, .legend, .scale, .dotlegend, .fontchk { font-size: var(--fs-note); line-height: 1.5; }
+.src { color: var(--ink-3); }
 .num { font-variant-numeric: tabular-nums; }
 .big { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .pill { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--none-bg); color: var(--ink-2); white-space: nowrap; }
@@ -70,10 +73,10 @@ svg.chart { width: 100%; height: auto; display: block; overflow: visible; }
 svg.chart:not(.map) text { fill: var(--ink-3); font-size: 10px; font-family: var(--font); }
 .map text { font-family: var(--font); text-anchor: middle; pointer-events: none; paint-order: stroke; }
 .grid line { stroke: var(--line); }
-.legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--ink-3); align-items: center; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--ink-3); align-items: center; }
 .legend .chk { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; color: var(--ink-2); }
 .legend i { display: inline-block; width: 12px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
-.scale { display: flex; align-items: center; gap: 2px; font-size: 11px; color: var(--ink-3); white-space: nowrap; flex-wrap: wrap; }
+.scale { display: flex; align-items: center; gap: 2px; color: var(--ink-3); white-space: nowrap; flex-wrap: wrap; }
 .scale .sw { width: 22px; height: 10px; border-radius: 2px; }
 .map path.r { stroke: var(--surface); stroke-width: 1; stroke-linejoin: round; cursor: pointer; }
 .map path.r:hover { stroke: var(--ink); stroke-width: 1.6; }
@@ -148,7 +151,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
 .sig .mr .lb i { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--c3); }
 .sig .mr .lb i.good { background: var(--good); } .sig .mr .lb i.warn { background: var(--warn); } .sig .mr .lb i.bad { background: var(--bad); } .sig .mr .lb i.ref { background: transparent; border: 1.5px solid var(--c3); box-sizing: border-box; }
 .sig .mr span.good { color: var(--good); } .sig .mr span.warn { color: var(--warn); } .sig .mr span.bad { color: var(--bad); }
-.dotlegend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 11.5px; color: var(--ink-3); }
+.dotlegend { display: flex; gap: 10px; flex-wrap: wrap; color: var(--ink-3); }
 .dotlegend span { display: inline-flex; gap: 4px; align-items: center; }
 .dotlegend i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 .pol { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 9px 0 9px 10px; border-bottom: 1px solid var(--line); border-left: 4px solid var(--c3); cursor: pointer; align-items: center; }
@@ -186,10 +189,10 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
 .fact { display: grid; grid-template-columns: 84px 1fr; gap: 1px 10px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; }
 .fact .k { color: var(--ink-2); font-size: 12.5px; padding-top: 1px; }
 .fact .v b { font-variant-numeric: tabular-nums; }
-.fact .o { grid-column: 2; font-size: 11.5px; color: var(--ink-3); line-height: 1.4; }
+.fact .o { grid-column: 2; color: var(--ink-3); }
 .proj .pill { align-self: start; }
 .proj { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; }
-.proj .o { grid-column: 2; font-size: 12px; color: var(--ink-3); }
+.proj .o { grid-column: 2; color: var(--ink-3); }
 .notes { display: grid; gap: 8px; }
 .note { background: var(--sunk); border-radius: 10px; padding: 10px 12px; font-size: 13.5px; display: grid; gap: 2px; }
 .vsec { display: grid; gap: 6px; padding: 10px 0 4px; border-top: 1px solid var(--line); }
@@ -218,7 +221,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
 .nm-emo { font-size: 20px; line-height: 1; filter: drop-shadow(0 1px 2px rgba(0,0,0,.35)); }
 .nm-lb { font-size: 12px; font-weight: 600; color: #15212b; background: rgba(255,255,255,.92); padding: 1px 5px; border-radius: 5px; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
 .nm-iw { background: #fff; color: #15212b; font-family: var(--font); font-size: 13px; line-height: 1.5; padding: 9px 11px; border-radius: 10px; box-shadow: 0 3px 12px rgba(0,0,0,.25); max-width: 240px; white-space: normal; }
-.fontchk { font-size: 11px; color: var(--ink-3); text-align: center; padding-block: 4px 12px; }
+.fontchk { color: var(--ink-3); text-align: center; padding-block: 4px 12px; }
 </style>
 
 <div class="app" id="app">
@@ -296,7 +299,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
           <label for="b_mort">받을 금액 (만원)<input id="b_mort" inputmode="numeric" value="60000" placeholder="비우면 최대"></label>
           <label for="b_rate">금리 (%)<input id="b_rate" inputmode="decimal" value="4.5"></label>
           <label for="b_years">기간 (년)<input id="b_years" inputmode="numeric" value="30"></label>
-          <p class="fsec">그 밖의 대출 <span class="muted">신용대출·사내대출 등</span></p>
+          <p class="fsec">그 밖의 대출 <span class="muted" style="font-size:var(--fs-note)">신용대출·사내대출 등</span></p>
           <label for="b_other">금액 (만원)<input id="b_other" inputmode="numeric" value="10000"></label>
           <label for="b_orate">금리 (%)<input id="b_orate" inputmode="decimal" value="5.0"></label>
           <label for="b_orep">갚는 방식<select id="b_orep"><option value="amort">원리금 균등</option><option value="principal">원금 균등</option><option value="bullet">만기 일시(이자만)</option></select></label>
@@ -347,7 +350,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
           <label for="v_score">느낌 (1~5)<select id="v_score"><option>5</option><option>4</option><option selected>3</option><option>2</option><option>1</option></select></label>
           <div class="vsec" style="grid-column:1/-1"><b>① 역까지 동선</b>
             <label for="v_walk">역까지 실제 걸어 본 시간 (분)<input id="v_walk" inputmode="numeric" placeholder="출퇴근 시간대에"></label>
-            <p class="muted" id="v_walkHint" style="margin:2px 0 0;font-size:12.5px"></p>
+            <p class="muted" id="v_walkHint" style="margin:2px 0 0"></p>
             <div class="chips" id="v_route"></div></div>
           <div class="vsec" style="grid-column:1/-1"><b>② 단지 안</b><div id="v_env"></div></div>
           <div class="vsec" style="grid-column:1/-1"><b>③ 정리</b>
@@ -720,7 +723,7 @@ const PSHORT = { '2026-10-01|세금': '조정지역 일시적 2주택 처분 3�
   const PN = D.v2_pnews || [];   // 뉴스 감지 후보(확인 전): 정책 이력에 넣기 전까지 따로
   const UP = (D.v2_upcoming || []).map(([d, k, t]) => `<div class="pol" style="border-left-color:${KC[k] || 'var(--c3)'};border-left-style:dotted"><div class="pt"><b>${t}</b><span class="muted num">${dt(d)} · D-${Math.round((new Date(d) - new Date(D.asof)) / 864e5)}</span></div></div>`).join('');
   $('#polNew').innerHTML = UP + (PN.length ? PN.map(n => `<div class="pol" style="border-left-color:${KC[n.kind] || 'var(--c3)'};border-left-style:dashed"><div class="pt"><b>${n.kind} 새 발표? <span class="pill warn">확인 전</span></b><span class="muted num">${dt(n.d)} · 언론사 ${n.n}곳</span></div>${n.a ? `<div class="pn"><a href="${n.a.u}" target="_blank" rel="noopener">${n.a.t.slice(0, 60)}</a></div>` : ''}</div>`).join('')
-    : '<p class="muted" style="font-size:12.5px;margin:0 0 4px">뉴스 감지(하루 두 번): 최근 30일 새 정책 후보 없음</p>');
+    : '<p class="muted" style="margin:0 0 4px">뉴스 감지(하루 두 번): 최근 30일 새 정책 후보 없음</p>');
   $('#polMore').addEventListener('click', () => { shown = P.length; draw(); });
   draw();
 })();
@@ -1005,7 +1008,7 @@ function factsHtml(seq) {
   // 일정은 청약홈 입주자모집공고 입주 예정 월(v2_newtown_ps, 2026-11-10 교차 확인: 기사 일정이 틀린 곳이 있음). 공고가 없으면 기사 일정
   const NPS = D.v2_newtown_ps || {}, ym = (v) => v.slice(0, 4) + '.' + v.slice(4);
   const ntWhen = (t) => { const q = NPS[t[0]]; return q ? `첫 입주 <b>${ym(q[0])}</b>${q[1] !== q[0] ? `~${ym(q[1])}` : ''} · 분양 공고 ${q[2]}건 ${q[3].toLocaleString()}세대` : t[4]; };
-  if (rc) out.push(row('신도시·택지', nt.length ? nt.map(t => `<span class="pill ${NTS[t[3]] || 'none'}">${t[3]}</span> ${t[0]} <b>${t[2]}호</b> <span class="muted" style="font-size:11px">${t[6] ? t[6] + ' 발표' : ''}</span><br><span class="muted" style="font-size:12px">${t[5]} · ${ntWhen(t)}</span>`).join('<br>') : `<span class="muted">${rn(rc).split(' ').pop()}에 없음</span>`));   // 같은 시군구(지구 좌표 없음). 입주 = 청약홈 공고, 공고 전이면 기사 일정
+  if (rc) out.push(row('신도시·택지', nt.length ? nt.map(t => `<span class="pill ${NTS[t[3]] || 'none'}">${t[3]}</span> ${t[0]} <b>${t[2]}호</b> <span class="muted" style="font-size:var(--fs-note)">${t[6] ? t[6] + ' 발표' : ''}</span><br><span class="muted" style="font-size:var(--fs-note)">${t[5]} · ${ntWhen(t)}</span>`).join('<br>') : `<span class="muted">${rn(rc).split(' ').pop()}에 없음</span>`));   // 같은 시군구(지구 좌표 없음). 입주 = 청약홈 공고, 공고 전이면 기사 일정
   const by = inf[15], hh = inf[16];
   if (by || hh) out.push(row('단지', `<b>${hh ? hh.toLocaleString() + '세대' : ''}${hh && by ? ' · ' : ''}${by ? YEAR - by + '년차' : ''}</b>`, 'K-apt 세대수 · 준공 연도'));
   // 점수·가중치·순위를 매기지 않는다(M3 📖 p.356: 실거래가가 최종 점수). 화면 문구는 2026-11-10 사용자 요청으로 뺐지만 원칙은 그대로
@@ -1262,7 +1265,7 @@ function drawDaily() {
   const same = deals.filter(x => Math.abs(x[2] - mainAg) <= 1 && !x[5]);
   const d2 = (s) => `20${s.slice(0, 2)}-${s.slice(2, 4)}-${s.slice(4)}`;
   const lp = lastPx(seq), sx = SR[seq];
-  $('#dHead').innerHTML = `<div class="row" style="justify-content:space-between"><b style="font-size:17px">${cxName(seq)} ${lite ? '<span class="pill none">기준 시세 없음</span>' : agTag(seq)}</b><button type="button" class="icon-btn" id="dOpen">단지 상세 →</button></div><span class="muted">${D.asof.slice(5).replace('-', '월 ')}일 아침 갱신${lite && sx ? ` · ${rn(sx.rc)} ${sx.umd || ''}${sx.pre ? ' · ' + preNote(sx) : sx.by ? ' · ' + sx.by + '년' : ''}${sx.hh ? ' · ' + Number(sx.hh).toLocaleString() + '세대' : ''}` : ''}</span>
+  $('#dHead').innerHTML = `<div class="row" style="justify-content:space-between"><b style="font-size:17px">${cxName(seq)} ${lite ? '<span class="pill none">기준 시세 없음</span>' : agTag(seq)}</b><button type="button" class="icon-btn" id="dOpen">단지 상세 →</button></div><span class="muted" style="font-size:var(--fs-note)">${D.asof.slice(5).replace('-', '월 ')}일 아침 갱신${lite && sx ? ` · ${rn(sx.rc)} ${sx.umd || ''}${sx.pre ? ' · ' + preNote(sx) : sx.by ? ' · ' + sx.by + '년' : ''}${sx.hh ? ' · ' + Number(sx.hh).toLocaleString() + '세대' : ''}` : ''}</span>
     <div class="kpis"><div class="kpi"><span class="k">${lite ? '최근 거래가' : mainAg + '㎡ 기준 시세'}</span><span class="v">${lite ? eok(lp && lp.p) : eok(ref)}</span>${lite && lp ? `<span class="d">${lp.k} · ${lp.d.slice(0, 2)}.${lp.d.slice(2, 4)}.${lp.d.slice(4)} · ${lp.ag}㎡</span>` : ''}</div><div class="kpi"><span class="k">최근 ${lite ? '1년' : '90일'} 거래</span><span class="v">${deals.length}건</span><span class="d">${mainAg}㎡ ${same.length}건${(RG[seq] || []).length ? ' · 분양권·입주권 포함' : ''}${TODAY_NEW.has(seq) ? ' · 오늘 새로 등록' : ''}</span></div></div>
     ${lite ? '<p class="src" style="margin:0">거래가 적거나 등기 전(입주권·분양권만 신고)이라 기준 시세를 정하지 못했습니다. 입주권 가격은 추가분담금이 빠져 실제 집값보다 낮게 보일 수 있습니다.</p>' : ''}`;
   $('#dOpen').addEventListener('click', () => openCx(seq));
@@ -1456,7 +1459,7 @@ function drawAsks() {
     <div class="kpi"><span class="k">중간 호가 <span class="pill ${cl(gm)}">${gm == null ? '–' : sgn(gm, 1)}</span></span><span class="v">${sale.length ? eok(med(sale)) : '–'}</span><span class="d">최저 ${sale.length ? eok(sale[0].p) : '–'} · 기준 ${eok(ref)}</span></div>
     <div class="kpi"><span class="k">전세 매물</span><span class="v">${jeon.length}개</span><span class="d">중간 ${jeon.length ? eok(med(jeon)) : '–'}</span></div>`;
   const row = (x) => { const g = gap(x.p);
-    return `<div class="deal"><span class="muted">${x.dong ? x.dong + '동' : ''}</span><span>${x.fl ? x.fl + (x.tot ? '/' + x.tot : '') + '층' : ''} ${x.dir || ''}${x.conf ? `<br><span class="muted" style="font-size:11.5px">${x.conf === '직접' ? '직접 기록' : '확인 ' + x.conf.slice(3)}</span>` : ''}</span><span class="p"><span class="pill ${cl(g)}">${g == null ? '–' : sgn(g, 1)}</span> ${eok(x.p)}</span></div>`; };
+    return `<div class="deal"><span class="muted">${x.dong ? x.dong + '동' : ''}</span><span>${x.fl ? x.fl + (x.tot ? '/' + x.tot : '') + '층' : ''} ${x.dir || ''}${x.conf ? `<br><span class="muted" style="font-size:var(--fs-note)">${x.conf === '직접' ? '직접 기록' : '확인 ' + x.conf.slice(3)}</span>` : ''}</span><span class="p"><span class="pill ${cl(g)}">${g == null ? '–' : sgn(g, 1)}</span> ${eok(x.p)}</span></div>`; };
   $('#askList').innerHTML = sale.length ? sale.slice(0, 5).map(row).join('')
       + (sale.length > 5 ? `<details class="more-f"><summary>나머지 ${sale.length - 5}개 보기</summary>${sale.slice(5).map(row).join('')}</details>` : '')
     : `<p class="muted">${ag}㎡ 매매 호가 기록이 없습니다. 네이버 부동산 단지 화면에서 '호가 저장' 버튼을 누른 뒤 아래 '붙여넣기'에 넣어 주세요.</p>`;
@@ -1652,7 +1655,7 @@ function gapChart(st) {
   // 글씨는 선 위에 배경을 깔고 맨 나중에 그린다(선에 가리지 않게)
   s += pill(L + 4, Math.min(H - B - 6, y(lo) - 6), `하위 20% = ${eok(st.p20)} 이하`, 'var(--good)', 'start');
   s += pill(lx - 6, Math.max(14, ly - 10), `지금 ${eok(last[1])} · 하위 ${st.pct}%`, 'var(--ink)', 'end');
-  return s + `</svg><p class="muted" style="font-size:12px">세로 = 두 단지 ${AREA}㎡ 분기 중앙가 차이(목표 − 내 집), 가로 = 분기('21 4Q = 2021년 4분기). 초록 칸까지 내려오면 격차가 좁혀진 때.</p>`;
+  return s + `</svg><p class="muted">세로 = 두 단지 ${AREA}㎡ 분기 중앙가 차이(목표 − 내 집), 가로 = 분기('21 4Q = 2021년 4분기). 초록 칸까지 내려오면 격차가 좁혀진 때.</p>`;
 }
 function drawMove() {
   const mySel = $('#mySel'), tgSel = $('#tgSel'), seqs = [...watch].filter(s => pxOf(s)), cur = store.get('v2-my2', null);
