@@ -328,8 +328,8 @@ json.dump({'monthly': monthly, 'cx': cx, 'today': today,
            'b2_validation': d.get('b2_validation', []),
            'geo': with_label_points(json.load(open(ROOT / 'data/geo/sudogwon_sgg_20260701.json'))),
            'han': json.load(open(ROOT / 'data/geo/han_river_2025.json'))['d'],   # 한강 선(tools/prototype/han_river.py)
-           # 신도시·신규택지(collector/newtowns.py, 손 관리): [이름, 시군구 코드들, 호수, 단계, 일정, 묶음]
-           'v2_newtown': [[t.name, list(t.region_codes), t.homes, t.stage, t.plan, t.group] for t in NEWTOWNS],
+           # 신도시·신규택지(collector/newtowns.py, 손 관리): [이름, 시군구 코드들, 호수, 단계, 일정, 묶음, 호수 발표 연도]. 공고 일정은 v2_newtown_ps
+           'v2_newtown': [[t.name, list(t.region_codes), t.homes, t.stage, t.plan, t.group, t.year] for t in NEWTOWNS],
            'region_names': REGIONS, 'asof': TODAY.isoformat()}, open(OUT / 'data.json', 'w'), ensure_ascii=False)
 for c in cx: print(c['name'], c['region'], c['P'], c['T'], c['C'], c['conf'], c['cn'], c['pattern'], c['rec'] and round(c['rec'],2), c['J'], c['jn'], c['ratio'] and round(c['ratio']), c['band'], c['n12'])
 print('today statuses', {s: sum(t['status'] == s for t in today) for s in set(t['status'] for t in today)})
