@@ -338,18 +338,9 @@ out['v2_e6t'] = [[r['apt_seq'], r['target_seq'], float(r['ratio_now']), float(r[
 out['v2_drive'] = {}
 for r in select(db, "SELECT apt_seq, dest, minutes FROM complex_drive WHERE minutes IS NOT NULL"):
     out['v2_drive'].setdefault(r['apt_seq'], {})[r['dest']] = float(r['minutes'])
-# 신도시 일정 교차 확인(collector/newtowns.py, 2026-11-10): 청약홈 입주자모집공고 입주 예정 월. 분양(본청약·블록) 공고만, 잔여·추가·임대 공고는 뺀다.
-# 지구 이름이 공고 이름이나 주소에 있고, 시군구 코드가 맞거나(코드가 비면 주소의 시 이름). [첫 입주 월, 마지막 입주 월, 공고 수, 세대 합]
-from collector.newtowns import NEWTOWNS as _NT
-def _nt_sql(t):
-    kw = t.ps_kw.replace("'", "''")
-    city = "|".join(sorted({REGIONS[c].split()[1].rstrip('시구군') for c in t.region_codes}))
-    return (f"SELECT {lit_name(t.name)} AS nt, min(move_in_ym) a, max(move_in_ym) b, count(*) n, sum(households) hh FROM presale "
-            f"WHERE (name ~ '{kw}' OR address ~ '{kw}') AND (region_code IN ({','.join(repr(c) for c in t.region_codes)}) OR (region_code IS NULL AND address ~ '{city}')) "
-            "AND (name || ' ' || coalesce(address, '')) ~ '본청약|블록|BL|신도시|지구' AND name !~ '잔여|추가|행복주택|국민임대|장기전세|영구임대' AND move_in_ym IS NOT NULL")
-lit_name = lambda x: "'" + x.replace("'", "''") + "'"
-_q = [_nt_sql(t) for t in _NT if t.ps_kw]
-out['v2_newtown_ps'] = {r['nt']: [r['a'], r['b'], r['n'], r['hh']] for r in select(db, " UNION ALL ".join(_q)) if r['n']} if _q else {}
+# 신도시 일정 교차 확인(collector/newtowns.py, 2026-11-10): 청약홈 입주자모집공고 입주 예정 월 [첫, 마지막, 공고 수, 세대 합]
+from collector.newtowns import presale_sql as _nt_sql, presale_rows as _nt_rows
+out['v2_newtown_ps'] = _nt_rows(select(db, _nt_sql())) if _nt_sql() else {}
 out['v2_proj'] = select(db, "SELECT name, status, status_date::text, outlook, cbd, region_codes, stations, new_stations FROM transit_projects")
 out['seqs'] = SEQS
 out['regions'] = {k: v for k, v in REGIONS.items()}

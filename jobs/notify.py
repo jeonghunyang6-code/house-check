@@ -20,7 +20,10 @@ from zoneinfo import ZoneInfo
 
 from collector import telegram as T
 from collector.db import Db, DbError, connect, lit, select
+from collector.newtowns import NEWTOWNS, mismatches, presale_rows, presale_sql
 from collector.policy import upcoming
+from collector.projects import PROJECTS
+from collector.provenance import STALE_DAYS, grade, stale
 
 KST = ZoneInfo("Asia/Seoul")
 SITE = os.environ.get("HC_SITE_URL", "")   # 없으면 site.yml 이 배포 때 저장한 user_state 'site_url'
@@ -298,6 +301,20 @@ def ask_reminder(info: dict[str, dict], seqs: list[str], today) -> list[str]:
     return out
 
 
+def check_lines(db: Db, today) -> list[str]:
+    """손 관리 사실 교차 확인(collector/provenance.py, 2026-11-10 사용자 요청): 신도시 손 값 ↔ 청약홈 공고 첫 입주, 진행 중 사업 재확인."""
+    out = []
+    sql = presale_sql()
+    if sql:
+        out += [f"🔀 {html.escape(m)} → collector/newtowns.py 고치기" for m in mismatches(presale_rows(select(db, sql)))]
+    live = [(f"{p.name}" + (" (출처 1곳)" if grade(p.sources) == "D" else ""), p.checked) for p in PROJECTS if p.status not in ("개통", "취소")]
+    live += [(f"{t.name}" + (" (출처 1곳)" if grade(t.sources) == "D" else ""), t.checked) for t in NEWTOWNS]
+    old = stale(live, today)
+    if old:
+        out.append(f"🔎 다시 확인({STALE_DAYS}일 지남): " + ", ".join(f"{html.escape(n)} {c:%m/%d}" for n, c in old[:6]) + (f" 외 {len(old) - 6}곳" if len(old) > 6 else ""))
+    return out
+
+
 def weekly(db: Db, save: bool = True) -> str:
     """금요일 주간 요약. 관심 단지는 이번 주 신고가 있거나 저장 호가 매물 수가 바뀌었거나 기준 시세가 지난주보다 1% 🔧 넘게 바뀐 곳만(2026-10-25 사용자 요청: 줄이고 이모지)."""
     today = datetime.now(KST).date()
@@ -348,6 +365,10 @@ def weekly(db: Db, save: bool = True) -> str:
         out.append("\n📅 <b>정책</b>")
         out += [f"⏳ {d:%m/%d} (D-{(d - today).days}) {html.escape(t)}" for d, _, t, _ in up]
         out += [f"🆕 {r['d'][5:].replace('-', '/')} {r['kind']} 발표 후보 · 언론사 {r['n']}곳(확인 전)" for r in pn]
+    ck = check_lines(db, today)
+    if ck:
+        out.append("\n🧾 <b>손 관리 자료 확인</b>")
+        out += ck
     mb = db_mb(db)
     url = site(db)
     out.append(f"\n{'⚠️' if mb >= DB_WARN_MB else '💾'} DB {mb}MB/500MB" + (f"  🔗 {url}" if url else ""))

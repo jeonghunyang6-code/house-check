@@ -36,6 +36,11 @@ jobs:
           mkdir -p hist
           for i in 1 2 3; do gh release download raw-data --repo "$GITHUB_REPOSITORY" -p 'deals_hist_*' -p 'rentsum_*' -D hist --clobber && break; [ $i = 3 ] && exit 1; sleep $((30 * i)); done
           ls hist | wc -l
+      - name: 손 관리 자료 점검(출처·등급, 실패하면 배포 안 함 → 어제 사이트 그대로)
+        # 2026-11-10 사용자 요청: 정책 이력·철도·신도시는 출처·확인일이 있어야 하고, 이날부터 넣는 칸은 기사 1곳 금지(collector/provenance.py)
+        run: |
+          pip install -q pytest
+          python -m pytest -q tests/test_provenance.py tests/test_policy.py tests/test_policy_news.py
       - name: 화면 만들기
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}

@@ -132,6 +132,11 @@ EVENTS: tuple[tuple[date, str, str, str], ...] = (
 )
 
 
+# 교차 확인(collector/provenance.py): 2026-11-10 부터 넣는 사건은 여기에 (날짜, 종류) → (다른 출처들, 확인한 날). 출처 합쳐 등급 C 이상이어야
+# (tests/test_provenance.py). 그 전 사건은 출처 1곳(EVENTS 의 주소)으로 두고, 고칠 때 여기에 더한다
+EVENT_MORE: dict[tuple[date, str], tuple[tuple[str, ...], date]] = {}
+
+
 # 다가오는 정책 일정(만료·마감). 텔레그램 주간 요약·화면 정책 목록에 D-day 로. 발표가 나면 ZONES·EVENTS 를 고치고 여기서 뺀다(2026-10-25 추가)
 UPCOMING: tuple[tuple[date, str, str, str], ...] = (
     (date(2026, 12, 31), "토허", "서울 전역·경기 12곳 아파트 토허 고시 기간 끝(연장·해제 발표 대기)", S_2025_10_TOH),
