@@ -73,10 +73,12 @@ PROJECTS: tuple[Project, ...] = (
     # 2026-11-09 추가(사용자 질문: 골든센트로 9호선 연장): 고덕강일 → 신강일(943, 강동) → 신미사(944, 하남) → 왕숙·진접2, 정거장 8곳(서울 1·하남 1·남양주 6).
     # 944 위치 = '미사강변 4·7·8단지 사이 미사강변대로 교차로'(기사)인데 좌표를 잡을 도구가 없어 new_stations 비움(구산성지 쪽 주민이 위치 변경 요구 중)
     # 2026-11-10 이름·전망을 9호선 4단계와 같은 꼴로(사용자). 강동구·서울시 매체는 '9호선 4단계 추가연장', 일부 언론은 '5단계' → 기사 2곳(시정일보·서울&)이 쓴 쪽.
-    # 착공을 2027 상반기로 늦춘다는 2025 보도는 1곳만 확인(MTN)이라 넣지 않음(기사 1곳 금지, collector/provenance.py)
-    Project("9호선 4단계 추가연장(강동하남남양주선, 고덕강일~미사~진접2)", "확정", date(2024, 12, 24), "개통 목표 2031",
+    # 착공: 2024 기본계획 2026 → 2025-07 경기도 계약 의뢰 때 '2027 상반기 착공, 2031 개통'(철도경제신문·기호일보, 2026-11-10 교차 확인)
+    Project("9호선 4단계 추가연장(강동하남남양주선, 고덕강일~미사~진접2)", "확정", date(2024, 12, 24), "착공 목표 2027 상반기 · 개통 목표 2031",
             ("강남", "여의도"), ("11740", "41450", "41360"), "https://www.sijung.co.kr/news/articleView.html?idxno=405579",
-            more=("https://www.seouland.com/arti/society/society_general/19684.html", "https://www.munhwa.com/article/11474788"), checked=date(2026, 11, 9)),
+            more=("https://www.seouland.com/arti/society/society_general/19684.html", "https://www.munhwa.com/article/11474788",
+                  "https://www.redaily.co.kr/news/articleView.html?idxno=12924", "https://www.kihoilbo.co.kr/news/articleView.html?idxno=1152251"),
+            checked=date(2026, 11, 10)),
     Project("서부선 새절~서울대입구", "계획", None, "2026-07 민자 우선협상대상자 지위 취소, 재공고 중(안 되면 재정 전환 검토)", ("여의도",),
             ("11380", "11410", "11440", "11560", "11590", "11620"), "https://www.fnnews.com/news/202610100050441724",
             stations=('새절', '신촌', '여의도', '노량진', '장승배기', '서울대입구')),

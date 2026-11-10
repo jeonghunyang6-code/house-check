@@ -338,6 +338,10 @@ out['v2_e6t'] = [[r['apt_seq'], r['target_seq'], float(r['ratio_now']), float(r[
 out['v2_drive'] = {}
 for r in select(db, "SELECT apt_seq, dest, minutes FROM complex_drive WHERE minutes IS NOT NULL"):
     out['v2_drive'].setdefault(r['apt_seq'], {})[r['dest']] = float(r['minutes'])
+# H3 학원가(입지 사실표, 2026-11-10 사용자 요청): 법정동별 입시·보습 학원+교습소 수(complexes.academy_exam)와 수도권 동 순위. {시군구|동: [수, 순위]}, n = 동 수
+_ac = select(db, """WITH a AS (SELECT region_code, umd_name, max(academy_exam) ac FROM complexes WHERE academy_exam IS NOT NULL GROUP BY 1, 2)
+ SELECT region_code rc, umd_name umd, ac, rank() OVER (ORDER BY ac DESC) rk, count(*) OVER () n FROM a""")
+out['v2_acad'] = {'n': int(_ac[0]['n']) if _ac else 0, 'd': {f"{r['rc']}|{r['umd']}": [int(r['ac']), int(r['rk'])] for r in _ac}}
 # 신도시 일정 교차 확인(collector/newtowns.py, 2026-11-10): 청약홈 입주자모집공고 입주 예정 월 [첫, 마지막, 공고 수, 세대 합]
 from collector.newtowns import presale_sql as _nt_sql, presale_rows as _nt_rows
 out['v2_newtown_ps'] = _nt_rows(select(db, _nt_sql())) if _nt_sql() else {}
