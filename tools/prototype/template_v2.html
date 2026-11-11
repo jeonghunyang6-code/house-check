@@ -1021,6 +1021,8 @@ function factsHtml(seq) {
   // 학원가(H3, 2026-11-10 사용자 요청): 같은 법정동 입시·보습 학원+교습소 수와 수도권 동 순위(extract v2_acad). 학군지 판정은 안 함(학원 수만으로는 못 봄 📖 p.89~95)
   const AC = D.v2_acad || {}, ac = (AC.d || {})[`${rc}|${inf[2] || (main(seq) || {}).umd}`];
   if (ac) out.push(row('학원가', `입시·보습 <b>${ac[0].toLocaleString()}곳</b> · 수도권 ${AC.n.toLocaleString()}개 동 중 ${ac[1].toLocaleString()}위`));
+  // 공원(2026-11-11 사용자 요청, jobs/infra.py park): 가장 가까운 근린공원 이상(어린이·소공원 뺌), 직선 2km 🔧 안. 전국도시공원정보표준데이터
+  if (inf[17] && inf[20] != null) out.push(row('공원', `<b>${inf[17]} ${inf[20].toLocaleString()}m</b>${inf[18] ? ` · ${inf[18]}` : ''}${inf[19] ? ` ${inf[19] >= 10000 ? (inf[19] / 10000).toFixed(1) + '만' : inf[19].toLocaleString()}㎡` : ''}`));
   const z = (D.v2_lz || {})[seq], me = cxName(seq).replace(/\s/g, ''), ip = ((z && (D.v2_ipz || {})[z]) || []).filter(x => x[0].replace(/\s/g, '') !== me);
   out.push(row('6개월 입주', ip.length ? `<b>${ip.reduce((a, x) => a + x[1], 0).toLocaleString()}세대</b> · ${ip.slice(0, 2).map(x => x[0]).join(', ')}${ip.length > 2 ? ` 외 ${ip.length - 2}곳` : ''}` : '<span class="muted">없음</span>'));   // 같은 생활권 입주 예정. 입주장엔 전세가 눌림 📖 p.153~154, 6개월 🔧
   // 같은 시군구 신도시·신규택지(D7 추가 공급 토지 📖 p.218~219). 공급 효과는 입주 때(📖 p.54~56)라 입주·착공 목표를 같이

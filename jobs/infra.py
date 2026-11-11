@@ -23,7 +23,7 @@ from collections import Counter
 from collector.datagokr_file import CaptchaRequired, DownloadError, download
 from collector.db import Db, DbError, connect, lit, select
 from collector import access as ac
-from collector import hira, schoolinfo
+from collector import hira, parks, schoolinfo
 from collector.lifezone import station_keys, station_key
 from collector.infra import dist_m, drop_shared_coords, merge_stations, nearest, normalize_station
 from collector.neis import OFFICES, PAGE, NeisError, count_by_dong, fetch_page, match_dong
@@ -475,6 +475,53 @@ def run_hospital(db: Db) -> int:
     return 0
 
 
+def run_park(db: Db) -> int:
+    """공원(collector/parks.py): 전국 표준데이터를 다 받아 수도권 근린공원 이상만 → 단지마다 가장 가까운 곳(2km 🔧 안)."""
+    pts, page, total = [], 1, 0
+    while True:
+        try:
+            total, got = parks.items(_get_json(parks.URL, {"pageNo": page, "numOfRows": parks.PAGE, "type": "json"}))
+        except (ApiError, QuotaExceeded) as e:
+            print(f"  공원 {page}쪽: {e}", file=sys.stderr)
+            return 2
+        if page == 1:
+            print(f"  공원 전체 {total}건, 첫 행 필드: {sorted(got[0]) if got else '없음'}", flush=True)
+        pts += [p for p in (parks.normalize(r) for r in got) if p]
+        if not got or page * parks.PAGE >= total:
+            break
+        page += 1
+    if not pts:   # 필드 이름이 다르면 여기서 멈춤(DB 안 바꿈)
+        print("  공원 좌표를 하나도 못 읽음 → collector/parks.py 필드 이름 확인", file=sys.stderr)
+        return 1
+    big = [p for p in pts if parks.keep(p)]
+    print(f"  좌표 읽은 공원 {len(pts)}곳 중 수도권 근린공원 이상 {len(big)}곳, 구분: {Counter(p['kind'] for p in big).most_common(8)}", flush=True)
+    grid = hira.Grid(big)
+    cx = select(db, "SELECT apt_seq, lat, lng FROM complexes WHERE lat IS NOT NULL")
+    vals = []
+    for c in cx:
+        la, lo = float(c["lat"]), float(c["lng"])
+        best, bd = None, None
+        for p in grid.around(la, lo, 3):   # 약 3km 칸 안
+            d = dist_m(la, lo, p["lat"], p["lng"])
+            if bd is None or d < bd:
+                best, bd = p, d
+        ok = best is not None and bd <= parks.NEAR_M
+        vals.append(f"({lit(c['apt_seq'])}, {lit(best['name'] if ok else None)}, {lit(best['kind'] if ok else None)}, "
+                    f"{best['area'] if ok and best['area'] else 'NULL'}::float8, {round(bd) if ok else 'NULL'}::int)")
+    stmts = ["BEGIN;", "DELETE FROM park;"]
+    for i in range(0, len(big), 500):
+        stmts.append("INSERT INTO park (name, kind, area_m2, lat, lng) VALUES " + ", ".join(
+            f"({lit(p['name'])}, {lit(p['kind'])}, {p['area'] if p['area'] else 'NULL'}, {p['lat']}, {p['lng']})" for p in big[i:i + 500]) + ";")
+    for i in range(0, len(vals), 1000):
+        stmts.append("UPDATE complexes AS c SET park_name = v.n, park_kind = v.k, park_area = v.ar, park_m = v.d "
+                     f"FROM (VALUES {', '.join(vals[i:i + 1000])}) AS v(a, n, k, ar, d) WHERE c.apt_seq = v.a;")
+    stmts.append("COMMIT;")
+    db.query("\n".join(stmts))
+    near = sum(1 for v in vals if "NULL::int" not in v)
+    print(f"  좌표 단지 {len(cx)}개 중 {parks.NEAR_M}m 안 근린공원 이상 있는 단지 {near}개")
+    return 0
+
+
 CLOSED = ("폐점", "예정")   # 이름에 이 말이 있으면 문을 닫았거나 아직 안 연 곳
 
 
@@ -511,7 +558,7 @@ def run_mart(db: Db, path: str | None) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("mode", choices=["stations", "schoolzone", "midzone", "elem", "academy", "hospital", "mart", "access"])
+    ap.add_argument("mode", choices=["stations", "schoolzone", "midzone", "elem", "academy", "hospital", "park", "mart", "access"])
     ap.add_argument("--dir", help="stations: 미리 받아 둔 st_<번호>.csv 폴더, access: <번호>.bin 역간거리 파일 폴더")
     ap.add_argument("--file", help="mart: 대형마트 TSV")
     ap.add_argument("--db", choices=["api", "psql"])
@@ -521,7 +568,7 @@ def main(argv: list[str] | None = None) -> int:
         db = connect(a.db)
         rc = {"stations": lambda: run_stations(db, a.dir), "schoolzone": lambda: run_schoolzone(db),
               "midzone": lambda: run_midzone(db), "elem": lambda: run_elem(db),
-              "academy": lambda: run_academy(db), "hospital": lambda: run_hospital(db), "mart": lambda: run_mart(db, a.file),
+              "academy": lambda: run_academy(db), "hospital": lambda: run_hospital(db), "park": lambda: run_park(db), "mart": lambda: run_mart(db, a.file),
               "access": lambda: run_access(db, a.dir)}[a.mode]()
     except DbError as e:
         print(f"[infra] DB 오류: {e}", file=sys.stderr)
