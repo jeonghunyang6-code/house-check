@@ -97,3 +97,14 @@ def test_my_area_follows_site_choice():
         def query(self, sql): return [{"v": self.v}] if self.v is not None else []
     assert my_area(_D("59")) == 59 and my_area(_D(59)) == 59 and my_area(_D('"59"')) == 59
     assert my_area(_D(None)) == 84 and my_area(_D("73")) == 84 and my_area(_D("x")) == 84
+
+
+def test_ask_diff_same_rules_as_site():
+    """사이트 호가 카드와 같은 규칙: 향은 안 보고 층은 저·중·고로, 같은 가격은 그대로."""
+    from jobs.notify import ask_diff
+    a = {"dong": "153", "tot": 19, "fl": "저", "ex": 59.02, "dir": "남향"}
+    prev = [{**a, "p": 200000}, {**a, "p": 210000}, {"dong": "147", "tot": 14, "fl": "중", "ex": 59, "p": 230000}]
+    now = [{**a, "fl": "3", "dir": "남서향", "p": 195000}, {**a, "p": 210000},                     # 3/19층 = 저, 향 달라도 같은 매물 → 내림 1
+           {"dong": "147", "tot": 14, "fl": "중", "ex": 59.7, "p": 230000}, {"dong": "147", "tot": 14, "fl": "중", "ex": 59, "p": 210000}]
+    assert ask_diff(prev, now) == {"dn": 1, "up": 0, "new": 1, "gone": 0}
+    assert ask_diff(now, prev) == {"dn": 0, "up": 1, "new": 0, "gone": 1}

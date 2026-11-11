@@ -177,6 +177,44 @@ def my_area(db: Db) -> int:
 BANDS = {84: (75, 100), 59: (50, 70)}   # 평형 → 전용㎡ 범위(최근 거래가·저장 호가 고를 때). 84 는 예전 그대로
 
 
+def _fband(x: dict) -> str:
+    f, t = str(x.get("fl") or ""), x.get("tot") or 0
+    if f in ("저", "중", "고") or not f.isdigit() or not t:
+        return f
+    r = int(f) / float(t)
+    return "저" if r <= 1 / 3 else "중" if r <= 2 / 3 else "고"
+
+
+def ask_diff(prev: list[dict], now: list[dict]) -> dict[str, int]:
+    """지난 저장 대비 매물 변화(사이트 상세 탭 호가 카드와 같은 규칙, 2026-11-11 사용자 결정 B안).
+    같은 동·전체 층·층 구간(저·중·고)·전용(정수 ㎡) = 같은 매물. 같은 가격은 먼저 그대로로 지우고, 남은 것은 싼 것끼리 짝."""
+    key = lambda x: (x.get("dong") or "", x.get("tot") or "", _fband(x), int(float(x["ex"])))
+    old: dict = {}
+    cur: dict = {}
+    for x in prev:
+        old.setdefault(key(x), []).append(x["p"])
+    for x in now:
+        cur.setdefault(key(x), []).append(x["p"])
+    out = {"dn": 0, "up": 0, "new": 0, "gone": 0}
+    for k in set(old) | set(cur):
+        o, c = sorted(old.get(k, [])), sorted(cur.get(k, []))
+        rest = []
+        for p in c:
+            if p in o:
+                o.remove(p)
+            else:
+                rest.append(p)
+        for i, p in enumerate(rest):
+            if i >= len(o):
+                out["new"] += 1
+            elif p < o[i]:
+                out["dn"] += 1
+            else:
+                out["up"] += 1
+        out["gone"] += max(0, len(o) - len(rest))
+    return out
+
+
 def watch_info(db: Db, seqs: list[str], save: bool = False, ag: int = 84) -> dict[str, dict]:
     """관심 단지별 이름·가격(ag㎡ 기준 시세, 없으면 최근 거래가)·저장 호가(ag㎡대, 최근 두 번). ag = my_area()."""
     lo, hi = BANDS[ag]
@@ -221,12 +259,16 @@ def watch_info(db: Db, seqs: list[str], save: bool = False, ag: int = 84) -> dic
         ask, moved = "", False
         dates = sorted(asks.get(s, {}))
         if dates:
-            cnt = lambda d: sorted(x["p"] for x in asks[s][d] if x.get("t") == "매매" and x.get("ex") and lo <= float(x["ex"]) < hi)
+            rows_of = lambda d: [x for x in asks[s][d] if x.get("t") == "매매" and x.get("ex") and lo <= float(x["ex"]) < hi]
+            cnt = lambda d: sorted(x["p"] for x in rows_of(d))
             now = cnt(dates[-1])
             if now:
                 diff = len(now) - len(cnt(dates[-2])) if len(dates) > 1 else 0
+                ad = ask_diff(rows_of(dates[-2]), rows_of(dates[-1])) if len(dates) > 1 else {"dn": 0, "new": 0}
                 ask = f"🏷️ {ag}㎡ 호가 {len(now)}개 · 중간 {eok(now[(len(now) - 1) // 2])}" + (f" ({'+' if diff > 0 else ''}{diff}개)" if diff else "") + f" · {dates[-1][5:].replace('-', '/')} 저장"
-                moved = diff != 0 and dates[-1] >= week_ago
+                if ad["dn"] or ad["new"]:   # 2026-11-11 사용자 요청: 가격 내린 매물(지난 저장 대비)
+                    ask += "\n   " + " · ".join(t for t in ((f"🔻 가격 내린 매물 {ad['dn']}건" if ad["dn"] else ""), (f"신규 {ad['new']}건" if ad["new"] else "")) if t)
+                moved = (diff != 0 or ad["dn"] > 0) and dates[-1] >= week_ago
         out[s] = {"name": names.get(s, s), "px": px, "ask": ask, "ask_moved": moved, "px_moved": px_moved, "ask_last": dates[-1] if dates else None}
     return out
 
