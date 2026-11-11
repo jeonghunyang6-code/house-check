@@ -2,10 +2,17 @@
 
 설명용 사실만(점수화하지 않음, 관점 M3). 어린이공원·소공원은 단지마다 너무 많아 빼고, 근린공원 이상(근린·체육·역사·수변·문화 등)에서 가장 가까운 곳.
 표준데이터 필드 이름(parkNm 공원명, parkSe 공원구분, latitude, longitude, parkAr 면적㎡, rdnmadr·lnmadr 주소)은 포털 안내 기준이며,
-이 세션에서는 포털 접속이 막혀 실제 응답으로 확인하지 못함 → jobs/infra.py park 가 첫 행 필드를 찍고, 좌표를 하나도 못 읽으면 쓰지 않고 멈춘다.
+2026-11-11 Actions 첫 응답에서 manageNo·parkNm 확인, 나머지는 jobs/infra.py park 가 첫 행 필드를 찍고 좌표를 하나도 못 읽으면 쓰지 않고 멈춘다.
 """
 
 from __future__ import annotations
+
+import json
+import os
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
 
 URL = "https://api.data.go.kr/openapi/tn_pubr_public_cty_park_info_api"
 PAGE = 1000
@@ -21,9 +28,43 @@ def _num(v):
         return None
 
 
+class ParkError(RuntimeError):
+    pass
+
+
+def get(page: int, key: str | None = None, sleep=time.sleep) -> dict:
+    """한 쪽. 2026-11-11 실제 응답: 다른 포털 API 와 달리 'response' 포장 없이 {'header', 'body': {'items': {'item': [...]}}}.
+    403·429 는 다시 하지 않고 멈춘다(접근 제한 우회 금지). 연결 끊김만 짧게 다시."""
+    key = key or os.environ.get("DATA_GO_KR_SERVICE_KEY", "")
+    q = urllib.parse.urlencode({"serviceKey": key, "pageNo": page, "numOfRows": PAGE, "type": "json"})
+    last = None
+    for i in range(4):
+        try:
+            with urllib.request.urlopen(f"{URL}?{q}", timeout=60) as r:
+                body = r.read().decode("utf-8")
+            break
+        except urllib.error.HTTPError as e:
+            if e.code in (403, 429):
+                raise ParkError(f"HTTP {e.code} → 멈춤") from None
+            last = f"HTTP {e.code}"   # 주소(키 포함)는 싣지 않는다
+        except (urllib.error.URLError, ConnectionError, TimeoutError) as e:
+            last = type(e).__name__
+        sleep(5 * (i + 1))
+    else:
+        raise ParkError(str(last))
+    try:
+        j = json.loads(body)
+    except json.JSONDecodeError:
+        raise ParkError("json 아님: " + (body[:120].replace(key, "") if key else body[:120])) from None
+    code = str(((j.get("response") or j).get("header") or {}).get("resultCode") or "")
+    if code not in ("00", "03", ""):   # 03 = 자료 없음(마지막 쪽 뒤)
+        raise ParkError(f"resultCode {code}: {((j.get('response') or j).get('header') or {}).get('resultMsg')}")
+    return j
+
+
 def items(body: dict) -> tuple[int, list[dict]]:
-    """표준데이터 API 응답 → (전체 건수, 행). items 가 목록이거나 {'item': …} 둘 다 받는다."""
-    b = (body.get("response") or {}).get("body") or {}
+    """표준데이터 API 응답 → (전체 건수, 행). 'response' 포장이 있든 없든, items 가 목록이거나 {'item': …} 둘 다 받는다."""
+    b = (body.get("response") or body).get("body") or {}
     it = b.get("items")
     if isinstance(it, dict):
         it = it.get("item")
