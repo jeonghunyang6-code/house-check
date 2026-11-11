@@ -16,7 +16,8 @@ def test_normalize_and_keep():
          "rdnmadr": "서울특별시 강동구 고덕동"}
     p = normalize(r)
     assert p["name"] == "고덕근린공원" and p["area"] == 21000 and keep(p)
-    assert not keep(normalize({**r, "parkSe": "어린이공원"})) and not keep(normalize({**r, "parkSe": "소공원"}))
+    assert not keep(normalize({**r, "parkSe": "어린이공원"})) and not keep(normalize({**r, "parkSe": "소공원"})) and not keep(normalize({**r, "parkSe": "기타"}))
+    assert normalize({**r, "parkNm": "명  주"})["name"] == "명 주"
     assert not keep(normalize({**r, "rdnmadr": "부산광역시 해운대구"}))
     assert keep(normalize({**r, "rdnmadr": "", "lnmadr": ""}))                 # 주소 없으면 좌표로 수도권
     assert normalize({**r, "latitude": ""}) is None and normalize({**r, "latitude": "0"}) is None

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 import urllib.error
 import urllib.parse
@@ -17,7 +18,7 @@ import urllib.request
 URL = "https://api.data.go.kr/openapi/tn_pubr_public_cty_park_info_api"
 PAGE = 1000
 NEAR_M = 2000                     # 🔧 이보다 먼 공원은 '없음'(설명용 표시 범위)
-SMALL = ("어린이", "소공원", "묘지")  # 공원구분에 이 말이 있으면 뺀다
+SMALL = ("어린이", "소공원", "묘지", "기타")  # 공원구분에 이 말이 있으면 뺀다. 기타 = 마을쉼터·공공공지·쌈지공원(2026-11-11 수도권 443곳, 가운데 900㎡)
 REGION = ("서울", "경기", "인천")
 
 
@@ -78,7 +79,7 @@ def normalize(r: dict) -> dict | None:
     if lat is None or lng is None or not (33 < lat < 39 and 124 < lng < 132):
         return None
     addr = (r.get("rdnmadr") or r.get("lnmadr") or "").strip()
-    return {"name": (r.get("parkNm") or "").strip(), "kind": (r.get("parkSe") or "").strip(),
+    return {"name": re.sub(r"\s+", " ", (r.get("parkNm") or "")).strip(), "kind": (r.get("parkSe") or "").strip(),
             "area": _num(r.get("parkAr")), "lat": lat, "lng": lng, "addr": addr}
 
 
