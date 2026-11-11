@@ -7,6 +7,8 @@ def test_items_shapes():
     one = {"response": {"body": {"items": {"item": {"parkNm": "b"}}, "totalCount": 1}}}
     assert items(one) == (1, [{"parkNm": "b"}])
     assert items({"response": {"body": {"items": "", "totalCount": "0"}}}) == (0, [])
+    bare = {"header": {"resultCode": "00"}, "body": {"items": {"item": [{"manageNo": "41287-00055", "parkNm": "c"}]}, "totalCount": "5"}}   # 2026-11-11 실제 모양
+    assert items(bare) == (5, [{"manageNo": "41287-00055", "parkNm": "c"}])
 
 
 def test_normalize_and_keep():

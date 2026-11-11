@@ -480,8 +480,8 @@ def run_park(db: Db) -> int:
     pts, page, total = [], 1, 0
     while True:
         try:
-            total, got = parks.items(_get_json(parks.URL, {"pageNo": page, "numOfRows": parks.PAGE, "type": "json"}))
-        except (ApiError, QuotaExceeded) as e:
+            total, got = parks.items(parks.get(page))
+        except parks.ParkError as e:
             print(f"  공원 {page}쪽: {e}", file=sys.stderr)
             return 2
         if page == 1:
