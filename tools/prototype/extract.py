@@ -229,9 +229,10 @@ out['v2_wk'] = select(db, """SELECT cls_id, week_date::text d, value v FROM rone
  AND week_date >= '2023-06-01' ORDER BY 1, 2""")
 out['v2_info'] = {r['apt_seq']: [r['apt_name'], r['region_code'], r['umd_name'], r['lat'] and round(float(r['lat']), 5), r['lng'] and round(float(r['lng']), 5),
                    r['station_name'], r['station_m'], r['h2_cbd_min'], r['h2_ybd_min'], r['h2_gbd_min'], r['mart_name'], r['mart_m'], r['hosp_name'], r['hosp_m'],
-                   r['mid_zone'], r['build_year'], r['hh']]
+                   r['mid_zone'], r['build_year'], r['hh'], r['park_name'], r['park_kind'], r['park_area'] and round(float(r['park_area'])), r['park_m']]
                   for r in select(db, """SELECT c.apt_seq, c.apt_name, c.region_code, c.umd_name, c.lat, c.lng, c.station_name, c.station_m, c.h2_cbd_min, c.h2_ybd_min,
- c.h2_gbd_min, c.mart_name, c.mart_m, c.hosp_name, c.hosp_m, c.mid_zone, c.build_year, k.households hh FROM complexes c LEFT JOIN kapt_complexes k USING (kapt_code)
+ c.h2_gbd_min, c.mart_name, c.mart_m, c.hosp_name, c.hosp_m, c.mid_zone, c.build_year, k.households hh,
+ c.park_name, c.park_kind, c.park_area, c.park_m FROM complexes c LEFT JOIN kapt_complexes k USING (kapt_code)
  WHERE c.apt_seq IN (SELECT apt_seq FROM complex_metrics WHERE ref_10k IS NOT NULL OR a5_est_10k IS NOT NULL)""")}
 # 검색용: 기준 시세가 없는 단지(거래가 적은 신축·소규모, 재건축 뒤 아직 매매 신고가 없는 곳)도 찾고 ♡ 할 수 있게.
 # K-apt 등록 단지 또는 3년 안 매매 3건+. 재건축으로 K-apt 이름·사용승인이 바뀐 곳(예: 코오롱상가아파트 → 더샵강동센트럴시티)은 K-apt 이름으로도 찾는다
