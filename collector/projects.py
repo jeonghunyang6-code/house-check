@@ -55,7 +55,7 @@ PROJECTS: tuple[Project, ...] = (
             "https://news.bizwatch.co.kr/article/real_estate/2026/09/14/0015",
             stations=('덕정', '의정부', '창동', '광운대', '청량리', '왕십리', '삼성', '양재', '과천', '인덕원', '금정', '수원', '상록수'),
             more=("https://www.sisajournal-e.com/news/articleView.html?idxno=423713", "https://www.dtoday.co.kr/news/articleView.html?idxno=763273"), checked=date(2026, 11, 10)),
-    Project("신안산선 안산·시흥~여의도", "착공", None, "광명 붕괴사고로 개통 목표 2026 → 2028 하반기", ("여의도",),
+    Project("신안산선 안산·시흥~여의도", "착공", None, "광명 붕괴사고로 늦어져 개통 목표 2028 하반기(당초 2026)", ("여의도",),
             ("11560", "11530", "11545", "41171", "41210", "41390", "41271", "41273"), "https://v.daum.net/v/t8umTEaeZj",
             stations=('여의도', '영등포', '신풍', '대림', '구로디지털단지', '독산', '석수', '광명', '시흥시청', '중앙'),
             more=("https://www.segye.com/newsView/20260415526687", "https://v.daum.net/v/20260414124515661", "https://www.mt.co.kr/estate/2026/10/08/2026100722544643761"), checked=date(2026, 11, 10)),

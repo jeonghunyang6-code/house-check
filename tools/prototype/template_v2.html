@@ -1007,8 +1007,10 @@ function factsHtml(seq) {
       cand.forEach(([n, a, o, nw]) => { const d = distM(la, lo, a, o); if (!best || d < best[1]) best = [n, d, nw]; });
       return { p, best, inReg: (p.region_codes || '').split(',').includes(rc) }; });
     const pj = all.filter(x => x.best && x.best[1] <= 1500).sort((a, b) => a.best[1] - b.best[1]), far = all.filter(x => !x.best && x.inReg);
-    out.push(row('철도 호재', (pj.length ? pj.slice(0, 2).map(({ p, best: b }) => `<span class="pill ${PST[p.status] || 'none'}">${p.status}</span> ${p.name.split('(')[0]} ${b[0]}역${b[2] ? '(가칭)' : ''} <b>${Math.round(b[1]).toLocaleString()}m</b>`).join('<br>') : '<span class="muted">1.5km 안 없음</span>')
-      + far.map(({ p }) => `<br><span class="pill ${PST[p.status] || 'none'}">${p.status}</span> ${p.name.split('(')[0]}`).join('')));   // 같은 시군구, 새 역 위치 미확인. 착공 뒤 들어가도 늦지 않다, 진짜 악재는 취소 📖 p.279~280. 새 역(가칭)은 기사에 나온 지명으로 잡은 대략 위치
+    // 개통 목표(2026-11-11 사용자 요청): 전망 글에 '개통 목표 2028'·'2028-08'·'2028 하반기' 꼴이 있을 때만(언론사 2곳 이상 확인한 값, collector/projects.py)
+    const tgt = (p) => { const m = (p.outlook || '').match(/개통 목표 (\d{4}(?:-\d{2})?(?: [상하]반기)?)/); return m ? ` <span class="muted" style="font-size:var(--fs-note)">· 개통 목표 ${m[1]}</span>` : ''; };
+    out.push(row('철도 호재', (pj.length ? pj.slice(0, 2).map(({ p, best: b }) => `<span class="pill ${PST[p.status] || 'none'}">${p.status}</span> ${p.name.split('(')[0]} ${b[0]}역${b[2] ? '(가칭)' : ''} <b>${Math.round(b[1]).toLocaleString()}m</b>${tgt(p)}`).join('<br>') : '<span class="muted">1.5km 안 없음</span>')
+      + far.map(({ p }) => `<br><span class="pill ${PST[p.status] || 'none'}">${p.status}</span> ${p.name.split('(')[0]}${tgt(p)}`).join('')));   // 같은 시군구, 새 역 위치 미확인. 착공 뒤 들어가도 늦지 않다, 진짜 악재는 취소 📖 p.279~280. 새 역(가칭)은 기사에 나온 지명으로 잡은 대략 위치
   }
   const e = (POI.elem || [])[(D.v2_elemz || {})[seq]];
   if (e && la) out.push(row('배정 초등학교', `<b>${sname(e[0])} ${Math.round(distM(la, lo, e[1], e[2])).toLocaleString()}m</b>${e[3] ? ` · 학생 ${e[3].toLocaleString()}명` : ''}`,
