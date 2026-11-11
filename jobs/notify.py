@@ -163,8 +163,23 @@ def daily(db: Db, ops_out: list | None = None) -> str | None:
     return "\n".join(warn + head + ([f"\n{url}"] if url and (rows or rd) else []))
 
 
-def watch_info(db: Db, seqs: list[str], save: bool = False) -> dict[str, dict]:
-    """관심 단지별 이름·가격(84㎡ 기준 시세, 없으면 최근 거래가)·저장 호가(84㎡대, 최근 두 번)."""
+def my_area(db: Db) -> int:
+    """사이트에서 고른 평형(user_state 'v2-area', 상세·관심 탭 84/59 버튼). 2026-11-11 사용자: 59㎡ 를 골랐는데 텔레그램은 84㎡ 고정이었음."""
+    got = select(db, "SELECT v FROM user_state WHERE k = 'v2-area'")
+    v = got[0]["v"] if got else None
+    try:
+        v = int(json.loads(v) if isinstance(v, str) and v.startswith('"') else v)
+    except (TypeError, ValueError):
+        v = 84
+    return v if v in BANDS else 84
+
+
+BANDS = {84: (75, 100), 59: (50, 70)}   # 평형 → 전용㎡ 범위(최근 거래가·저장 호가 고를 때). 84 는 예전 그대로
+
+
+def watch_info(db: Db, seqs: list[str], save: bool = False, ag: int = 84) -> dict[str, dict]:
+    """관심 단지별 이름·가격(ag㎡ 기준 시세, 없으면 최근 거래가)·저장 호가(ag㎡대, 최근 두 번). ag = my_area()."""
+    lo, hi = BANDS[ag]
     if not seqs:
         return {}
     ins = ", ".join(lit(s) for s in seqs)
@@ -172,19 +187,19 @@ def watch_info(db: Db, seqs: list[str], save: bool = False) -> dict[str, dict]:
       FROM complexes c LEFT JOIN kapt_complexes k USING (kapt_code) WHERE c.apt_seq IN ({ins})
       UNION ALL SELECT pc_seq, apt_name FROM presale_complexes WHERE pc_seq IN ({ins})""")}
     refs = {}
-    for r in select(db, f"SELECT apt_seq s, area_group ag, ref_10k p FROM complex_metrics WHERE apt_seq IN ({ins}) AND ref_10k IS NOT NULL ORDER BY abs(area_group - 84)"):
+    for r in select(db, f"SELECT apt_seq s, area_group ag, ref_10k p FROM complex_metrics WHERE apt_seq IN ({ins}) AND ref_10k IS NOT NULL ORDER BY abs(area_group - {int(ag)})"):
         refs.setdefault(r["s"], (r["ag"], r["p"]))
     # 지난주 기준 시세: 금요일마다 jeonse_lines 가 metric_snap 에 쌓은 값(6~13일 전) — 2026-10-27 사용자 요청 '지난주 대비'
     today = datetime.now(KST).date()
     prev = {(r["s"], r["ag"]): r["p"] for r in select(db, f"""SELECT DISTINCT ON (apt_seq, area_group) apt_seq s, area_group ag, ref_10k p FROM metric_snap
       WHERE apt_seq IN ({ins}) AND ref_10k IS NOT NULL AND asof BETWEEN {lit(today)}::date - 13 AND {lit(today)}::date - 6 ORDER BY apt_seq, area_group, asof DESC""")}
-    if save and refs:   # 보여 주는 평형(84㎡에 가장 가까운) 그대로 쌓는다(전세 신호는 84·59 만이라 따로)
+    if save and refs:   # 보여 주는 평형(ag㎡에 가장 가까운) 그대로 쌓는다(전세 신호는 84·59 만이라 따로)
         db.query("INSERT INTO metric_snap (apt_seq, area_group, asof, ref_10k) VALUES " + ", ".join(f"({lit(k)}, {ag}, {lit(today)}, {p})" for k, (ag, p) in refs.items())
                  + " ON CONFLICT (apt_seq, area_group, asof) DO UPDATE SET ref_10k = EXCLUDED.ref_10k;")
     last = {r["s"]: r for r in select(db, f"""SELECT DISTINCT ON (s) s, ag, p, k, d FROM (
-      SELECT apt_seq s, area_group ag, price_10k p, '매매' k, contract_date d FROM deals WHERE apt_seq IN ({ins}) AND NOT is_cancelled AND area_group BETWEEN 75 AND 99
+      SELECT apt_seq s, area_group ag, price_10k p, '매매' k, contract_date d FROM deals WHERE apt_seq IN ({ins}) AND NOT is_cancelled AND area_group >= {lo} AND area_group < {hi}
       UNION ALL SELECT coalesce(apt_seq, pc_seq), area_group, price_10k, kind, contract_date FROM right_deals
-        WHERE (apt_seq IN ({ins}) OR pc_seq IN ({ins})) AND NOT is_cancelled AND area_group BETWEEN 75 AND 99) x ORDER BY s, d DESC""")}
+        WHERE (apt_seq IN ({ins}) OR pc_seq IN ({ins})) AND NOT is_cancelled AND area_group >= {lo} AND area_group < {hi}) x ORDER BY s, d DESC""")}
     got = select(db, "SELECT v FROM user_state WHERE k = 'v2-naver'")
     asks = got[0]["v"] if got else {}
     asks = (json.loads(asks) if isinstance(asks, str) else asks) or {}
@@ -206,11 +221,11 @@ def watch_info(db: Db, seqs: list[str], save: bool = False) -> dict[str, dict]:
         ask, moved = "", False
         dates = sorted(asks.get(s, {}))
         if dates:
-            cnt = lambda d: sorted(x["p"] for x in asks[s][d] if x.get("t") == "매매" and x.get("ex") and 75 <= float(x["ex"]) < 100)
+            cnt = lambda d: sorted(x["p"] for x in asks[s][d] if x.get("t") == "매매" and x.get("ex") and lo <= float(x["ex"]) < hi)
             now = cnt(dates[-1])
             if now:
                 diff = len(now) - len(cnt(dates[-2])) if len(dates) > 1 else 0
-                ask = f"🏷️ 호가 {len(now)}개 · 중간 {eok(now[(len(now) - 1) // 2])}" + (f" ({'+' if diff > 0 else ''}{diff}개)" if diff else "") + f" · {dates[-1][5:].replace('-', '/')} 저장"
+                ask = f"🏷️ {ag}㎡ 호가 {len(now)}개 · 중간 {eok(now[(len(now) - 1) // 2])}" + (f" ({'+' if diff > 0 else ''}{diff}개)" if diff else "") + f" · {dates[-1][5:].replace('-', '/')} 저장"
                 moved = diff != 0 and dates[-1] >= week_ago
         out[s] = {"name": names.get(s, s), "px": px, "ask": ask, "ask_moved": moved, "px_moved": px_moved, "ask_last": dates[-1] if dates else None}
     return out
@@ -224,16 +239,16 @@ def short_deal(r: dict) -> str:
 RATIO_MOVE = 3.0   # 🔧 4주 전세가율 변화 알림 기준(%p). 책에 수치 없음
 
 
-def jeonse_lines(db: Db, seqs: list[str], names: dict[str, str], today, save: bool = True) -> list[str]:
+def jeonse_lines(db: Db, seqs: list[str], names: dict[str, str], today, save: bool = True, ag: int = 84) -> list[str]:
     """관심 단지 전세 신호만: 📖 전세가율 정상 범위 밖·80% 초과(p.152), 역전세(지금 전세 < 2년 전, 대비금 10%, p.153), 🔧 4주 전세가율 ±3%p.
-    84㎡(없으면 59㎡)대 한 평형. 이번 값을 metric_snap 에 쌓는다."""
+    고른 평형(ag, 없으면 84·59 중 다른 쪽) 한 평형. 이번 값을 metric_snap 에 쌓는다."""
     if not seqs:
         return []
     ins = ", ".join(lit(s) for s in seqs)
     rows = {}
     for r in select(db, f"""SELECT apt_seq s, area_group ag, ref_10k, jeonse_10k, jeonse_ratio::float ratio, band_lo::float lo, band_hi::float hi, reverse_risk rr,
       jeonse_24m_10k j24, reserve_10k rs FROM complex_metrics WHERE apt_seq IN ({ins}) AND area_group IN (84, 85, 59, 60) AND jeonse_10k IS NOT NULL
-      ORDER BY apt_seq, CASE WHEN area_group IN (84, 85) THEN 0 ELSE 1 END, jeonse_n DESC NULLS LAST"""):
+      ORDER BY apt_seq, CASE WHEN area_group IN ({int(ag)}, {int(ag) + 1}) THEN 0 ELSE 1 END, jeonse_n DESC NULLS LAST"""):
         rows.setdefault(r["s"], r)
     if rows and save:
         db.query("INSERT INTO metric_snap (apt_seq, area_group, asof, ref_10k, jeonse_10k, jeonse_ratio) VALUES "
@@ -335,7 +350,8 @@ def weekly(db: Db, save: bool = True) -> str:
         out.append("  ".join(parts) + f"\n<i>부동산원 {wk[-1]['d'][5:].replace('-', '/')} 주</i>")
     seqs = watch(db)
     rows = deals(db, seqs, 7)
-    info = watch_info(db, seqs, save)
+    ag = my_area(db)
+    info = watch_info(db, seqs, save, ag)
     moved = [s for s in seqs if any(r["apt_seq"] == s for r in rows) or info[s]["ask_moved"] or info[s]["px_moved"]]
     if not seqs:
         out.append("\n🏠 관심 단지가 없습니다(웹에서 ♡)")
@@ -351,7 +367,7 @@ def weekly(db: Db, save: bool = True) -> str:
         if quiet:
             out.append(f"\n😴 나머지 {quiet}곳: 이번 주 신고·호가 변동 없음")
         out += ask_reminder(info, seqs, today)
-    js = jeonse_lines(db, seqs, {k: v["name"] for k, v in info.items()}, today, save)
+    js = jeonse_lines(db, seqs, {k: v["name"] for k, v in info.items()}, today, save, ag)
     if js:
         out.append("\n🔑 <b>전세 신호</b>")
         out += js

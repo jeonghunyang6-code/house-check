@@ -86,3 +86,14 @@ def test_daily_head_counts_quick_sales(monkeypatch):
     assert N.daily(None).split("\n")[0] == "🔔 <b>관심 단지 새 거래 2건</b> · 🔻<b>급매 1건</b>"
     monkeypatch.setattr(N, "deals", lambda db, seqs, days: rows[1:])
     assert N.daily(None).split("\n")[0] == "🔔 <b>관심 단지 새 거래 1건</b>"
+
+
+def test_my_area_follows_site_choice():
+    """2026-11-11: 사이트에서 59㎡ 를 고르면 주간 요약도 59㎡(그 밖·없음은 84)."""
+    from jobs.notify import my_area
+
+    class _D:
+        def __init__(self, v): self.v = v
+        def query(self, sql): return [{"v": self.v}] if self.v is not None else []
+    assert my_area(_D("59")) == 59 and my_area(_D(59)) == 59 and my_area(_D('"59"')) == 59
+    assert my_area(_D(None)) == 84 and my_area(_D("73")) == 84 and my_area(_D("x")) == 84
