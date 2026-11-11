@@ -57,7 +57,9 @@ jobs:
       - name: 화면 점검(배포 전, 실패하면 배포 안 함 → 어제 사이트 그대로)
         run: |
           npm i --no-save --silent --prefix "$RUNNER_TEMP/pw" playwright@1.56.1
-          "$RUNNER_TEMP/pw/node_modules/.bin/playwright" install --with-deps chromium > /dev/null
+          # 2026-11-11: 우분투 저장소 DNS 장애로 글꼴 등 시스템 패키지(--with-deps) 설치가 두 번 실패 → 그러면 브라우저만 깔고 점검(점검은 화면 오류만 봄, 러너에 기본 라이브러리는 있음)
+          "$RUNNER_TEMP/pw/node_modules/.bin/playwright" install --with-deps chromium > /dev/null \
+            || { echo "시스템 패키지 설치 실패 → 브라우저만 받아 점검"; "$RUNNER_TEMP/pw/node_modules/.bin/playwright" install chromium > /dev/null; }
           NODE_PATH="$RUNNER_TEMP/pw/node_modules" node tools/prototype/smoke.js house-check
       - name: Vercel 배포
         env:
