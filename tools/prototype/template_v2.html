@@ -1496,17 +1496,17 @@ function drawAsks() {
       o.slice(c.length).forEach(x => gone.push(x)); });
   }
   const where = (x) => `${x.dong ? x.dong + '동 ' : ''}${x.fl ? x.fl + (x.tot ? '/' + x.tot : '') + '층' : ''} ${x.dir || ''}`.trim();
-  const tagOf = (x) => { const m = mark.get(x); if (!m) return ''; return m[0] === 'new' ? ' <span class="pill acc">새</span>' : ` <span class="${m[0] === 'dn' ? 'dn' : 'up'}" style="font-size:var(--fs-note);font-weight:700">${m[0] === 'dn' ? '▼' : '▲'}${man(Math.abs(m[1]))}</span>`; };
+  // 목록 안 표시(2026-11-11 사용자: '▼5,000만'처럼 같은 자리에 '신규'도)
+  const tagOf = (x) => { const m = mark.get(x); if (!m) return ''; return m[0] === 'new' ? ' <span style="font-size:var(--fs-note);font-weight:700;color:var(--accent)">신규</span>' : ` <span class="${m[0] === 'dn' ? 'dn' : 'up'}" style="font-size:var(--fs-note);font-weight:700">${m[0] === 'dn' ? '▼' : '▲'}${man(Math.abs(m[1]))}</span>`; };
   const row = (x) => { const g = gap(x.p);
     return `<div class="deal"><span class="muted">${x.dong ? x.dong + '동' : ''}</span><span>${x.fl ? x.fl + (x.tot ? '/' + x.tot : '') + '층' : ''} ${x.dir || ''}${tagOf(x)}${x.conf ? `<br><span class="muted" style="font-size:var(--fs-note)">${x.conf === '직접' ? '직접 기록' : '확인 ' + x.conf.slice(3)}</span>` : ''}</span><span class="p"><span class="pill ${cl(g)}">${g == null ? '–' : sgn(g, 1)}</span> ${eok(x.p)}</span></div>`; };
   const li = (t) => `<div style="font-size:var(--fs-note);padding:2px 0">${t}</div>`;
-  // 시안 B(2026-11-11 사용자: 너무 길다): 펼치면 내림만 한 줄씩, 새·빠짐은 한 줄로 묶음. 시안 C: 요약 한 줄만(목록의 ▼·새 표시로)
-  const ADM = window.HC_ADM || 'B', cnt = [dn.length && `<b class="dn">내림 ${dn.length}</b>`, fresh.length && `새 ${fresh.length}`, gone.length && `빠짐 ${gone.length}`, up.length && `올림 ${up.length}`].filter(Boolean).join(' · ');
+  // 2026-11-11 사용자 결정(B안): 접힌 한 줄 요약, 펼치면 내림만 한 줄씩, 신규·제외는 한 줄로 묶음. 이름 새→신규, 빠짐→제외
+  const cnt = [dn.length && `<b class="dn">내림 ${dn.length}</b>`, fresh.length && `신규 ${fresh.length}`, gone.length && `제외 ${gone.length}`, up.length && `올림 ${up.length}`].filter(Boolean).join(' · ');
   const brief = (xs) => xs.sort((a, b) => a.p - b.p).slice(0, 4).map(x => `${x.dong ? x.dong + '동 ' : ''}${eok(x.p)}`).join(', ') + (xs.length > 4 ? ` 외 ${xs.length - 4}` : '');
-  const diffHtml = !prevD || !cnt ? '' : ADM === 'C' ? `<p class="muted" style="margin:6px 0 2px">지난 저장(${dt(prevD).slice(3)}) 대비: ${cnt}</p>`
-    : `<details class="more-f" style="margin:6px 0 2px"><summary><span>지난 저장(${dt(prevD).slice(3)}) 대비: ${cnt}</span></summary>
+  const diffHtml = !prevD || !cnt ? '' : `<details class="more-f" style="margin:6px 0 2px"><summary><span>지난 저장(${dt(prevD).slice(3)}) 대비: ${cnt}</span></summary>
     ${dn.sort((a, b) => (a[0].p - a[1].p) - (b[0].p - b[1].p)).slice(0, 5).map(([x, o]) => li(`<span class="dn">▼</span> ${where(x)} ${eok(o.p)} → <b>${eok(x.p)}</b>`)).join('')}
-    ${fresh.length ? li(`새 ${brief(fresh)}`) : ''}${gone.length ? li(`<span class="muted">빠짐 ${brief(gone)}</span>`) : ''}</details>`;
+    ${fresh.length ? li(`<span style="color:var(--accent);font-weight:700">신규</span> ${brief(fresh)}`) : ''}${gone.length ? li(`<span class="muted">제외 ${brief(gone)}</span>`) : ''}</details>`;
   $('#askList').innerHTML = sale.length ? diffHtml + sale.slice(0, 5).map(row).join('')
       + (sale.length > 5 ? `<details class="more-f"><summary>나머지 ${sale.length - 5}개 보기</summary>${sale.slice(5).map(row).join('')}</details>` : '')
     : `<p class="muted">${ag}㎡ 매매 호가 기록이 없습니다. 네이버 부동산 단지 화면에서 '호가 저장' 버튼을 누른 뒤 아래 '붙여넣기'에 넣어 주세요.</p>`;
