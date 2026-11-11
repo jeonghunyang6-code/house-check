@@ -1500,12 +1500,13 @@ function drawAsks() {
   const row = (x) => { const g = gap(x.p);
     return `<div class="deal"><span class="muted">${x.dong ? x.dong + '동' : ''}</span><span>${x.fl ? x.fl + (x.tot ? '/' + x.tot : '') + '층' : ''} ${x.dir || ''}${tagOf(x)}${x.conf ? `<br><span class="muted" style="font-size:var(--fs-note)">${x.conf === '직접' ? '직접 기록' : '확인 ' + x.conf.slice(3)}</span>` : ''}</span><span class="p"><span class="pill ${cl(g)}">${g == null ? '–' : sgn(g, 1)}</span> ${eok(x.p)}</span></div>`; };
   const li = (t) => `<div style="font-size:var(--fs-note);padding:2px 0">${t}</div>`;
-  const diffHtml = prevD && (dn.length || up.length || fresh.length || gone.length) ? `<details class="more-f" style="margin:6px 0 2px"><summary><span>지난 저장(${dt(prevD).slice(3)}) 대비: ${[dn.length && `<b class="dn">내림 ${dn.length}</b>`, fresh.length && `새 매물 ${fresh.length}`, gone.length && `빠짐 ${gone.length}`, up.length && `올림 ${up.length}`].filter(Boolean).join(' · ')}</span></summary>
-    ${dn.sort((a, b) => (a[0].p - a[1].p) - (b[0].p - b[1].p)).map(([x, o]) => li(`<span class="dn">▼</span> ${where(x)} ${eok(o.p)} → <b>${eok(x.p)}</b> <span class="dn">(−${man(o.p - x.p)})</span>`)).join('')}
-    ${fresh.map(x => li(`<span class="pill acc" style="font-size:11px;padding:0 5px">새</span> ${where(x)} <b>${eok(x.p)}</b>`)).join('')}
-    ${gone.sort((a, b) => a.p - b.p).map(x => li(`<span class="muted">빠짐 ${where(x)} ${eok(x.p)}</span>`)).join('')}
-    ${up.map(([x, o]) => li(`<span class="up">▲</span> ${where(x)} ${eok(o.p)} → ${eok(x.p)}`)).join('')}
-    <p class="src" style="margin:4px 0 0">같은 동·층 구간(저·중·고)·전용이면 같은 매물로 봄. 빠짐 = 팔렸거나 내렸거나 네이버에서 묶인 매물.</p></details>` : '';
+  // 시안 B(2026-11-11 사용자: 너무 길다): 펼치면 내림만 한 줄씩, 새·빠짐은 한 줄로 묶음. 시안 C: 요약 한 줄만(목록의 ▼·새 표시로)
+  const ADM = window.HC_ADM || 'B', cnt = [dn.length && `<b class="dn">내림 ${dn.length}</b>`, fresh.length && `새 ${fresh.length}`, gone.length && `빠짐 ${gone.length}`, up.length && `올림 ${up.length}`].filter(Boolean).join(' · ');
+  const brief = (xs) => xs.sort((a, b) => a.p - b.p).slice(0, 4).map(x => `${x.dong ? x.dong + '동 ' : ''}${eok(x.p)}`).join(', ') + (xs.length > 4 ? ` 외 ${xs.length - 4}` : '');
+  const diffHtml = !prevD || !cnt ? '' : ADM === 'C' ? `<p class="muted" style="margin:6px 0 2px">지난 저장(${dt(prevD).slice(3)}) 대비: ${cnt}</p>`
+    : `<details class="more-f" style="margin:6px 0 2px"><summary><span>지난 저장(${dt(prevD).slice(3)}) 대비: ${cnt}</span></summary>
+    ${dn.sort((a, b) => (a[0].p - a[1].p) - (b[0].p - b[1].p)).slice(0, 5).map(([x, o]) => li(`<span class="dn">▼</span> ${where(x)} ${eok(o.p)} → <b>${eok(x.p)}</b>`)).join('')}
+    ${fresh.length ? li(`새 ${brief(fresh)}`) : ''}${gone.length ? li(`<span class="muted">빠짐 ${brief(gone)}</span>`) : ''}</details>`;
   $('#askList').innerHTML = sale.length ? diffHtml + sale.slice(0, 5).map(row).join('')
       + (sale.length > 5 ? `<details class="more-f"><summary>나머지 ${sale.length - 5}개 보기</summary>${sale.slice(5).map(row).join('')}</details>` : '')
     : `<p class="muted">${ag}㎡ 매매 호가 기록이 없습니다. 네이버 부동산 단지 화면에서 '호가 저장' 버튼을 누른 뒤 아래 '붙여넣기'에 넣어 주세요.</p>`;
