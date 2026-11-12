@@ -83,9 +83,18 @@ def test_daily_head_counts_quick_sales(monkeypatch):
     monkeypatch.setattr(N, "redev_changes", lambda db, seqs: [])
     monkeypatch.setattr(N, "ops_lines", lambda db: ([], None))
     monkeypatch.setattr(N, "site", lambda db: "")
-    assert N.daily(None).split("\n")[0] == "🔔 <b>관심 단지 새 거래 2건</b> · 🔻<b>급매 1건</b>"
+    monkeypatch.setattr(N, "my_area", lambda db: 84)
+    assert N.daily(None).split("\n")[0] == "🔔 <b>관심 단지 84㎡ 새 거래 2건</b> · 🔻<b>급매 1건</b>"
     monkeypatch.setattr(N, "deals", lambda db, seqs, days: rows[1:])
-    assert N.daily(None).split("\n")[0] == "🔔 <b>관심 단지 새 거래 1건</b>"
+    assert N.daily(None).split("\n")[0] == "🔔 <b>관심 단지 84㎡ 새 거래 1건</b>"
+    # 2026-11-12: 59㎡ 를 골랐으면 59㎡ 만 한 줄씩, 84㎡ 는 맨 아래 한 줄
+    monkeypatch.setattr(N, "my_area", lambda db: 59)
+    s59 = {**rows[0], "apt_name": "다", "area_m2": 59.06, "price_10k": 159500, "ref_10k": 162000}
+    monkeypatch.setattr(N, "deals", lambda db, seqs, days: [s59, rows[1]])
+    out = N.daily(None).split("\n")
+    assert out[0] == "🔔 <b>관심 단지 59㎡ 새 거래 1건</b>" and out[1].startswith("🏠 다 59㎡") and out[2].startswith("↪️ 다른 평형: 나 84㎡ 14.1억")
+    monkeypatch.setattr(N, "deals", lambda db, seqs, days: rows[1:])
+    assert N.daily(None).split("\n")[:1] == ["🔔 <b>관심 단지 새 거래</b> (59㎡ 없음)"]
 
 
 def test_my_area_follows_site_choice():
