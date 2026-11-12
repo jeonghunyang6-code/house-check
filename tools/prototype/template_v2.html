@@ -1372,11 +1372,25 @@ function parseLines(text) {   // 북마크(tools/pc/naver_ask_bookmarklet.js)와
 function askItems(d) {   // 새 북마크(v2)·붙여넣기는 전용면적·층을 따로 준다. 옛 북마크는 spec 글자('112/84㎡, 12/25층, 남향')에서
   return (d.items || []).map(x => ({ t: x.type, p: manOf(x.price), ...(x.ex != null ? { ex: +x.ex, fl: x.fl || '', tot: x.tot || 0, dir: x.dir || '' } : specOf(x.spec)), dong: x.dong || '', conf: x.conf || '' })).filter(x => x.p);
 }
+/* 저장 호가 정리(2026-11-12): 저장할 때마다 전체(v2-naver)가 서버로 가서 계속 커짐(11/11 640KB) → 그래프·비교에 쓰는 것만 남긴다.
+   단지마다 최근 저장 2번은 늘 남기고(지난 저장 대비 비교), 8주 안은 주마다 마지막 저장(8주 그래프), 그 전 13개월 안은 달마다 마지막 저장(6개월 그래프), 더 오래된 건 지움 */
+function pruneAsks(A, today) {
+  const t0 = new Date((today || D.asof) + 'T00:00:00').getTime(), DAY = 864e5;
+  const wk = (d) => { const t = new Date(d + 'T00:00:00'); t.setDate(t.getDate() - (t.getDay() + 6) % 7); return 'w' + t.getTime(); };
+  Object.values(A).forEach(byDate => {
+    const ds = Object.keys(byDate).sort(), keep = new Set(ds.slice(-2)), seen = new Set();
+    ds.slice().reverse().forEach(d => { const age = (t0 - new Date(d + 'T00:00:00').getTime()) / DAY;
+      const k = age <= 56 ? wk(d) : age <= 400 ? 'm' + d.slice(0, 7) : null;
+      if (k && !seen.has(k)) { seen.add(k); keep.add(d); } });
+    ds.forEach(d => { if (!keep.has(d)) delete byDate[d]; });
+  });
+  return A;
+}
 function saveAsk(d, seq) {
   const items = askItems(d), no = d.no ? String(d.no) : null;
   if (!items.length || !seq) return null;
   if (no && NMAP[no] !== seq) { NMAP[no] = seq; store.set('v2-nmap', NMAP); }   // 네이버 단지 번호 → 우리 단지 기억
-  const at = d.at || D.asof, A = store.get('v2-naver', {}); (A[seq] = A[seq] || {})[at] = items; store.set('v2-naver', A);   // 같은 날 다시 저장하면 덮어씀
+  const at = d.at || D.asof, A = store.get('v2-naver', {}); (A[seq] = A[seq] || {})[at] = items; store.set('v2-naver', pruneAsks(A));   // 같은 날 다시 저장하면 덮어씀
   const c = (t) => items.filter(x => x.t === t).length;
   if (!watch.has(seq)) toggleWatch(seq);
   const nx = items.filter(x => !x.ex).length;   // 면적을 못 읽은 매물은 그래프에서 빠진다(2026-11-03 새 화면에서 겪음)
@@ -1515,7 +1529,7 @@ $('#dSpan').addEventListener('click', (e) => { const b = e.target.closest('butto
 $('#askSpan').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { store.set('v2-askspan', b.dataset.v); drawAsks(); } });
 $('#askForm').addEventListener('submit', (e) => { e.preventDefault(); const p = parseFloat(String($('#a_price').value).replace(/,/g, '')); if (!isFinite(p) || !dSeq) return;
   const A = store.get('v2-naver', {}), S = (A[dSeq] = A[dSeq] || {}); (S[D.asof] = S[D.asof] || []).push({ t: '매매', p, ex: +$('#a_area').value, fl: $('#a_floor').value, tot: 0, dir: '', dong: '', conf: '직접' });
-  store.set('v2-naver', A); $('#a_price').value = ''; drawAsks(); });
+  store.set('v2-naver', pruneAsks(A)); $('#a_price').value = ''; drawAsks(); });
 /* 실제 지도(네이버 지도 Dynamic Map). 웹 배포(build_v2 --web)에서 HC_MAPKEY 가 있을 때만, 상세 탭을 처음 그릴 때 스크립트를 받는다.
    실패·인증 거부면 아래 그림 지도(drawMap SVG) 그대로. 정비구역은 대표 지번 한 점(jobs/redev_geo.py) */
 const NMAPS = { p: null, fail: false, map: null, ov: [], zv: [], center: null, sat: false, seq: null };

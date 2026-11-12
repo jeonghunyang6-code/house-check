@@ -1,7 +1,10 @@
 # 생활 인프라 (jobs/infra.py): 역 위치·초등 통학구역·중학교 학교군·동별 학원 수·병원 → 단지 연결. 가끔(분기) 수동 실행.
+# 공원(park)만 분기마다 자동(2026-11-12 사용자 요청): 전국도시공원정보표준데이터는 매달 초 갱신 → 1·4·7·10월 5일 새벽
 name: infra
 
 on:
+  schedule:
+    - cron: "43 19 4 1,4,7,10 *"   # 1·4·7·10월 5일 04:43 KST, mode = park
   workflow_dispatch:
     inputs:
       mode:
@@ -12,7 +15,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: infra-${{ inputs.mode }}
+  group: infra-${{ inputs.mode || 'park' }}
   cancel-in-progress: false
 
 jobs:
@@ -36,4 +39,4 @@ jobs:
           SCHOOLINFO_API_KEY: ${{ secrets.SCHOOLINFO_API_KEY }}
           HC_DB_BACKEND: psql
           PYTHONUNBUFFERED: "1"
-        run: python -m jobs.infra "${{ inputs.mode }}"
+        run: python -m jobs.infra "${{ inputs.mode || 'park' }}"
