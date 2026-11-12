@@ -153,9 +153,18 @@ def daily(db: Db, ops_out: list | None = None) -> str | None:
     if not rows and not warn and not rd:
         return None
     url = site(db)
+    # 2026-11-12 사용자: 사이트에서 고른 평형(59㎡) 거래만 한 줄씩, 다른 평형은 맨 아래 한 줄 요약(신고가·급매 표시는 남김)
+    ag = my_area(db)
+    lo, hi = BANDS[ag]
+    mine = [r for r in rows if lo <= float(r["area_m2"]) < hi]
+    other = [r for r in rows if not lo <= float(r["area_m2"]) < hi]
     # 급매가 있으면 제목에 먼저(2026-10-28 사용자 요청: 관심 단지 급매 실거래는 바로 눈에)
-    nq = sum("🔻급매" in tag(r) for r in rows)
-    head = [f"🔔 <b>관심 단지 새 거래 {len(rows)}건</b>" + (f" · 🔻<b>급매 {nq}건</b>" if nq else ""), *deal_lines(rows)] if rows else []
+    nq = sum("🔻급매" in tag(r) for r in mine)
+    head = ([f"🔔 <b>관심 단지 {ag}㎡ 새 거래 {len(mine)}건</b>" + (f" · 🔻<b>급매 {nq}건</b>" if nq else ""), *deal_lines(mine)] if mine
+            else [f"🔔 <b>관심 단지 새 거래</b> ({ag}㎡ 없음)"] if other else [])
+    if other:
+        head.append("↪️ 다른 평형: " + " · ".join(f"{html.escape(r['apt_name'])} {float(r['area_m2']):.0f}㎡ {eok(r['price_10k'])}{tag(r)}" for r in other[:3])
+                    + (f" 외 {len(other) - 3}건" if len(other) > 3 else ""))
     if rd:
         head += [f"🏗️ <b>주변 정비구역 단계 변화 {len(rd)}곳</b>"] + [
             f"{'⏫' if (r['stage_no'] or 0) > (r['prev_no'] or 0) else '🔁'} {html.escape(r['zone_nm'])}({html.escape(r['biz_type'] or '')}) "
