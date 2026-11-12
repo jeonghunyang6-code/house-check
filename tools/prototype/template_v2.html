@@ -83,6 +83,13 @@ svg.chart:not(.map) text { fill: var(--ink-3); font-size: 10px; font-family: var
 .rank { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; font-size: 13px; }
 .rank div { display: flex; justify-content: space-between; gap: 6px; border-bottom: 1px dashed var(--line); padding-bottom: 3px; }
 .up { color: var(--up2); } .dn { color: var(--dn2); }
+/* 기간별 변동 표(2026-11-12 시안, Ladderprice 5단계) */
+.per { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; margin-top: 8px; }
+.per th { font-weight: 600; color: var(--ink-3); font-size: var(--fs-note); text-align: right; padding: 4px 2px; border-bottom: 1px solid var(--line); }
+.per th:first-child, .per td:first-child { text-align: left; }
+.per td { text-align: right; padding: 6px 2px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.per tr.tot td { font-weight: 700; }
+.per tr.gap td { border-bottom: 2px solid var(--line); }
 .policy { border-color: var(--accent); background: linear-gradient(0deg, var(--surface), var(--surface)) padding-box; }
 .policy .tag { font-size: 12px; font-weight: 700; color: var(--accent); letter-spacing: .02em; }
 .list { display: grid; }
@@ -247,6 +254,12 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
         <div class="rank" id="wkRank"></div>
         <details id="wkAll" style="margin-top:6px"><summary class="muted" style="font-size:12.5px;cursor:pointer">전체 순위</summary><div class="rank" id="wkAllRows" style="margin-top:6px"></div></details>
         <p class="src" id="wkSrc"></p>
+      </div>
+      <div class="card">
+        <h2>기간별 변동 <small id="perDate"></small></h2>
+        <div class="seg" id="perKind"><button type="button" data-v="t" aria-pressed="true">매매</button><button type="button" data-v="j" aria-pressed="false">전세</button></div>
+        <div id="perTab"></div>
+        <p class="src" id="perSrc"></p>
       </div>
       <div class="card">
         <h2>서울 거래량 <small>최근 2년, 계약월 기준</small></h2>
@@ -591,6 +604,7 @@ function labelPt(k, g) {
   const W = D.weekly, G = D.geo, V = W.v, NODATA = new Set(W.nodata || []), names = D.region_names;
   // 관심권(2026-10-26 사용자 지정, 고정): 서울 25개 구 + 경기 15곳(토허 40곳과 같음). 넣고 빼기는 여기
   const MINE = new Set([...Object.keys(G).filter(k => k.startsWith('11')), '41111', '41115', '41117', '41131', '41133', '41135', '41173', '41210', '41290', '41310', '41430', '41450', '41463', '41465', '41597']);
+  window.HC_MINE = MINE;   // 기간별 변동 표도 같은 관심권
   const st = { scope: 'mine', kind: 't' };
   const bbox = (ks) => { let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; ks.forEach(k => (G[k].d.match(/-?[\d.]+,-?[\d.]+/g) || []).forEach(p => { const [x, y] = p.split(',').map(Number); x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }));
     const pad = (x1 - x0) * 0.03; return [x0 - pad, y0 - pad, x1 - x0 + pad * 2, y1 - y0 + pad * 2].map(v => Math.round(v)); };
@@ -1769,6 +1783,24 @@ $('#fundForm').addEventListener('input', () => { fundTouched = true; drawFund();
 watchChanged.push(drawMove);
 
 /* 처음 열 때 */
-syncArea(); drawWatch(); window.runBudget(); drawMove();
+/* 기간별 변동(2026-11-12 사용자 요청 시안): R-ONE 주간 지수 1개월(4주)·3개월(13주)·6개월(26주)·1년(52주) 전 발표 주 대비. 서울·수도권 + 관심 단지 지역 + 관심권 전체(펼치기) */
+const perSt = { kind: 't' };
+function drawPeriods() {
+  const W = D.weekly; if (!W || !W.agg) { $('#perTab').innerHTML = ''; return; }
+  const k = perSt.kind, f = (v) => v == null ? '<span class="muted">–</span>' : `<span class="${v > 0.02 ? 'up' : v < -0.02 ? 'dn' : 'muted'}">${sgn(v, 1)}</span>`;
+  const tr = (nm, o, cls = '') => `<tr class="${cls}"><td>${nm}</td><td>${f(o['m' + k])}</td><td>${f(o['q' + k])}</td><td>${f(o['h' + k])}</td><td><b>${f(o['y' + k])}</b></td></tr>`;
+  const head = '<tr><th>지역</th><th>1개월</th><th>3개월</th><th>6개월</th><th>1년</th></tr>';
+  const yv = (rc) => W.v[rc]['y' + k] ?? -99;
+  const mine = [...new Set([...watch].map(s => infoOf(s)[1] || (main(s) || {}).rc).filter(rc => rc && W.v[rc]))].sort((a, b) => yv(b) - yv(a));
+  const all = [...(window.HC_MINE || [])].filter(rc => W.v[rc]).sort((a, b) => yv(b) - yv(a));
+  $('#perTab').innerHTML = `<table class="per">${head}${tr('수도권', W.agg.sudo, 'tot')}${tr('서울', W.agg.seoul, 'tot' + (mine.length ? ' gap' : ''))}${mine.map(rc => tr(rn(rc), W.v[rc])).join('')}</table>`
+    + `<details class="more-f" style="margin-top:4px"><summary>관심권 전체 ${all.length}곳 (1년 높은 순)</summary><table class="per">${head}${all.map(rc => tr(rn(rc), W.v[rc])).join('')}</table></details>`;
+  $('#perDate').textContent = `${dt(W.date)} 주 기준`;
+  $('#perSrc').textContent = `한국부동산원 R-ONE 주간 아파트 ${k === 't' ? '매매' : '전세'} 가격지수, 각 기간 전 발표 주 대비`;
+}
+document.getElementById('perKind').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; perSt.kind = b.dataset.v;
+  document.querySelectorAll('#perKind button').forEach(x => x.setAttribute('aria-pressed', x === b)); drawPeriods(); });
+watchChanged.push(drawPeriods);
+syncArea(); drawWatch(); window.runBudget(); drawMove(); drawPeriods();
 if (location.hash.startsWith('#ask=')) importAskHash(); else go((location.hash || '').slice(1) || store.get('v2-tab', 'home'));
 </script>
