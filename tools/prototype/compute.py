@@ -174,6 +174,11 @@ def weekly():
     year = yd[-1] if yd else None
     qd = [x for x in dates if x <= (date.fromisoformat(last) - timedelta(days=91)).isoformat()]
     q13 = qd[-1] if qd else None  # D2: 13주(약 3개월) 전 발표 주
+    # 시장 탭 기간별 변동 표(2026-11-12 사용자 요청 시안, Ladderprice 5단계): 4주(1개월)·26주(6개월) 전 발표 주도
+    md = [x for x in dates if x <= (date.fromisoformat(last) - timedelta(days=28)).isoformat()]
+    m4 = md[-1] if md else None
+    hd = [x for x in dates if x <= (date.fromisoformat(last) - timedelta(days=182)).isoformat()]
+    h26 = hd[-1] if hd else None
     val = {(r['stat'], r['cls_id'], r['d']): r['value'] for r in rows}
     v = {}
     for r in rows:
@@ -185,6 +190,16 @@ def weekly():
             v[r['region_code']]['y' + k] = round((a / y - 1) * 100, 2) if y else None
             q = val.get((r['stat'], r['cls_id'], q13)) if q13 else None
             v[r['region_code']]['q' + k] = round((a / q - 1) * 100, 2) if q else None
+            for pre, dd in (('m', m4), ('h', h26)):
+                x = val.get((r['stat'], r['cls_id'], dd)) if dd else None
+                v[r['region_code']][pre + k] = round((a / x - 1) * 100, 2) if x else None
+    agg = {}   # 서울·수도권 전체(시군구 코드 없는 행): 1개월·3개월·6개월·1년
+    for cls, nm in ((50008, 'seoul'), (50002, 'sudo')):
+        for stat, k in (('sale', 't'), ('jeonse', 'j')):
+            a = val.get((stat, cls, last))
+            for pre, dd in (('m', m4), ('q', q13), ('h', h26), ('y', year)):
+                x = val.get((stat, cls, dd)) if dd and a else None
+                agg.setdefault(nm, {})[pre + k] = round((a / x - 1) * 100, 2) if x else None
     tot = {}
     for stat, k in (('sale', 't'), ('jeonse', 'j')):
         for cls, nm in ((50008, 'seoul'), (50002, 'sudo')):
@@ -195,7 +210,7 @@ def weekly():
                 else: break
             tot[f'{nm}_{k}'] = {'w': round((s[-1] / s[-2] - 1) * 100, 2), 'streak': n, 'weeks': len(s)}
     from collector.regions import REGIONS
-    return {'date': last, 'prev_date': prev, 'year_date': year, 'q13_date': q13, 'v': v, 'tot': tot,
+    return {'date': last, 'prev_date': prev, 'year_date': year, 'q13_date': q13, 'm4_date': m4, 'h26_date': h26, 'agg': agg, 'v': v, 'tot': tot,
             'nodata': [c for c in REGIONS if c not in v and c != '28720']}
 
 def g1():  # 유동성·소득·집값 2005 = 100 (📖 p.50), collector/market.py rebase
