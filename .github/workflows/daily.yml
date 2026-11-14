@@ -90,4 +90,7 @@ jobs:
         if: ${{ !cancelled() && !inputs.dry_run }}
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "VACUUM FULL complex_metrics" -c "VACUUM FULL complexes"
+        # 2026-11-14: 실거래·전월세 원본 표도 지우고 바꾼 자리가 쌓여 DB 432MB(한도 500) → VACUUM FULL 로 348MB. 일요일마다 이 표들도(실거래 16초 남짓)
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "VACUUM FULL complex_metrics" -c "VACUUM FULL complexes"
+          if [ "$(TZ=Asia/Seoul date +%u)" = 7 ]; then psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "VACUUM FULL deals" -c "VACUUM FULL rents" -c "VACUUM FULL rent_events"; fi
