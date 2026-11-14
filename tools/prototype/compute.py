@@ -208,7 +208,9 @@ def weekly():
             for i in range(len(s) - 1, 0, -1):
                 if s[i] > s[i - 1]: n += 1
                 else: break
-            tot[f'{nm}_{k}'] = {'w': round((s[-1] / s[-2] - 1) * 100, 2), 'streak': n, 'weeks': len(s)}
+            # c12: 최근 12주 주간 변동률(시장 탭 숫자 카드 막대, 2026-11-14 디자인 3-A)
+            tot[f'{nm}_{k}'] = {'w': round((s[-1] / s[-2] - 1) * 100, 2), 'streak': n, 'weeks': len(s),
+                                'c12': [round((s[i] / s[i - 1] - 1) * 100, 3) for i in range(max(1, len(s) - 12), len(s))]}
     from collector.regions import REGIONS
     return {'date': last, 'prev_date': prev, 'year_date': year, 'q13_date': q13, 'm4_date': m4, 'h26_date': h26, 'agg': agg, 'v': v, 'tot': tot,
             'nodata': [c for c in REGIONS if c not in v and c != '28720']}
