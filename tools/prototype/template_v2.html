@@ -1022,9 +1022,11 @@ function remodelHtml(seq) {
     + `<div class="rmlab"><span>${ST[0]}</span><span style="color:var(--accent);font-weight:700">${ST[now]} (${now + 1}/${N})</span><span>${ST[N - 1]}</span></div>`;
   const done = R.s.map(([st, d, note, lab, url, auto]) => `<div class="rmrow"><span class="muted num">${dd(d)}</span><span class="st"><i class="dot"></i><span>${esc(note)}${auto && auto !== 'o' ? ' <span class="rmauto">자동</span>' : ''}</span></span>`
     + (url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(lab)} ›</a>` : `<span class="muted" style="font-size:var(--fs-note)">${esc(lab)}</span>`) + `</div>`).join('');
+  // D11(송희구, 부읽남TV 26-11-06 13:22·18:20): 초기 재개발·재건축 주의 — 조합설립 전(구역지정·추진위·예정구역)이면 한 줄
+  const early = R.st && now < ST.indexOf('조합설립') ? `<p class="rmnext" style="color:var(--warn)">초기 단계: 기간·분담금이 불확실해요. 작가 기준 재개발은 최소 시공사 선정 뒤, 재건축은 조합설립 뒤 거래 제한도 확인.</p>` : '';
   const todo = ST.slice(now + 1).map(s => `<div class="rmrow todo"><span></span><span class="st"><i class="dot"></i><span>${s}</span></span><span></span></div>`).join('');
   return `<div class="rmhd"><b>${esc(R.k)}${R.zone ? ` <span class="muted" style="font-size:var(--fs-note);font-weight:400">${esc(R.zone)} 구역 · 공식 자료</span>` : ''}</b><span class="pill acc">${esc(ST[now])}${last[0] === ST[now] && /통과|가결|인가|선정|승인/.test(last[2]) ? ' ' + (last[2].match(/통과|가결|인가|선정|승인/) || [''])[0] : ''}</span></div>${bar}`
-    + (R.n ? `<p class="rmnext">다음: ${esc(R.n)}</p>` : '') + done
+    + (R.n ? `<p class="rmnext">다음: ${esc(R.n)}</p>` : '') + early + done
     + (todo ? `<details class="more-f" style="margin-top:4px"><summary>남은 단계 ${N - now - 1}개 보기</summary>${todo}</details>` : '')
     + (R.st ? `<p class="src">단계·날짜는 ${R.s[0][3]} 공공데이터 그대로(매주 갱신, 손 관리 아님). 건축심의는 날짜가 공개되지 않습니다.</p>`
       : `<p class="src">단계 날짜는 구청·서울시 발표나 언론사 2곳 이상으로 확인. '자동' = 같은 소식을 언론사 3곳 이상이 제목으로 보도해 자동으로 올린 단계(틀리면 텔레그램 답장 '빼줘').</p>`);
@@ -1095,7 +1097,9 @@ function factsHtml(seq) {
   const ntWhen = (t) => { const q = NPS[t[0]]; return q ? `첫 입주 <b>${ym(q[0])}</b>${q[1] !== q[0] ? `~${ym(q[1])}` : ''} · 분양 공고 ${q[2]}건 ${q[3].toLocaleString()}세대` : t[4]; };
   if (rc) out.push(row('신도시·택지', nt.length ? nt.map(t => `<span class="pill ${NTS[t[3]] || 'none'}">${t[3]}</span> ${t[0]} <b>${t[2]}호</b> <span class="muted" style="font-size:var(--fs-note)">${t[6] ? t[6] + ' 발표' : ''}</span><br><span class="muted" style="font-size:var(--fs-note)">${t[5]} · ${ntWhen(t)}</span>`).join('<br>') : `<span class="muted">${rn(rc).split(' ').pop()}에 없음</span>`));   // 같은 시군구(지구 좌표 없음). 입주 = 청약홈 공고, 공고 전이면 기사 일정
   const by = inf[15], hh = inf[16];
-  if (by || hh) out.push(row('단지', `<b>${hh ? hh.toLocaleString() + '세대' : ''}${hh && by ? ' · ' : ''}${by ? YEAR - by + '년차' : ''}</b>`, 'K-apt 세대수 · 준공 연도'));
+  // V8(송희구, 부읽남TV 26-11-06 42:56): 최소 250세대. 작으면 나홀로 느낌, 교통 좋은 곳에 소형 단지가 몰려 있으면 괜찮음 → 판정 없이 주의 딱지만
+  if (by || hh) out.push(row('단지', `<b>${hh ? hh.toLocaleString() + '세대' : ''}${hh && by ? ' · ' : ''}${by ? YEAR - by + '년차' : ''}</b>${hh && hh < 250 ? ' <span class="pill warn">250세대 미만</span>' : ''}`,
+    hh && hh < 250 ? 'K-apt 세대수 · 준공 연도 · 작가 기준 최소 250세대(작으면 나홀로 느낌, 교통 좋은 곳에 소형 단지가 몰려 있으면 괜찮음)' : 'K-apt 세대수 · 준공 연도'));
   // 점수·가중치·순위를 매기지 않는다(M3 📖 p.356: 실거래가가 최종 점수). 화면 문구는 2026-11-10 사용자 요청으로 뺐지만 원칙은 그대로
   return out.join('') || '<p class="muted">이 단지는 입지 자료가 없습니다.</p>';
 }
