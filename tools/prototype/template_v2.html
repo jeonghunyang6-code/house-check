@@ -1533,8 +1533,8 @@ function drawAsks() {
       o.slice(c.length).forEach(x => gone.push(x)); });
   }
   const where = (x) => `${x.dong ? x.dong + '동 ' : ''}${x.fl ? x.fl + (x.tot ? '/' + x.tot : '') + '층' : ''} ${x.dir || ''}`.trim();
-  // 목록 안 표시(2026-11-11 사용자: '▼5,000만'처럼 같은 자리에 '신규'도)
-  const tagOf = (x) => { const m = mark.get(x); if (!m) return ''; return m[0] === 'new' ? ' <span style="font-size:var(--fs-note);font-weight:700;color:var(--accent)">신규</span>' : ` <span class="${m[0] === 'dn' ? 'dn' : 'up'}" style="font-size:var(--fs-note);font-weight:700">${m[0] === 'dn' ? '▼' : '▲'}${man(Math.abs(m[1]))}</span>`; };
+  // 목록 안 표시(2026-11-11 사용자: '▼5,000만'처럼 같은 자리에 '신규'도). 2026-11-15 사용자: 청록 글씨만으론 안 보임 → 연한 배경 딱지
+  const tagOf = (x) => { const m = mark.get(x); if (!m) return ''; return m[0] === 'new' ? ' <span style="font-size:var(--fs-note);font-weight:700;color:var(--accent);background:var(--accent-bg);border-radius:4px;padding:1px 5px;margin-left:2px">신규</span>' : ` <span class="${m[0] === 'dn' ? 'dn' : 'up'}" style="font-size:var(--fs-note);font-weight:700">${m[0] === 'dn' ? '▼' : '▲'}${man(Math.abs(m[1]))}</span>`; };
   const row = (x) => { const g = gap(x.p);
     return `<div class="deal"><span class="muted">${x.dong ? x.dong + '동' : ''}</span><span>${x.fl ? x.fl + (x.tot ? '/' + x.tot : '') + '층' : ''} ${x.dir || ''}${tagOf(x)}${x.conf ? `<br><span class="muted" style="font-size:var(--fs-note)">${x.conf === '직접' ? '직접 기록' : '확인 ' + x.conf.slice(3)}</span>` : ''}</span><span class="p"><span class="pill ${cl(g)}">${g == null ? '–' : sgn(g, 1)}</span> ${eok(x.p)}</span></div>`; };
   const li = (t) => `<div style="font-size:var(--fs-note);padding:2px 0">${t}</div>`;
