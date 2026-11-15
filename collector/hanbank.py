@@ -3,7 +3,7 @@
 물가 = OpenStreetMap 한강 물 영역(natural=water, name=한강)의 경계선(외곽·섬 포함). Overpass API 로 받는다(이 세션에선 막혀 GitHub 자동 작업에서, 401·403·429 면 멈춤).
 © OpenStreetMap contributors (ODbL). 저장소에는 계산 결과(단지별 숫자)만 남긴다.
 
-1열 추정 = 단지 중심 → 가장 가까운 물가 점 사이에 다른 아파트 단지 중심이 없음(시선 폭 🔧 150m, 물가까지 🔧 400m 안).
+1열 추정 = 단지 중심 → 가장 가까운 물가 점 사이에 다른 아파트 단지 중심이 없음(시선 폭 🔧 150m, 물가까지 🔧 800m 안).
 한계: 단지 중심 한 점이라 큰 단지는 동마다 다르고, 아파트가 아닌 건물·높이·나무는 못 본다 → 화면에 '추정'. 관심 단지는 손 관리(collector/hanview.py)가 우선.
 """
 
@@ -21,7 +21,7 @@ QUERY = f"""[out:json][timeout:180];
  way["natural"="water"]["name"="한강"]({BBOX[0]},{BBOX[1]},{BBOX[2]},{BBOX[3]}););
 out geom({BBOX[0]},{BBOX[1]},{BBOX[2]},{BBOX[3]});"""
 URLS = ("https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter")
-NEAR_BANK = 400   # 🔧 m: 이보다 멀면 1열로 보지 않음(강변북로·올림픽대로·한강공원 폭 포함)
+NEAR_BANK = 800   # 🔧 m: 이보다 멀면 '앞이 트임'으로 보지 않음. 400 으로 시험하니 큰 단지(잠실 장미 1~3·원베일리·선사현대)는 중심이 강에서 멀어 빠짐(2026-11-15)
 LAT = 150         # 🔧 m: 시선 폭(이 안에 다른 단지 중심이 있으면 가림)
 KEEP = 2000       # m: 이보다 먼 단지는 거리도 안 남김
 KX, KY = math.cos(math.radians(37.5)) * 111320, 110940
