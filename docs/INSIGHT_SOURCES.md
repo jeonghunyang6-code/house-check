@@ -63,3 +63,4 @@
 - KB Think 인터뷰: https://kbthink.com/realestate/basics/blog/260203.html
 - 지식인사이드 출연 영상: https://www.youtube.com/watch?v=56MQkUuS_dc
 - 돈터뷰 출연 영상: https://www.youtube.com/watch?v=XUmvqPVF-e4
+- 부읽남TV 출연 영상(2026-11-06 촬영, 자막은 사용자가 붙여 넣음 2026-11-15 — 세션에서 유튜브가 봇 확인으로 막음): https://www.youtube.com/watch?v=GZfTpovi56k → viewpoints.md C11·V8·L13~15·D11~13·F7·F8, 시점 발언
