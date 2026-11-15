@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "stations | schoolzone | midzone | elem | academy | hospital | park | access (mart 는 커넥터로 모은 파일이 필요해 로컬에서)"
+        description: "stations | schoolzone | midzone | elem | academy | hospital | park | access | hanbank(한강변 추정, OSM) (mart 는 커넥터로 모은 파일이 필요해 로컬에서)"
         default: "schoolzone"
 
 permissions:

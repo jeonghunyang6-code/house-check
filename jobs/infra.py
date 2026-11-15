@@ -522,6 +522,35 @@ def run_park(db: Db) -> int:
     return 0
 
 
+def run_hanbank(db: Db) -> int:
+    """한강변 추정(collector/hanbank.py, 0087): OSM 한강 물가까지 거리 + 1열 추정 → complexes.han_bank_m·han_front·han_block."""
+    from collector import hanbank as H
+    try:
+        osm = H.fetch()
+    except H.Stop as e:
+        print(f"  멈춤: {e}", file=sys.stderr)
+        return 2
+    segs = H.segments(osm)
+    print(f"  OSM 한강 물 요소 {len(osm.get('elements', []))}개, 물가 선분 {len(segs)}개", flush=True)
+    if len(segs) < 100:
+        print("  물가 선분이 너무 적음 → 쿼리 확인(DB 안 바꿈)", file=sys.stderr)
+        return 1
+    cx = select(db, "SELECT apt_seq, apt_name, lat, lng FROM complexes WHERE lat IS NOT NULL")
+    got = H.judge(cx, segs)
+    vals = [f"({lit(s)}, {d}, {'true' if fr else 'false'}, {lit(b)})" for s, (d, fr, b) in got.items()]
+    stmts = ["BEGIN;", "UPDATE complexes SET han_bank_m = NULL, han_front = NULL, han_block = NULL WHERE han_bank_m IS NOT NULL;"]
+    for i in range(0, len(vals), 1000):
+        stmts.append("UPDATE complexes AS c SET han_bank_m = v.d, han_front = v.f, han_block = v.b "
+                     f"FROM (VALUES {', '.join(vals[i:i + 1000])}) AS v(a, d, f, b) WHERE c.apt_seq = v.a;")
+    stmts.append("COMMIT;")
+    db.query("\n".join(stmts))
+    front = [s for s, (d, fr, b) in got.items() if fr]
+    print(f"  좌표 단지 {len(cx)}개 중 물가 {H.KEEP}m 안 {len(got)}개, {H.NEAR_BANK}m 안 {sum(1 for d, *_ in got.values() if d <= H.NEAR_BANK)}개, 1열 추정 {len(front)}개")
+    nm = {c['apt_seq']: c['apt_name'] for c in cx}
+    print("  1열 추정 예: " + ", ".join(f"{nm[s]}({got[s][0]}m)" for s in sorted(front, key=lambda s: got[s][0])[:40]))
+    return 0
+
+
 CLOSED = ("폐점", "예정")   # 이름에 이 말이 있으면 문을 닫았거나 아직 안 연 곳
 
 
@@ -558,7 +587,7 @@ def run_mart(db: Db, path: str | None) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("mode", choices=["stations", "schoolzone", "midzone", "elem", "academy", "hospital", "park", "mart", "access"])
+    ap.add_argument("mode", choices=["stations", "schoolzone", "midzone", "elem", "academy", "hospital", "park", "mart", "access", "hanbank"])
     ap.add_argument("--dir", help="stations: 미리 받아 둔 st_<번호>.csv 폴더, access: <번호>.bin 역간거리 파일 폴더")
     ap.add_argument("--file", help="mart: 대형마트 TSV")
     ap.add_argument("--db", choices=["api", "psql"])
@@ -569,7 +598,7 @@ def main(argv: list[str] | None = None) -> int:
         rc = {"stations": lambda: run_stations(db, a.dir), "schoolzone": lambda: run_schoolzone(db),
               "midzone": lambda: run_midzone(db), "elem": lambda: run_elem(db),
               "academy": lambda: run_academy(db), "hospital": lambda: run_hospital(db), "park": lambda: run_park(db), "mart": lambda: run_mart(db, a.file),
-              "access": lambda: run_access(db, a.dir)}[a.mode]()
+              "access": lambda: run_access(db, a.dir), "hanbank": lambda: run_hanbank(db)}[a.mode]()
     except DbError as e:
         print(f"[infra] DB 오류: {e}", file=sys.stderr)
         rc = 1
