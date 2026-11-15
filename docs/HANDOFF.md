@@ -20,6 +20,7 @@
 - 되돌린 것: Ladderprice 1단계(평형별 거래 근거) 화면, 2단계 가격대 배치표 시안 킵(docs/LADDERPRICE_GAP.md 는 남김). 관심 탭 나란히 보기 삭제.
 
 **곧 확인할 것**: 11-13 금요일 주간 요약(59㎡·가격 내린 매물·손 관리 자료 확인 줄 첫 실행), 매일 알림 평형 분리, 재확인 재시도·부분 실패 site 갱신이 실제로 생길 때.
+**한강(2026-11-15)**: 사실표 '한강' = B collector/hanview.py 손 관리(관심 단지, 비어 있음) 우선, 없으면 A collector/hanbank.py(OSM 한강 물가까지 m + 사이에 다른 아파트 단지 없음 = '한강뷰 가능·추정', 물가 800m 🔧 안, 시선 폭 150m 🔧) → complexes.han_bank_m·han_front·han_block(0087), infra.yml 분기마다·수동 mode hanbank. 한계: 단지 중심 한 점(트리마제 오판), 건물 높이 못 봄. 정비 진행 현황 보완: 정비구역 안 관심 단지는 공공데이터 8단계, 금요일 🧾 '🔍 정비 단계 확인 필요'(2010년 이전 준공·기록 없음, CHECKED_NONE 로 뺌).
 **정비 진행 현황(2026-11-15)**: 상세 탭 맨 아래. 리모델링은 공공데이터가 없어 collector/remodel.py REMODELS 손 관리(단계마다 발표·언론사 2곳+, tests/test_remodel.py). 자동 갱신: jobs/complex_news.py(daily, 관심 단지 이름이 **제목**에 있는 기사만 → complex_news 0085) → jobs/remodel.py(단계 말+끝난 말, 안 끝난 말 없음, 언론사 3곳·3일, 앞으로만 → remodel_auto 0086). 금요일 요약 '🏗️ 이름: 단계', 텔레그램 답장 '빼줘' → removed(web/lib/tgreply.js). 기사 목록 카드는 사용자가 원치 않아 뺌(시장 정리 기사에 이름만 나온 것이 대부분이었음). 선사현대(건축심의 6/10)·성내삼성(추진위) 등록, 명일GS 기록 없음.
 **새 역 좌표(2026-11-15)**: collector/projects.py `geo_stations`(이름, 주소)에 넣으면 projects.py 가 기본 브랜치에 들어올 때 station_geo.yml 이 Geocoding(NCP_MAPS 시크릿) → station_geo 표(0084) → jobs.policy 다시 적재 → site 재배포. 세션의 NAVER_CLIENT_* 키는 다른 앱 키라 Geocoding 구독 없음(401 '210'). 9호선 944 신미사 = 8단지 주소(미사강변대로 240)로 근사, 943 신강일·남양주 6곳은 위치 미확인. 특목고 진학률은 학교알리미 파일을 사용자가 받아야 해서 보류.
 **세션 환경 한계**: 공공데이터포털·국토부·VWorld·뉴스 사이트는 세션에서 막힘(Actions 에선 됨), pytest 설치 안 됨(함수 직접 실행으로 확인, Actions 가 pytest 돌림).
