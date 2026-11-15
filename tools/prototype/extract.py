@@ -346,6 +346,17 @@ out['v2_acad'] = {'n': int(_ac[0]['n']) if _ac else 0, 'd': {f"{r['rc']}|{r['umd
 # 신도시 일정 교차 확인(collector/newtowns.py, 2026-11-10): 청약홈 입주자모집공고 입주 예정 월 [첫, 마지막, 공고 수, 세대 합]
 from collector.newtowns import presale_sql as _nt_sql, presale_rows as _nt_rows
 out['v2_newtown_ps'] = _nt_rows(select(db, _nt_sql())) if _nt_sql() else {}
+# 관심 단지 소식(jobs/complex_news.py, 2026-11-15 사용자 요청): 최근 6개월, 같은 기사 묶음. {단지: [[날짜, 제목, 언론사, 주소, 딱지, 외 n곳, 제목에 이름]]}
+from collector import complex_news as _CN
+from datetime import date as _date
+_nw = {}
+try:
+    for r in select(db, "SELECT apt_seq, url, title, outlet, pub::text pub, in_title, tags FROM complex_news WHERE pub >= current_date - 183"):
+        _nw.setdefault(r['apt_seq'], []).append({**r, 'pub': _date.fromisoformat(r['pub']), 'tags': (r['tags'] or '').split(',') if r['tags'] else []})
+except Exception as e:   # 표가 아직 없을 때(0085 전)
+    print('  complex_news 없음:', e)
+out['v2_news'] = {s: [[g['pub'].isoformat(), g['title'], g['outlet'], g['url'], g['tags'], g['others'], bool(g['in_title'])] for g in _CN.group(rs)[:30]]
+                  for s, rs in _nw.items()}
 out['v2_proj'] = select(db, "SELECT name, status, status_date::text, outlook, cbd, region_codes, stations, new_stations FROM transit_projects")
 out['seqs'] = SEQS
 out['regions'] = {k: v for k, v in REGIONS.items()}

@@ -192,6 +192,14 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
 .more-f summary { font-size: 13px; color: var(--accent); font-weight: 600; }
 .more-f summary::after { content: ""; }
 .deal { display: grid; grid-template-columns: 54px 1fr auto; gap: 8px; padding: 7px 0; border-bottom: 1px dashed var(--line); font-size: 13.5px; align-items: center; }
+/* 단지 소식(2026-11-15 사용자 A안): 기존 목록 줄(.deal)·딱지(.pill) 그대로, 줄 전체가 원문 링크 */
+a.deal.nw { color: inherit; text-decoration: none; grid-template-columns: 54px 1fr 12px; align-items: start; min-height: 44px; }
+a.deal.nw:hover .t { text-decoration: underline; text-underline-offset: 2px; }
+a.deal.nw .t { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.4; }
+a.deal.nw .m { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; margin-top: 3px; font-size: var(--fs-note); color: var(--ink-3); }
+a.deal.nw .m .pill { font-size: 11px; padding: 1px 7px; }
+a.deal.nw .go { color: var(--ink-3); padding-top: 1px; }
+.nwnew { font-size: var(--fs-note); font-weight: 700; color: var(--accent); background: var(--accent-bg); border-radius: 4px; padding: 1px 5px; }
 .deal .p { font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
 .lmap { width: 100%; height: auto; display: block; background: var(--sunk); border-radius: 12px; }
 .lmap text { font-family: var(--font); font-size: 100px; fill: var(--ink-2); paint-order: stroke; stroke: var(--sunk); stroke-width: 22px; stroke-linejoin: round; }
@@ -416,6 +424,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
       <div class="card"><h2>주변 지도 <small id="dMapSub">반경 1.5km</small><button type="button" class="icon-btn" id="dMapType" hidden style="margin-left:auto;font-size:12.5px">위성</button></h2><div class="src" id="dNear" hidden style="margin:0 0 8px;line-height:1.6"></div><div class="nmap" id="dNmap" hidden></div><svg class="lmap" id="dMap" viewBox="-1600 -1600 3200 3200" role="img" aria-label="단지 주변 역·병원·마트·중학교"></svg><div class="legend" id="dMapLg"></div>
         <div class="legend" id="dMapZ" hidden style="margin-top:6px"><label class="chk"><input type="checkbox" data-z="after"> 정비 조합설립 뒤</label><label class="chk"><input type="checkbox" data-z="before"> 정비 그 전</label><label class="chk"><input type="checkbox" data-z="proj"> 개통 예정 역</label></div></div>
       <div class="card"><h2>개발 호재 · 주변 정비사업</h2><div id="dDev"></div></div>
+      <div class="card"><h2>단지 소식 <small>최근 6개월 · 매일 아침</small></h2><div id="dNews"></div></div>
     </div>
   </section>
 
@@ -992,6 +1001,17 @@ const PST = { '개통': 'none', '착공': 'good', '확정': 'acc', '계획': 'no
    📖 재개발은 조합설립인가 뒤 매수, 노후도(30년+) 미충족이면 불가, 가장 큰 위험은 시간 p.368~373 */
 const RDUR = {};
 (D.v2_rdur || []).forEach(r => { RDUR[(r.rd ? 'r' : 'b') + r.seg] = [+r.med, +r.p25, +r.p75]; });
+/* 단지 소식(jobs/complex_news.py): 관심·내 단지만 모음. 최근 5묶음 + 나머지 접기. '신규' = 화면 기준일 7일 안 */
+function newsHtml(seq) {
+  const N = (D.v2_news || {})[seq];
+  if (!N) return `<p class="muted" style="margin:6px 0">관심 단지(♡)로 올리면 다음 날 아침부터 기사를 모읍니다.</p>`;
+  if (!N.length) return `<p class="muted" style="margin:6px 0">최근 6개월 동안 단지 이름이 나온 기사가 없습니다.</p>`;
+  const t0 = new Date(D.asof).getTime() - 7 * 864e5, esc = (s) => String(s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const row = ([d, t, o, u, tg, n]) => `<a class="deal nw" href="${esc(u)}" target="_blank" rel="noopener"><span class="muted num">${dt(d)}</span><span><span class="t">${esc(t)}</span>`
+    + `<span class="m">${new Date(d).getTime() >= t0 ? '<span class="nwnew">신규</span>' : ''}<span>${esc(o)}${n ? ` 외 ${n}곳` : ''}</span>${(tg || []).map(x => `<span class="pill none">${esc(x)}</span>`).join('')}</span></span><span class="go">›</span></a>`;
+  return N.slice(0, 5).map(row).join('') + (N.length > 5 ? `<details class="more-f"><summary>지난 기사 ${N.length - 5}건 더 보기</summary>${N.slice(5).map(row).join('')}</details>` : '')
+    + `<p class="src">네이버 뉴스에서 제목·요약에 단지 이름이 나온 기사. 같은 내용은 한 줄로 묶고, 본문은 저장하지 않고 원문으로 연결합니다.</p>`;
+}
 function redevLeft(z) {
   const k = /재개발/.test(z.biz_type || '') ? 'r' : 'b', g = (s) => RDUR[k + s] || [0, 0, 0], BUILD = [3, 2.5, 3.5];
   const st = z.stage_no || 0;
@@ -1372,7 +1392,7 @@ function drawDaily() {
   $('#dDeals').innerHTML = clist.slice(0, 12).map(drow).join('')
     + (clist.length > 12 ? `<details class="more-f"><summary>나머지 ${clist.length - 12}건 보기</summary>${clist.slice(12).map(drow).join('')}</details>` : '')
     || `<p class="muted">최근 ${SPN} 거래가 없습니다.</p>`;
-  drawAsks(); drawMap(seq); $('#dDev').innerHTML = devHtml(seq); $('#dFacts').innerHTML = factsHtml(seq);
+  drawAsks(); drawMap(seq); $('#dDev').innerHTML = devHtml(seq); $('#dFacts').innerHTML = factsHtml(seq); $('#dNews').innerHTML = newsHtml(seq);
 }
 /* 호가: 네이버 부동산 '호가 저장' 버튼(tools/pc/naver_ask_bookmarklet.js) 붙여넣기 + 직접 기록. 단지 → 날짜 → 매물 목록 */
 const NMAP = Object.assign({ '105286': '41450-298' }, store.get('v2-nmap', {}));   // 네이버 단지 번호 → 우리 단지 (105286 = 사용자가 준 미사강변 골든센트로 주소)
