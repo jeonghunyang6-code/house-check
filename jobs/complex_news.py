@@ -51,10 +51,11 @@ def collect(c: dict, since, today, sleep=time.sleep) -> list[dict]:
             arts = search(f'"{n}"', start=1 + 100 * p)
             sleep(0.2)
             for a in arts:
-                if a["pub"] < since or not a["id"] or a["id"] in got or not C.matches(a["text"], names, pl):
+                # 2026-11-15 사용자: 요약문에만 이름이 나온 기사(시장 정리·순위 기사)는 단지 소식이 아님 → 제목에 단지 이름이 있는 것만
+                if a["pub"] < since or not a["id"] or a["id"] in got or not C.matches(a["text"], names, pl) or not C.in_title(a["title"], names):
                     continue
                 got[a["id"]] = {"url": a["id"], "title": a["title"], "outlet": C.press_name(a["id"]), "pub": a["pub"],
-                                "in_title": C.in_title(a["title"], names), "tags": C.tags_of(a["text"])}
+                                "in_title": C.in_title(a["title"], names), "tags": C.tags_of(a["title"])}   # 딱지도 제목에서만(요약문 단어로 엉뚱한 딱지가 붙던 것)
             if len(arts) < 100 or min(a["pub"] for a in arts) < since:
                 break
     return list(got.values())
@@ -82,7 +83,7 @@ def run(db: Db) -> int:
             print(f"  {c['apt_name']}: 맞는 기사 {len(rows)}건, 새로 {save(db, c['apt_seq'], rows, today)}건 (since {since})")
     except NewsBlocked as e:
         print(f"  멈춤: 뉴스 검색 {e}", file=sys.stderr)
-    db.query(f"DELETE FROM complex_news WHERE pub < {lit(today - timedelta(days=KEEP_DAYS))};")
+    db.query(f"DELETE FROM complex_news WHERE pub < {lit(today - timedelta(days=KEEP_DAYS))} OR NOT in_title;")
     return 0
 
 

@@ -1004,13 +1004,14 @@ const RDUR = {};
 /* 단지 소식(jobs/complex_news.py): 관심·내 단지만 모음. 최근 5묶음 + 나머지 접기. '신규' = 화면 기준일 7일 안 */
 function newsHtml(seq) {
   const N = (D.v2_news || {})[seq];
-  if (!N) return `<p class="muted" style="margin:6px 0">관심 단지(♡)로 올리면 다음 날 아침부터 기사를 모읍니다.</p>`;
-  if (!N.length) return `<p class="muted" style="margin:6px 0">최근 6개월 동안 단지 이름이 나온 기사가 없습니다.</p>`;
+  const mine = watch.has(seq) || store.get('v2-my2', '') === seq;
+  if (!N && !mine) return `<p class="muted" style="margin:6px 0">관심 단지(♡)로 올리면 다음 날 아침부터 기사를 모읍니다.</p>`;
+  if (!N || !N.length) return `<p class="muted" style="margin:6px 0">최근 6개월 동안 단지 이름이 제목에 나온 기사가 없습니다. 매일 아침 다시 찾습니다.</p>`;
   const t0 = new Date(D.asof).getTime() - 7 * 864e5, esc = (s) => String(s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const row = ([d, t, o, u, tg, n]) => `<a class="deal nw" href="${esc(u)}" target="_blank" rel="noopener"><span class="muted num">${dt(d)}</span><span><span class="t">${esc(t)}</span>`
     + `<span class="m">${new Date(d).getTime() >= t0 ? '<span class="nwnew">신규</span>' : ''}<span>${esc(o)}${n ? ` 외 ${n}곳` : ''}</span>${(tg || []).map(x => `<span class="pill none">${esc(x)}</span>`).join('')}</span></span><span class="go">›</span></a>`;
   return N.slice(0, 5).map(row).join('') + (N.length > 5 ? `<details class="more-f"><summary>지난 기사 ${N.length - 5}건 더 보기</summary>${N.slice(5).map(row).join('')}</details>` : '')
-    + `<p class="src">네이버 뉴스에서 제목·요약에 단지 이름이 나온 기사. 같은 내용은 한 줄로 묶고, 본문은 저장하지 않고 원문으로 연결합니다.</p>`;
+    + `<p class="src">네이버 뉴스에서 제목에 단지 이름이 나온 기사만(시장 정리 기사에 이름만 나온 것은 뺌). 같은 내용은 한 줄로 묶고, 본문은 저장하지 않고 원문으로 연결합니다.</p>`;
 }
 function redevLeft(z) {
   const k = /재개발/.test(z.biz_type || '') ? 'r' : 'b', g = (s) => RDUR[k + s] || [0, 0, 0], BUILD = [3, 2.5, 3.5];
