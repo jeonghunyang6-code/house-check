@@ -229,10 +229,11 @@ out['v2_wk'] = select(db, """SELECT cls_id, week_date::text d, value v FROM rone
  AND week_date >= '2023-06-01' ORDER BY 1, 2""")
 out['v2_info'] = {r['apt_seq']: [r['apt_name'], r['region_code'], r['umd_name'], r['lat'] and round(float(r['lat']), 5), r['lng'] and round(float(r['lng']), 5),
                    r['station_name'], r['station_m'], r['h2_cbd_min'], r['h2_ybd_min'], r['h2_gbd_min'], r['mart_name'], r['mart_m'], r['hosp_name'], r['hosp_m'],
-                   r['mid_zone'], r['build_year'], r['hh'], r['park_name'], r['park_kind'], r['park_area'] and round(float(r['park_area'])), r['park_m']]
+                   r['mid_zone'], r['build_year'], r['hh'], r['park_name'], r['park_kind'], r['park_area'] and round(float(r['park_area'])), r['park_m'],
+                   r['han_bank_m'], r['han_front'], r['han_block']]   # 21~23 한강변 추정(collector/hanbank.py, 2026-11-15)
                   for r in select(db, """SELECT c.apt_seq, c.apt_name, c.region_code, c.umd_name, c.lat, c.lng, c.station_name, c.station_m, c.h2_cbd_min, c.h2_ybd_min,
  c.h2_gbd_min, c.mart_name, c.mart_m, c.hosp_name, c.hosp_m, c.mid_zone, c.build_year, k.households hh,
- c.park_name, c.park_kind, c.park_area, c.park_m FROM complexes c LEFT JOIN kapt_complexes k USING (kapt_code)
+ c.park_name, c.park_kind, c.park_area, c.park_m, c.han_bank_m, c.han_front, c.han_block FROM complexes c LEFT JOIN kapt_complexes k USING (kapt_code)
  WHERE c.apt_seq IN (SELECT apt_seq FROM complex_metrics WHERE ref_10k IS NOT NULL OR a5_est_10k IS NOT NULL)""")}
 # 검색용: 기준 시세가 없는 단지(거래가 적은 신축·소규모, 재건축 뒤 아직 매매 신고가 없는 곳)도 찾고 ♡ 할 수 있게.
 # K-apt 등록 단지 또는 3년 안 매매 3건+. 재건축으로 K-apt 이름·사용승인이 바뀐 곳(예: 코오롱상가아파트 → 더샵강동센트럴시티)은 K-apt 이름으로도 찾는다
@@ -360,6 +361,16 @@ try:
     _au = select(db, "SELECT apt_seq, stage, first_date::text d, n_press, urls FROM remodel_auto WHERE status = 'auto'")
 except Exception as e:   # 0086 전
     print('  remodel_auto 없음:', e); _au = []
+# 관심 단지가 정비구역 안이면 그 구역(단계 높은 것 하나)
+from collector.redev import STAGE_ORDER as _ZST
+_ZN = {'구역지정': '정비구역 지정', '추진위': '추진위원회 승인', '조합설립': '조합설립인가', '사업시행': '사업시행인가', '관리처분': '관리처분인가', '착공': '착공'}
+_ZD = (('구역지정', 'zone_ymd'), ('추진위', 'committee_ymd'), ('조합설립', 'assoc_ymd'), ('사업시행', 'impl_ymd'), ('관리처분', 'mgmt_ymd'), ('착공', 'construction_ymd'))
+_zn = {}
+if _rs:
+    for r in select(db, "SELECT DISTINCT ON (r.apt_seq) r.apt_seq, z.zone_nm, z.biz_type, z.stage, z.stage_no, z.src, z.zone_ymd::text, z.committee_ymd::text, "
+                        "z.assoc_ymd::text, z.impl_ymd::text, z.mgmt_ymd::text, z.construction_ymd::text FROM complex_redev r JOIN redev_zone z USING (code) "
+                        "WHERE r.apt_seq IN (" + ",".join("'%s'" % x.replace("'", "") for x in _rs) + ") ORDER BY r.apt_seq, z.stage_no DESC NULLS LAST"):
+        _zn[r['apt_seq']] = r
 out['v2_remodel'] = {}
 for _s in _rs:
     _m = _RM.REMODELS.get(_s)
@@ -369,10 +380,24 @@ for _s in _rs:
             u = _jv(a['urls']) or []
             steps.append([a['stage'], a['d'], a['stage'] + ' (기사 제목 기준)', f"기사 {a['n_press']}곳", u[0] if u else '', True])
     steps.sort(key=lambda x: _RM.idx(x[0]))
+    z = _zn.get(_s)
     if steps:
         out['v2_remodel'][_s] = {'k': _m.kind if _m else '리모델링', 's': steps, 'n': _m.next if _m else '', 'by': _by.get(_s)}
-    elif _by.get(_s) and int(_by[_s]) <= 2010:
-        out['v2_remodel'][_s] = {'none': 1, 'by': _by[_s]}
+    elif z:   # 재건축·재개발: 서울 정비사업 현황·경기 정비사업(jobs/redev.py) 공식 단계, 날짜 있는 단계만 줄로
+        st = list(_ZST) if (z['stage_no'] or 0) > 0 else ['예정구역', *_ZST]
+        now = (z['stage_no'] or 0) - 1 if (z['stage_no'] or 0) > 0 else 0
+        lab = '서울시 정비사업 현황' if z['src'] == 'seoul' else '경기 정비사업 현황'
+        rows = [[st_, z[c][:10], _ZN.get(st_, st_), lab, '', 'o'] for st_, c in _ZD if z.get(c)]
+        rows.sort(key=lambda x: st.index(x[0]))
+        if not rows or rows[-1][0] != st[now]:
+            rows.append([st[now], '', st[now] + ' (날짜 없음)', lab, '', 'o'])
+        out['v2_remodel'][_s] = {'k': z['biz_type'].replace('공동주택', '').replace('아파트지구', ''), 'zone': z['zone_nm'], 'st': st, 's': rows, 'n': '', 'by': _by.get(_s)}
+    elif _by.get(_s) and int(_by[_s]) <= _RM.OLD_YEAR:
+        out['v2_remodel'][_s] = {'none': 1, 'by': _by[_s], 'chk': str(_RM.CHECKED_NONE[_s]) if _s in _RM.CHECKED_NONE else None}
+# 한강뷰 손 관리(collector/hanview.py B안): {단지: [전 세대|일부 동|없음, 설명, 출처 이름, 출처 주소, 확인일]}
+from collector.hanview import HANVIEW as _HV
+out['v2_hanview'] = {k: [v.kind, v.note, _pn(v.sources[0]) if v.sources[0].startswith('http') else v.sources[0], v.sources[0] if v.sources[0].startswith('http') else '', str(v.checked)]
+                     for k, v in _HV.items()}
 out['v2_proj'] = select(db, "SELECT name, status, status_date::text, outlook, cbd, region_codes, stations, new_stations FROM transit_projects")
 out['seqs'] = SEQS
 out['regions'] = {k: v for k, v in REGIONS.items()}

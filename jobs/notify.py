@@ -381,6 +381,24 @@ def check_lines(db: Db, today) -> list[str]:
     return out
 
 
+def remodel_check_lines(db: Db) -> list[str]:
+    """금요일 🧾: 2010년 이전 준공 관심 단지인데 정비 단계 기록(손 관리·자동·정비구역)이 없는 곳(2026-11-15)."""
+    out = []
+    try:   # 정비 진행 현황(2026-11-15 사용자): 2010년 이전 준공 관심 단지인데 손 관리 단계·자동 단계·정비구역 연결이 모두 없는 곳
+        from collector import remodel as RM
+        seqs = watch(db)
+        if seqs:
+            q = ", ".join(lit(s) for s in seqs)
+            done = {r["apt_seq"] for r in select(db, f"SELECT apt_seq FROM complex_redev WHERE apt_seq IN ({q}) UNION SELECT apt_seq FROM remodel_auto WHERE apt_seq IN ({q})")}
+            need = [r["apt_name"] + f"({r['build_year']})" for r in select(db, f"SELECT apt_seq, apt_name, build_year FROM complexes WHERE apt_seq IN ({q}) AND build_year <= {RM.OLD_YEAR} ORDER BY build_year")
+                    if r["apt_seq"] not in done and r["apt_seq"] not in RM.REMODELS and r["apt_seq"] not in RM.CHECKED_NONE]
+            if need:
+                out.append("🔍 정비 단계 확인 필요(손 관리 기록 없음): " + ", ".join(html.escape(n, quote=False) for n in need[:6]) + (f" 외 {len(need) - 6}곳" if len(need) > 6 else ""))
+    except (DbError, KeyError, TypeError):
+        pass
+    return out
+
+
 def remodel_lines(db: Db, seqs: list[str], names: dict[str, str]) -> list[str]:
     """이번 주(7일) 기사 제목으로 자동으로 올린 재건축·리모델링 단계(jobs/remodel.py, 2026-11-15 사용자 요청). 텔레그램 '빼줘' 답장이 이 줄('🏗️ 이름: 단계')을 읽는다."""
     try:
@@ -447,7 +465,7 @@ def weekly(db: Db, save: bool = True) -> str:
     if rm:
         out.append("\n🏗️ <b>정비 단계 자동 갱신</b> (틀리면 이 글에 답장 '빼줘')")
         out += rm
-    ck = check_lines(db, today)
+    ck = check_lines(db, today) + remodel_check_lines(db)
     if ck:
         out.append("\n🧾 <b>손 관리 자료 확인</b>")
         out += ck
