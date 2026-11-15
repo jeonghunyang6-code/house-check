@@ -112,7 +112,7 @@ svg.chart:not(.map) text { fill: var(--ink-3); font-size: 10px; font-family: var
 .kpi .d { font-size: 12px; color: var(--ink-2); line-height: 1.45; }
 /* 숫자 카드 최근 12주 막대(2026-11-14 디자인 3-A) */
 .kpi .sp { display: block; width: 100%; height: 30px; margin-top: 6px; }
-.kpi .spl { display: flex; justify-content: space-between; font-size: var(--fs-note); color: var(--ink-3); margin-top: 1px; }
+.kpi .spl { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--ink-3); margin-top: 1px; }   /* 2026-11-15 사용자: 더 작게 */
 .stack { display: flex; height: 26px; border-radius: 8px; overflow: hidden; }
 .stack span { display: flex; align-items: center; justify-content: center; font-size: 11.5px; color: var(--on-strong); font-weight: 600; white-space: nowrap; overflow: hidden; }
 .bar2 { display: grid; grid-template-columns: 64px 1fr auto; gap: 8px; align-items: center; font-size: 13px; }
@@ -657,12 +657,17 @@ function labelPt(k, g) {
     const spark12 = (c) => { if (!c || c.length < 2) return '';
       const VW = 180, H = 30, hi = Math.max(0, ...c), lo = Math.min(0, ...c), m = (hi - lo) || 0.05, bw = VW / c.length, mid = 1 + (H - 2) * hi / m;
       return `<svg class="sp" viewBox="0 0 ${VW} ${H}" preserveAspectRatio="none" aria-hidden="true"><line x1="0" x2="${VW}" y1="${mid}" y2="${mid}" stroke="var(--line)"/>` +
-        c.map((x, i) => { const h = Math.max(Math.abs(x) / m * (H - 2), 1); return `<rect x="${i * bw + 1.5}" width="${bw - 3}" y="${x >= 0 ? mid - h : mid}" height="${h}" rx="1" fill="var(${x >= 0 ? '--up2' : '--dn2'})"/>`; }).join('')
+        c.map((x, i) => { const h = Math.max(Math.abs(x) / m * (H - 2), 1); return `<rect x="${i * bw + 1.5}" width="${bw - 3}" y="${x >= 0 ? mid - h : mid}" height="${h}" rx="1" fill="var(${x >= 0 ? '--up2' : '--dn2'})"/>`
+          + `<rect class="hit" data-i="${i}" x="${i * bw}" width="${bw}" y="0" height="${H}" fill="transparent"/>`; }).join('')
         + `</svg><span class="spl"><span>${c.length}주 전</span><span>이번 주</span></span>`; };
     $('#wkKpis').innerHTML = [['서울 전체', 'seoul'], ['수도권 전체', 'sudo']].map(([n, id]) => {
       const t = W.tot[`${id}_${st.kind}`], up = t.w >= 0;
       return `<div class="kpi"><span class="k">${n} ${st.kind === 't' ? '매매' : '전세'}</span><span class="v" style="color:var(${up ? '--up2' : '--dn2'})">${fmt(t.w)}</span><span class="d">${t.streak}주 연속 ${up ? '상승' : '하락'}</span>${spark12(t.c12)}</div>`;
     }).join('');
+    // 막대에 마우스(휴대폰은 누르기) → 그 주 변동률(지도처럼, 2026-11-15 사용자)
+    [['seoul', 0], ['sudo', 1]].forEach(([id, j]) => { const t = W.tot[`${id}_${st.kind}`], box = document.querySelectorAll('#wkKpis .kpi')[j];
+      if (box && t.c12) box.querySelectorAll('rect.hit').forEach(r => { const i = +r.dataset.i, v = t.c12[i], d = (t.c12d || [])[i];
+        hover(r, `${d ? dt(d) + ' 주 · ' : ''}<b class="${v > 0 ? 'up' : v < 0 ? 'dn' : ''}">${fmt(v)}</b>`); }); });
     const ranked = keys.filter(k => V[k] && V[k][st.kind] != null).map(k => [k, V[k][st.kind]]).sort((a, b) => b[1] - a[1]);
     const top = ranked.slice(0, 4), bot = ranked.slice(-4).reverse();
     $('#wkAllRows').style.cssText = `margin-top:6px;grid-auto-flow:column;grid-template-rows:repeat(${Math.ceil(ranked.length / 2)},auto)`;   // 위→아래 순위
