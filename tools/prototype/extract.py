@@ -351,7 +351,7 @@ from collector import complex_news as _CN
 from datetime import date as _date
 _nw = {}
 try:
-    for r in select(db, "SELECT apt_seq, url, title, outlet, pub::text pub, in_title, tags FROM complex_news WHERE pub >= current_date - 183"):
+    for r in select(db, "SELECT apt_seq, url, title, outlet, pub::text pub, in_title, tags FROM complex_news WHERE pub >= current_date - 183 AND in_title"):
         _nw.setdefault(r['apt_seq'], []).append({**r, 'pub': _date.fromisoformat(r['pub']), 'tags': (r['tags'] or '').split(',') if r['tags'] else []})
 except Exception as e:   # 표가 아직 없을 때(0085 전)
     print('  complex_news 없음:', e)

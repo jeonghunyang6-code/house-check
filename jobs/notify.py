@@ -389,7 +389,7 @@ def news_lines(db: Db, seqs: list[str], names: dict[str, str], today) -> list[st
     if not seqs:
         return []
     try:
-        rows = select(db, "SELECT apt_seq, url, title, outlet, pub::text pub, in_title, tags FROM complex_news WHERE first_seen > "
+        rows = select(db, "SELECT apt_seq, url, title, outlet, pub::text pub, in_title, tags FROM complex_news WHERE in_title AND first_seen > "
                       f"{lit(today - _td(days=7))} AND pub > {lit(today - _td(days=14))} AND apt_seq IN (" + ", ".join(lit(s) for s in seqs) + ")")
     except DbError:
         return []
