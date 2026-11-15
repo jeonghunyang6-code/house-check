@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "stations | schoolzone | midzone | elem | academy | hospital | park | access (mart 는 커넥터로 모은 파일이 필요해 로컬에서)"
+        description: "stations | schoolzone | midzone | elem | academy | hospital | park | access | hanbank(한강변 추정, OSM) (mart 는 커넥터로 모은 파일이 필요해 로컬에서)"
         default: "schoolzone"
 
 permissions:
@@ -40,3 +40,10 @@ jobs:
           HC_DB_BACKEND: psql
           PYTHONUNBUFFERED: "1"
         run: python -m jobs.infra "${{ inputs.mode || 'park' }}"
+      - name: 한강변 추정(분기, OSM 물가 · 2026-11-15)
+        if: ${{ github.event_name == 'schedule' && !cancelled() }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          HC_DB_BACKEND: psql
+          PYTHONUNBUFFERED: "1"
+        run: python -m jobs.infra hanbank
