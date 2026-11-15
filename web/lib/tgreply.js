@@ -66,10 +66,34 @@ async function removePolicy(q, text, replyTo, today = new Date()) {
     : `${r.mm}/${r.dd} ${r.kind} 자동 추가 정책을 찾지 못했어요(이미 뺐거나 없음).`;
 }
 
+// 재건축·리모델링 단계 자동 갱신 취소(2026-11-15, jobs/notify.py remodel_lines): 금요일 요약의 '🏗️ 이름: 단계' 줄에 답장 '빼줘' 또는 '빼줘 선사현대 건축심의'.
+// remodel_auto status 'auto' → 'removed'. jobs/remodel.py 는 뺀 단계를 다시 넣지 않는다
+const RM_STAGES = ['추진위', '조합설립', '시공사', '안전진단', '도계위', '건축심의', '사업승인', '이주', '착공', '준공'];
+function remodelRefs(s) {
+  const out = [], re = new RegExp(`🏗️\\s*([^:\\n]+?)\\s*:\\s*(${RM_STAGES.join('|')})`, 'g');
+  let m; while ((m = re.exec(String(s || '')))) out.push({ name: m[1], stage: m[2] });
+  return out;
+}
+function remodelInText(t) {
+  const m = String(t || '').match(new RegExp(`^빼\\S*\\s+(.+?)\\s+(${RM_STAGES.join('|')})\\s*$`));
+  return m ? [{ name: m[1], stage: m[2] }] : [];
+}
+async function removeRemodel(q, text, replyTo) {
+  let refs = remodelInText(text);
+  if (!refs.length) refs = remodelRefs(replyTo);
+  if (!refs.length) return null;
+  if (refs.length > 1 && !remodelInText(text).length) return '알림에 단계가 여러 개예요. 하나만 골라 주세요:\n' + refs.map(r => `• 빼줘 ${esc(r.name)} ${r.stage}`).join('\n');
+  const r = refs[0];
+  const got = await q(`UPDATE remodel_auto a SET status = 'removed' FROM complexes c WHERE a.apt_seq = c.apt_seq AND a.status = 'auto' AND a.stage = $1
+      AND regexp_replace(lower(c.apt_name), '[[:space:]()·.-]', '', 'g') LIKE '%' || $2 || '%' RETURNING c.apt_name`, [r.stage, norm(r.name)]);
+  return got.rows.length ? `뺐어요: ${esc(got.rows[0].apt_name)} ${r.stage}(자동)\n다음 사이트 갱신부터 정비 진행 현황에서 빠져요.`
+    : `${esc(r.name)} ${r.stage} 자동 단계를 찾지 못했어요(이미 뺐거나 없음).`;
+}
+
 async function reply(q, text, site, replyTo) {
   const t = String(text || '').trim();
   if (!t || /^\/(start|help)|^도움/.test(t)) return HELP;
-  if (/^빼(줘|주세요|기|라)?(\s|$)/.test(t)) return removePolicy(q, t, replyTo);
+  if (/^빼(줘|주세요|기|라)?(\s|$)/.test(t)) return (await removeRemodel(q, t, replyTo)) || removePolicy(q, t, replyTo);
   const { list, watch, asks } = await find(q, t);
   if (!list.length) return `'${esc(t)}' 단지를 찾지 못했습니다. 이름 일부만 보내도 됩니다(예: 그라시움).`;
   const one = list.length === 1 || list[0].exact || (watch.includes(list[0].apt_seq) && !watch.includes((list[1] || {}).apt_seq));
@@ -77,4 +101,4 @@ async function reply(q, text, site, replyTo) {
   return (await summary(q, list[0], watch, asks)) + (site ? `\n${site}` : '');
 }
 
-module.exports = { reply, norm, askLine, HELP, policyRefs, removePolicy };
+module.exports = { reply, norm, askLine, HELP, policyRefs, removePolicy, remodelRefs, remodelInText, removeRemodel };

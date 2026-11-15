@@ -381,28 +381,15 @@ def check_lines(db: Db, today) -> list[str]:
     return out
 
 
-def news_lines(db: Db, seqs: list[str], names: dict[str, str], today) -> list[str]:
-    """이번 주(7일) 새로 모인 단지 소식(jobs/complex_news.py, 2026-11-15 사용자: 금요일 주간 요약에만). 처음 모은 날의 6개월치가 한꺼번에 뜨지 않게 기사 날짜도 14일 안.
-    단지마다 한 줄: 묶음 수·딱지 + 대표 제목(제목에 단지 이름 있는 것 먼저)."""
-    from datetime import date as _d, timedelta as _td
-    from collector import complex_news as CN
-    if not seqs:
-        return []
+def remodel_lines(db: Db, seqs: list[str], names: dict[str, str]) -> list[str]:
+    """이번 주(7일) 기사 제목으로 자동으로 올린 재건축·리모델링 단계(jobs/remodel.py, 2026-11-15 사용자 요청). 텔레그램 '빼줘' 답장이 이 줄('🏗️ 이름: 단계')을 읽는다."""
     try:
-        rows = select(db, "SELECT apt_seq, url, title, outlet, pub::text pub, in_title, tags FROM complex_news WHERE in_title AND first_seen > "
-                      f"{lit(today - _td(days=7))} AND pub > {lit(today - _td(days=14))} AND apt_seq IN (" + ", ".join(lit(s) for s in seqs) + ")")
+        rows = select(db, "SELECT a.apt_seq, a.stage, a.first_date::text d, a.n_press n, c.apt_name FROM remodel_auto a LEFT JOIN complexes c USING (apt_seq) "
+                      "WHERE a.status = 'auto' AND a.detected_at > now() - interval '7 days' ORDER BY a.first_date")
     except DbError:
         return []
-    out = []
-    for s in seqs:
-        rs = [{**r, "pub": _d.fromisoformat(r["pub"]), "tags": (r["tags"] or "").split(",") if r["tags"] else []} for r in rows if r["apt_seq"] == s]
-        if not rs:
-            continue
-        g = CN.group(rs)
-        head = sorted(g, key=lambda x: (not x["in_title"], -x["others"]))[0]
-        tg = list(dict.fromkeys(t for x in g for t in x["tags"]))[:2]
-        out.append(f"▪️ <b>{html.escape(names.get(s, s))}</b> {len(g)}건{' · ' + '·'.join(tg) if tg else ''}\n   {html.escape(head['title'][:60], quote=False)}")
-    return out
+    return [f"🏗️ {html.escape(names.get(r['apt_seq']) or r['apt_name'] or r['apt_seq'], quote=False)}: {r['stage']} · {r['d'][5:].replace('-', '/')} 언론사 {r['n']}곳"
+            for r in rows]
 
 
 def weekly(db: Db, save: bool = True) -> str:
@@ -456,10 +443,10 @@ def weekly(db: Db, save: bool = True) -> str:
         out.append("\n📅 <b>정책</b>")
         out += [f"⏳ {d:%m/%d} (D-{(d - today).days}) {html.escape(t)}" for d, _, t, _ in up]
         out += [f"🆕 {r['d'][5:].replace('-', '/')} {r['kind']} 발표 후보 · 언론사 {r['n']}곳(확인 전)" for r in pn]
-    nw = news_lines(db, seqs, {k: v["name"] for k, v in info.items()}, today)
-    if nw:
-        out.append("\n📰 <b>단지 소식</b>")
-        out += nw
+    rm = remodel_lines(db, seqs, {k: v["name"] for k, v in info.items()})
+    if rm:
+        out.append("\n🏗️ <b>정비 단계 자동 갱신</b> (틀리면 이 글에 답장 '빼줘')")
+        out += rm
     ck = check_lines(db, today)
     if ck:
         out.append("\n🧾 <b>손 관리 자료 확인</b>")
