@@ -1,0 +1,42 @@
+# 새로 생기는 역(가칭) 좌표 (jobs/station_geo.py → station_geo 0084 → transit_projects 다시 적재) 뒤 사이트 다시 만들기.
+# collector/projects.py 의 geo_stations 주소를 네이버 클라우드 Geocoding 으로 찾는다(2026-11-15 사용자 요청).
+# projects.py 가 바뀌어 기본 브랜치에 들어오면 저절로 돈다. 필요한 시크릿: NCP_MAPS_KEY_ID·NCP_MAPS_KEY(Maps Application, Geocoding), DATABASE_URL
+name: station_geo
+
+on:
+  push:
+    branches: [claude/inspiring-bell-73ixlm]
+    paths: [collector/projects.py]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write   # 끝나고 site.yml 을 다시 돌리려고
+
+concurrency:
+  group: station_geo
+  cancel-in-progress: false
+
+jobs:
+  station_geo:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: psql 확인
+        run: command -v psql || (sudo apt-get update -q && sudo apt-get install -y -q postgresql-client)
+      - name: 새 역 좌표 + 철도 사업 다시 적재
+        env:
+          NCP_MAPS_KEY_ID: ${{ secrets.NCP_MAPS_KEY_ID }}
+          NCP_MAPS_KEY: ${{ secrets.NCP_MAPS_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          HC_DB_BACKEND: psql
+          PYTHONUNBUFFERED: "1"
+        run: python -m jobs.station_geo
+      - name: 사이트 다시 만들기
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run site.yml --ref "${{ github.ref_name }}"

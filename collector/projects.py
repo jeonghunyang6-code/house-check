@@ -28,6 +28,9 @@ class Project:
     # 새로 생기는 역(가칭): (이름, 위도, 경도). 역 위치가 공개되지 않아 기사에 나온 지명(교차로·학교·광장)의 좌표로 대략 잡음(2026-10-26, 카카오 장소 검색).
     # 지도 표시용. H4 역세권(700m) 계산에는 쓰지 않는다
     new_stations: tuple[tuple[str, float, float], ...] = ()
+    # 새 역(가칭)을 주소로: (이름, 주소). GitHub 자동 작업(station_geo.yml → jobs/station_geo.py)이 네이버 클라우드 Geocoding 으로 좌표를 찾아
+    # station_geo 표(0084)에 두고, jobs/policy.py 가 new_stations 에 합친다(2026-11-15 사용자: 새 역 위치는 자동 작업으로 좌표 받기)
+    geo_stations: tuple[tuple[str, str], ...] = ()
     # 교차 확인(collector/provenance.py, 2026-11-10~): 다른 출처, 확인한 날. 그 전 사업은 2026-10-18 웹 검색 확인(출처 1곳)
     more: tuple[str, ...] = ()
     checked: date = date(2026, 10, 18)
@@ -86,6 +89,8 @@ PROJECTS: tuple[Project, ...] = (
     # 개통: 2025-07 경기도 '2031'(철도경제신문·기호일보) vs 2026-07 뉴시스 서울시 쪽 '2032 준공' → 규칙대로 범위
     Project("9호선 5단계(강동하남남양주선, 고덕강일~미사~진접2)", "확정", date(2024, 12, 24), "착공 목표 2027 상반기 · 개통 목표 2031~2032",
             ("강남", "여의도"), ("11740", "41450", "41360"), "https://mediahub.seoul.go.kr/archives/2018836",
+            # 944(신미사) 잠정 위치 = 미사강변 4·7·8단지 사거리(경기일보 2024-08-08·하남일보). 8단지 주소(dorojuso.kr)로 근사. 943(신강일)·남양주 6곳은 위치 못 찾음
+            geo_stations=(('신미사', '경기도 하남시 미사강변대로 240'),),
             more=("https://news.mtn.co.kr/news-detail/2026032615491963683", "https://mobile.newsis.com/view/NISX20260728_0003726855",
                   "https://www.sijung.co.kr/news/articleView.html?idxno=405579", "https://www.seouland.com/arti/society/society_general/19684.html",
                   "https://www.redaily.co.kr/news/articleView.html?idxno=12924", "https://www.kihoilbo.co.kr/news/articleView.html?idxno=1152251"),
