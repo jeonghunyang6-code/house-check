@@ -396,7 +396,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
         <div id="askTrendBox" hidden>
           <div class="row" style="justify-content:space-between;align-items:center;margin:8px 0 2px;gap:8px"><p id="askTrendTitle" style="font-size:13.5px;margin:0"></p>
             <div class="seg" id="askSpan" style="flex:none"><button type="button" data-v="8w" aria-pressed="true">8주</button><button type="button" data-v="6m" aria-pressed="false">6개월</button></div></div>
-          <svg class="chart" id="askTrend" viewBox="0 0 340 168" role="img" aria-label="주마다 매매 호가"></svg></div>
+          <svg class="chart" id="askTrend" viewBox="0 0 340 168" role="img" aria-label="주마다 매매 호가"></svg><div id="askLegend" style="font-size:var(--fs-note);color:var(--ink-3);text-align:right;margin-top:2px"></div></div>
         <div id="askList"></div>
         <details class="more-f" id="askPasteBox"><summary>네이버 부동산에서 붙여넣기</summary><div class="body">
           <textarea id="askPaste" rows="3" placeholder="'호가 저장' 버튼으로 복사한 내용을 붙여넣기" style="font:inherit;font-size:14px;width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:10px;padding:8px;background:var(--surface);color:var(--ink)"></textarea>
@@ -1519,12 +1519,13 @@ function drawAsks() {
     // 값 이름표는 그래프 오른쪽 대신 위 한 줄에(2026-10-28 사용자: 가로를 끝까지 쓰기). 기준 = 지금 주 기준 시세, 점선 표시와 같은 색
     const rl = refs[refs.length - 1] || refs.filter(Boolean).pop();
     const nw = (h) => `<span style="white-space:nowrap">${h}</span>`;   // 좁은 화면에서 '기준 24.9 / 억'처럼 끊기지 않게 덩어리로 줄바꿈
-    // 2026-11-15 사용자: 위 칸(매물 수·중간 호가)과 겹치는 숫자는 빼고 '변화'만. 기준은 제목 줄(점선 끝 이름표는 데이터를 가려 뺌)
+    // 2026-11-15 사용자: 위 칸(매물 수·중간 호가)과 겹치는 숫자는 빼고 '변화'만. 기준은 점·막대에 마우스 올리면 보여서 글줄에 안 씀(2026-11-15 사용자: 길어져 버튼이 다음 줄로 내려감), 점선 끝 이름표도 데이터를 가려 뺌
     const dot = `<i style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent);margin:0 3px 1px 0"></i>`;
     $('#askTrendTitle').innerHTML = [has.length > 1 ? nw(`매물 <b>${first.v.length}→${last.v.length}</b>`) : '',
       has.length > 1 ? nw(`중간 <b style="color:var(--c1)">${eok(first.m)}→${eok(last.m)}</b>`) : '',
-      rl ? nw(`<span style="color:var(--c1);border-bottom:1.5px dashed var(--c1);white-space:nowrap">기준 ${eok(rl)}</span>`) : '',
-      nw(`<span style="font-size:var(--fs-note);color:var(--ink-3)">${dot}급매${dls.length ? ` · ◆ 실거래 ${dls.length}` : ''}</span>`)].filter(Boolean).join(' · ');
+    ].filter(Boolean).join(' · ');
+    // 범례는 그래프 아래 한 줄(2026-11-15 사용자: 위 글줄이 길어져 8주·6개월 버튼이 다음 줄로 내려가는 게 보기 싫음)
+    $('#askLegend').innerHTML = `${dot}급매${dls.length ? ` · ◆ 실거래 ${dls.length}` : ''}`;
   }
   const pn = prevD ? snap(prevD).filter(x => x.t === '매매').length : null, gm = gap(med(sale));
   $('#askSum').innerHTML = !now.length ? '' : `
