@@ -53,7 +53,7 @@ p { margin: 0; }
 .num { font-variant-numeric: tabular-nums; }
 .big { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .pill { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--none-bg); color: var(--ink-2); white-space: nowrap; }
-.pill.good { background: var(--good-bg); color: var(--good); } .pill.warn { background: var(--warn-bg); color: var(--warn); } .pill.bad { background: var(--bad-bg); color: var(--bad); } .pill.acc { background: var(--accent-bg); color: var(--accent); }
+.pill.good { background: var(--good-bg); color: var(--good); } .pill.warn { background: var(--warn-bg); color: var(--warn); } .pill.bad { background: var(--bad-bg); color: var(--bad); } .pill.acc { background: var(--accent-bg); color: var(--accent); } .acc-t { color: var(--accent); }
 .pill.ex { background: transparent; border: 1px dashed var(--ink-3); color: var(--ink-3); font-weight: 500; }
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .sig { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -410,7 +410,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
             <label for="a_price" style="grid-column:1/-1">매매 호가 (만원)<input id="a_price" inputmode="numeric" placeholder="네이버 부동산·중개소에서 본 가격"></label>
             <button type="submit" class="more" style="grid-column:1/-1">호가 기록</button>
           </form></div></details>
-        <p class="src">호가 ÷ 최근 실거래 기준 시세: 3% 이내 초록, 3~5% 노랑, 5% 넘으면 빨강, 5% 이상 싸면 파랑. 시안에서는 이 기기에만 저장됩니다.</p>
+        <p class="src">호가 ÷ 최근 실거래 기준 시세: 3% 이내 초록, 3~5% 노랑, 5% 넘으면 빨강, 5% 이상 싸면 청록(급매, 그래프 점·막대도 같은 색). 시안에서는 이 기기에만 저장됩니다.</p>
       </div>
       <div class="card"><h2>입지 사실표 <small>점수 없이 숫자 그대로</small></h2><div id="dFacts"></div></div>
       <div class="card"><h2>주변 지도 <small id="dMapSub">반경 1.5km</small><button type="button" class="icon-btn" id="dMapType" hidden style="margin-left:auto;font-size:12.5px">위성</button></h2><div class="src" id="dNear" hidden style="margin:0 0 8px;line-height:1.6"></div><div class="nmap" id="dNmap" hidden></div><svg class="lmap" id="dMap" viewBox="-1600 -1600 3200 3200" role="img" aria-label="단지 주변 역·병원·마트·중학교"></svg><div class="legend" id="dMapLg"></div>
@@ -493,6 +493,10 @@ const D = /*DATA*/null;
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const eok = (v) => v == null ? '–' : (v / 10000).toFixed(Math.abs(v) >= 100000 ? 1 : 2) + '억';   // 자릿수 고정(15억 → 15.0억, 9.5억 → 9.50억): 목록에서 칸이 맞게(2026-11-03 사용자)
+// 그래프 세로축(2026-11-15 사용자: 22.5억·18.8억 대신 22억·20억처럼 딱 떨어지게). 범위를 눈금에 맞춰 넓힌다, 칸은 4개 이하
+const niceAx = (lo, hi) => { const sp = (hi - lo) || hi * 0.05 || 1000, st = [500, 1000, 2000, 2500, 5000, 10000, 20000, 25000, 50000, 100000].find(x => sp / x <= 4) || 100000;
+  const a = Math.floor(lo / st) * st, b = Math.ceil(hi / st) * st, t = []; for (let v = a; v <= b + 1e-6; v += st) t.push(v); return { lo: a, hi: b, ticks: t }; };
+const eokT = (v) => (v / 10000).toFixed(2).replace(/\.?0+$/, '') + '억';
 const man = (v) => Math.abs(v) >= 10000 ? (v / 10000).toFixed(2).replace(/\.?0+$/, '') + '억' : Math.round(v).toLocaleString() + '만';
 const sgn = (v, d = 1) => v == null || isNaN(v) ? '–' : (v > 0 ? '+' : '') + Number(v).toFixed(d) + '%';
 const NS = 'http://www.w3.org/2000/svg';
@@ -667,7 +671,7 @@ function labelPt(k, g) {
     // 막대에 마우스(휴대폰은 누르기) → 그 주 변동률(지도처럼, 2026-11-15 사용자)
     [['seoul', 0], ['sudo', 1]].forEach(([id, j]) => { const t = W.tot[`${id}_${st.kind}`], box = document.querySelectorAll('#wkKpis .kpi')[j];
       if (box && t.c12) box.querySelectorAll('rect.hit').forEach(r => { const i = +r.dataset.i, v = t.c12[i], d = (t.c12d || [])[i];
-        hover(r, `${d ? dt(d) + ' 주 · ' : ''}<b class="${v > 0 ? 'up' : v < 0 ? 'dn' : ''}">${fmt(v)}</b>`); }); });
+        hover(r, `${d ? dt(d) + ' 주 · ' : ''}<b>${fmt(v)}</b>`); }); });
     const ranked = keys.filter(k => V[k] && V[k][st.kind] != null).map(k => [k, V[k][st.kind]]).sort((a, b) => b[1] - a[1]);
     const top = ranked.slice(0, 4), bot = ranked.slice(-4).reverse();
     $('#wkAllRows').style.cssText = `margin-top:6px;grid-auto-flow:column;grid-template-rows:repeat(${Math.ceil(ranked.length / 2)},auto)`;   // 위→아래 순위
@@ -1334,15 +1338,24 @@ function drawDaily() {
   const wk0 = ((t) => { t.setDate(t.getDate() - (t.getDay() + 6) % 7); return t.getTime(); })(new Date(new Date(t0).setHours(0, 0, 0, 0)));
   const wks = yr ? [...Array(Math.ceil((t1 - wk0) / (7 * 864e5)) + 1)].map((_, i) => wk0 + i * 7 * 864e5) : [], rws = yr ? refWeekly(dy, mainAg, wks) : [];
   const refT = (t) => { if (!yr) return ref; const i = Math.floor((t - wk0) / (7 * 864e5)); return rws[Math.max(0, Math.min(i, rws.length - 1))] || ref; };
-  const vals = csame.map(x => x[4]).concat(ref ? [ref] : [], rws.filter(Boolean));
-  $('#dChartTitle').innerHTML = `${mainAg}㎡ <b>${csame.length}건</b>${ref ? ` · <span style="color:var(--c1);border-bottom:1.5px dashed var(--c1);white-space:nowrap">기준 ${eok(ref)}</span>` : ''}`;
+  // 튀는 거래는 축에서 빼고 그래프 위·아래 끝에 ↓·↑ 로(2026-11-15 사용자: 15.6억 한 건이 그래프를 누름).
+  // 튀는 거래 = 4건 이상일 때 사분위 범위(IQR)의 1.5배 밖 + 중간값에서 10% 넘게. 그런 거래가 10%(최소 1건)보다 많으면 두 무리로 보고 빼지 않음
+  const prices = csame.map(x => x[4]).sort((a, b) => a - b), pn = prices.length, md = pn ? prices[pn >> 1] : null;
+  const qq = (f) => prices[Math.min(pn - 1, Math.round(f * (pn - 1)))], q1 = pn ? qq(0.25) : 0, q3 = pn ? qq(0.75) : 0, iq = q3 - q1;
+  const out0 = (p) => pn >= 4 && (p < q1 - 1.5 * iq || p > q3 + 1.5 * iq) && Math.abs(p / md - 1) > 0.10;
+  const clip = prices.filter(out0).length <= Math.max(1, Math.floor(pn / 10)), out = (p) => clip && out0(p);
+  const vals = csame.filter(x => !out(x[4])).map(x => x[4]).concat(ref ? [ref] : [], rws.filter(Boolean));
+  // 기준 시세는 점선 끝 이름표로(위 칸에도 있음). 점 색 범례: 기준보다 5% 넘게 싸면 청록(목록 '급매'와 같은 색), 3% 넘게 비싸면 빨강
+  const dot = (c) => `<i style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(${c});margin:0 3px 1px 0"></i>`;
+  $('#dChartTitle').innerHTML = `${mainAg}㎡ <b>${csame.length}건</b> <span style="font-size:var(--fs-note);color:var(--ink-3);white-space:nowrap">· ${dot('--accent')}급매 ${dot('--up2')}기준+3%↑</span>`;
   if (vals.length) {
-    const lo = Math.min(...vals) * 0.97, hi = Math.max(...vals) * 1.03, y = (v) => T + (H - T - B) * (1 - (v - lo) / ((hi - lo) || 1));
-    [lo, (lo + hi) / 2, hi].forEach(t => { el('line', { x1: L, x2: W - R, y1: y(t), y2: y(t), stroke: 'var(--line)' }, svg); txt(svg, L - 4, y(t) + 3, eok(t), 'end'); });
+    const AX = niceAx(Math.min(...vals) * 0.995, Math.max(...vals) * 1.005), lo = AX.lo, hi = AX.hi, y = (v) => T + (H - T - B) * (1 - (v - lo) / ((hi - lo) || 1));
+    AX.ticks.forEach(t => { el('line', { x1: L, x2: W - R, y1: y(t), y2: y(t), stroke: 'var(--line)' }, svg); txt(svg, L - 4, y(t) + 3, eokT(t), 'end'); });
+    const yc = (p) => out(p) ? (p < md ? H - B - 4 : T + 4) : y(p);   // 튀는 거래는 끝에 붙임
     // 매달 1일 옅은 세로선, 달 이름은 그 달 구간 가운데(좁으면 생략)
     for (let m = new Date(new Date(t0).getFullYear(), new Date(t0).getMonth(), 1); m.getTime() < t1; m.setMonth(m.getMonth() + 1)) {
       const a = Math.max(m.getTime(), t0), b = Math.min(new Date(m.getFullYear(), m.getMonth() + 1, 1).getTime(), t1);
-      if (m.getTime() > t0) el('line', { x1: xt(a), x2: xt(a), y1: T, y2: H - B, stroke: 'var(--line)' }, svg);
+      if (m.getTime() > t0) el('line', { x1: xt(a), x2: xt(a), y1: H - B, y2: H - B + 4, stroke: 'var(--line)' }, svg);   // 세로 격자선 대신 아래 작은 눈금(2026-11-15)
       if (xt(b) - xt(a) >= 18) txt(svg, (xt(a) + xt(b)) / 2, H - 4, (m.getMonth() + 1) + '월', 'middle', { style: 'font-size:9px;fill:var(--ink-3)' });
     }
     if (yr) {   // 주별 기준 시세 계단선(그래프 범위 안만)
@@ -1350,16 +1363,20 @@ function drawDaily() {
         return `${i && (rws[i - 1] || ref) && w > t0 ? 'L' : 'M'}${xt(a).toFixed(1)},${y(v).toFixed(1)}L${xt(e).toFixed(1)},${y(v).toFixed(1)}`; }).join('');
       el('path', { d, fill: 'none', stroke: 'var(--c1)', 'stroke-dasharray': '4 3', 'stroke-width': 1.2 }, svg);
     } else if (ref) { el('line', { x1: L, x2: W - R, y1: y(ref), y2: y(ref), stroke: 'var(--c1)', 'stroke-dasharray': '4 3' }, svg); }
-    const col = (x) => { const rf = refT(new Date(d2(x[1])).getTime()); return rf && x[4] <= rf * 0.95 ? 'var(--dn2)' : rf && x[4] > rf * 1.03 ? 'var(--up2)' : 'var(--c3)'; };
-    csame.forEach(x => { const dot = el('circle', { cx: xs(x[1]), cy: y(x[4]), r: yr ? 3.4 : 4, fill: col(x), ...(x[6] ? { fill: 'var(--surface)', stroke: 'var(--c1)', 'stroke-width': 1.6 } : {}) }, svg); hover(dot, `${dt(d2(x[1]))} · ${x[3]}층 · ${eok(x[4])}${x[6] ? ' · ' + x[6] : ''}`); });
+    const rEnd = yr ? (rws.filter(Boolean).pop() || ref) : ref;
+    if (rEnd) txt(svg, W - R, y(rEnd) - 4, '기준 ' + eokT(Math.round(rEnd / 1000) * 1000), 'end', { style: 'font-size:9px;font-weight:700;fill:var(--c1);paint-order:stroke;stroke:var(--surface);stroke-width:3px' });
+    const col = (x) => { const rf = refT(new Date(d2(x[1])).getTime()); return rf && x[4] <= rf * 0.95 ? 'var(--accent)' : rf && x[4] > rf * 1.03 ? 'var(--up2)' : 'var(--c3)'; };
+    csame.forEach(x => { const cx = xs(x[1]), cy = yc(x[4]), tipT = `${dt(d2(x[1]))} · ${x[3]}층 · ${eok(x[4])}${x[6] ? ' · ' + x[6] : ''}`;
+      if (out(x[4])) { const dn = x[4] < md, k = 4.5; hover(el('path', { d: dn ? `M${cx - k},${cy - k}L${cx + k},${cy - k}L${cx},${cy + k}Z` : `M${cx - k},${cy + k}L${cx + k},${cy + k}L${cx},${cy - k}Z`, fill: col(x) }, svg), tipT); return; }
+      hover(el('circle', { cx, cy, r: yr ? 3.4 : 4, fill: col(x), ...(x[6] ? { fill: 'var(--surface)', stroke: 'var(--c1)', 'stroke-width': 1.6 } : {}) }, svg), tipT); });
     // 가격 이름표: 6건 이하면 전부, 많으면 최고·최저·가장 최근만. 점 위(맨 위 칸이면 아래)
     const tag = csame.length <= 6 ? csame : [...new Set([csame[0], csame.reduce((a, b) => b[4] > a[4] ? b : a), csame.reduce((a, b) => b[4] < a[4] ? b : a)])];
     const put = [];   // 이름표끼리 겹치면 점 아래로, 그래도 겹치면 생략(먼저 놓인 것 = 최근·최고 우선)
-    tag.forEach(x => { const cx = Math.min(Math.max(xs(x[1]), L + 14), W - R - 14), cy = y(x[4]), hit = (ly) => put.some(([px, py]) => Math.abs(px - cx) < 32 && Math.abs(py - ly) < 11);
+    tag.forEach(x => { const cx = Math.min(Math.max(xs(x[1]), L + 14), W - R - 14), cy = yc(x[4]), hit = (ly) => put.some(([px, py]) => Math.abs(px - cx) < 32 && Math.abs(py - ly) < 11);
       const ly = [cy < T + 12 ? cy + 13 : cy - 7, cy + 13].find(v => !hit(v)); if (ly == null) return; put.push([cx, ly]);
-      txt(svg, cx, ly, eok(x[4]), 'middle', { style: `font-size:9.5px;font-weight:700;fill:${col(x)};paint-order:stroke;stroke:var(--surface);stroke-width:3px` }); });
+      txt(svg, cx, ly, (out(x[4]) ? (x[4] < md ? '↓' : '↑') : '') + eok(x[4]), 'middle', { style: `font-size:9.5px;font-weight:700;fill:${col(x)};paint-order:stroke;stroke:var(--surface);stroke-width:3px` }); });
   }
-  const drow = (x) => { const g = ref ? (x[4] / ref - 1) * 100 : null, cl = g == null ? '' : g <= -5 ? 'dn' : g >= 3 ? 'up' : 'muted';
+  const drow = (x) => { const g = ref ? (x[4] / ref - 1) * 100 : null, cl = g == null ? '' : g <= -5 ? 'acc-t' : g >= 3 ? 'up' : 'muted';   // 급매(-5%↓) 청록 = 그래프 점과 같은 색
     return `<div class="deal"${Math.abs(x[2] - mainAg) <= 1 ? '' : ' style="opacity:.45"'}><span class="muted num">${dt(d2(x[1]))}</span><span>${x[2]}㎡ · ${x[3]}층${x[5] ? ' · 직거래' : ''}${x[6] ? ` <span class="pill none">${x[6]}</span>` : ''}${g != null && g <= -5 && Math.abs(x[2] - mainAg) <= 1 ? ' <span class="pill acc">급매</span>' : ''}</span><span class="p"><span class="${cl}" style="font-size:12px;font-weight:500">${Math.abs(x[2] - mainAg) <= 1 && g != null ? sgn(g, 0) : ''}</span> ${eok(x[4])}</span></div>`; };
   // 2026-11-09 사용자: 59㎡ 를 골랐으면 목록도 59㎡ 만(다른 면적 흐리게 보여 주던 것 뺌)
   const clist = cdeals.filter(x => Math.abs(x[2] - mainAg) <= 1);
@@ -1459,6 +1476,8 @@ function drawAsks() {
   const w0 = monday(base), weeks = [...Array(NW)].map((_, i) => MO ? new Date(now0.getFullYear(), now0.getMonth() - (NW - 1 - i), 1).getTime()
     : (t => { t.setDate(t.getDate() - 7 * (NW - 1 - i)); return t.getTime(); })(new Date(w0)));   // 칸마다 시작 시각(주 = 월요일, 달 = 1일)
   const byW = {}; dates.forEach(d => { const v = snap(d).filter(x => x.t === '매매').map(x => x.p).sort((a, b) => a - b); if (v.length) byW[(MO ? month(d) : monday(d)).getTime()] = [d, v]; });
+  // 저장을 시작하기 전 빈 칸은 빼고 그린다(2026-11-15 사용자: 왼쪽 절반이 빔). 중간에 빈 주는 그대로. 너무 넓어지지 않게 8주는 4칸, 6개월은 3칸까지만 줄임
+  const k0 = Math.min(Math.max(0, weeks.findIndex(w => byW[w])), NW - (MO ? 3 : 4)); if (k0 > 0) weeks.splice(0, k0);
   const cols = weeks.map(w => byW[w] ? { d: byW[w][0], v: byW[w][1], m: (byW[w][1][(byW[w][1].length - 1) >> 1] + byW[w][1][byW[w][1].length >> 1]) / 2 } : null);
   // 주별 기준 시세(extract v2_refw: 그 주 끝 시점 A1 규칙). 달은 그 달 마지막 주(이번 달은 이번 주) 값. 없으면 오늘 기준 시세
   const RW = ((D.v2_refw || {})[dSeq] || {})[String(ag)] || [], w0r = D.v2_refw_w0 ? new Date(D.v2_refw_w0 + 'T00:00:00').getTime() : null;
@@ -1470,11 +1489,11 @@ function drawAsks() {
   const dls = (DY[dSeq] || DEALS[dSeq] || []).filter(x => Math.abs(x[2] - ag) <= 1 && !x[5]).map(x => [weeks.indexOf((MO ? month(d2k(x[1])) : monday(d2k(x[1]))).getTime()), x]).filter(([i]) => i >= 0);
   const has = cols.filter(Boolean), tsvg = $('#askTrend'); tsvg.innerHTML = ''; $('#askTrendBox').hidden = !Object.keys(byW).length;
   if (has.length) {
-    const W = 340, H = 168, L = 37, R = 4, T = 10, B = 30, cw = (W - L - R) / NW, xs = (i) => L + cw * (i + 0.5);
-    const refs = weeks.map((_, i) => refAt(i)), ps = has.flatMap(c => c.v).concat(refs.filter(Boolean), dls.map(([, x]) => x[4])), lo = Math.min(...ps) * 0.985, hi = Math.max(...ps) * 1.015;
-    const y = (v) => T + (H - T - B) * (1 - (v - lo) / ((hi - lo) || 1)), cheap = (p, i) => refs[i] && p < refs[i];
+    const W = 340, H = 168, L = 37, R = 4, T = 10, B = 30, cw = (W - L - R) / weeks.length, xs = (i) => L + cw * (i + 0.5);
+    const refs = weeks.map((_, i) => refAt(i)), ps = has.flatMap(c => c.v).concat(refs.filter(Boolean), dls.map(([, x]) => x[4])), AX = niceAx(Math.min(...ps) * 0.995, Math.max(...ps) * 1.005), lo = AX.lo, hi = AX.hi;
+    const y = (v) => T + (H - T - B) * (1 - (v - lo) / ((hi - lo) || 1)), cheap = (p, i) => refs[i] && p <= refs[i] * 0.95;   // 기준보다 5% 넘게 쌈 = 청록(목록 '급매'·실거래 점과 같은 규칙, 2026-11-15)
     const step = [100, 200, 250, 500, 1000, 2000, 2500, 5000, 10000].find(t => (hi - lo) / t <= 12) || 10000;   // 가격대 막대 한 칸(만원): 세로로 약 8~12칸(굵게)
-    [lo, (lo + hi) / 2, hi].forEach(v => { el('line', { x1: L, x2: W - R, y1: y(v), y2: y(v), stroke: 'var(--line)' }, tsvg); txt(tsvg, L - 4, y(v) + 3, eok(v), 'end'); });
+    AX.ticks.forEach(v => { el('line', { x1: L, x2: W - R, y1: y(v), y2: y(v), stroke: 'var(--line)' }, tsvg); txt(tsvg, L - 4, y(v) + 3, eokT(v), 'end'); });
     // 기준 시세 계단선(주마다 그때 값): 점선, 칸을 누르면 그 주 값
     if (refs.some(Boolean)) {
       const seg = refs.map((v, i) => v ? `${i && refs[i - 1] ? 'L' : 'M'}${(xs(i) - cw / 2).toFixed(1)},${y(v).toFixed(1)}L${(xs(i) + cw / 2).toFixed(1)},${y(v).toFixed(1)}` : '').join('');
@@ -1492,14 +1511,14 @@ function drawAsks() {
       if (Math.max(...Object.values(cnt)) <= 5) {   // 점이 한 줄에 5개 넘게 몰리지 않으면 점 하나 = 매물 하나
         const off0 = {};
         c.v.forEach(p => { const key = Math.round(y(p) / 3), off = (off0[key] = (off0[key] || 0) + 1) - 1, cx = x + (off % 2 ? 1 : -1) * Math.ceil(off / 2) * 4.6;   // 2026-11-03 점·간격도 작게(막대와 같이)
-          const dot = el('circle', { cx, cy: y(p), r: 2.2, fill: cheap(p, i) ? 'var(--good)' : 'var(--ink-3)', 'fill-opacity': cheap(p, i) ? 1 : 0.5 }, tsvg);
+          const dot = el('circle', { cx, cy: y(p), r: 2.2, fill: cheap(p, i) ? 'var(--accent)' : 'var(--ink-3)', 'fill-opacity': cheap(p, i) ? 1 : 0.5 }, tsvg);
           hover(dot, `${dt(c.d)} · 호가 ${eok(p)}${refs[i] ? ` · ${MO ? '그 달' : '그 주'} 기준 ${eok(refs[i])}(${sgn((p / refs[i] - 1) * 100)})` : ''}`); });
       } else {   // 매물이 많으면(고덕그라시움 66개 등, 2026-10-28 사용자) 가격대 막대: 가로 길이 = 그 가격대 매물 수(가장 많은 가격대 = 칸 폭의 60%, 칸 사이 여백)
         const bins = {}; c.v.forEach(p => { const b = Math.floor((p - lo) / step); bins[b] = (bins[b] || 0) + 1; });
         const mx = Math.max(...Object.values(bins));
         // 2026-11-03 사용자: 뚱뚱해 보여 가로(칸 폭 60% → 44%)·세로(가격대 칸의 55%, 가운데) 모두 줄임
-        Object.entries(bins).forEach(([b, n]) => { const p0 = lo + b * step, p1 = p0 + step, w = Math.max(2.5, cw * 0.44 * n / mx), green = refs[i] && p1 <= refs[i] + step * 0.5 && (p0 + p1) / 2 < refs[i];
-          const bh = Math.max((y(p0) - y(p1)) * 0.55, 1.5), r = el('rect', { x: x - w / 2, y: (y(p0) + y(p1) - bh) / 2, width: w, height: bh, rx: 1.2, fill: green ? 'var(--good)' : 'var(--ink-3)', 'fill-opacity': green ? 0.95 : 0.3 }, tsvg);
+        Object.entries(bins).forEach(([b, n]) => { const p0 = lo + b * step, p1 = p0 + step, w = Math.max(6, cw * 0.44 * n / mx), green = refs[i] && (p0 + p1) / 2 <= refs[i] * 0.95;   // 한두 개짜리도 점선처럼 안 보이게 최소 6px
+          const bh = Math.max((y(p0) - y(p1)) * 0.55, 1.5), r = el('rect', { x: x - w / 2, y: (y(p0) + y(p1) - bh) / 2, width: w, height: bh, rx: 1.2, fill: green ? 'var(--accent)' : 'var(--ink-3)', 'fill-opacity': green ? 0.95 : 0.3 }, tsvg);
           hover(r, `${dt(c.d)} · ${eok(p0)}~${eok(p1)} · ${n}개${refs[i] ? ` · ${MO ? '그 달' : '그 주'} 기준 ${eok(refs[i])}` : ''}`); });
       }
       el('rect', { x: x - cw * 0.34, y: y(c.m) - 1.5, width: cw * 0.68, height: 3, rx: 1.5, fill: 'var(--c1)' }, tsvg);
@@ -1513,9 +1532,12 @@ function drawAsks() {
     // 값 이름표는 그래프 오른쪽 대신 위 한 줄에(2026-10-28 사용자: 가로를 끝까지 쓰기). 기준 = 지금 주 기준 시세, 점선 표시와 같은 색
     const rl = refs[refs.length - 1] || refs.filter(Boolean).pop();
     const nw = (h) => `<span style="white-space:nowrap">${h}</span>`;   // 좁은 화면에서 '기준 24.9 / 억'처럼 끊기지 않게 덩어리로 줄바꿈
-    $('#askTrendTitle').innerHTML = [has.length > 1 ? nw(`매물 <b>${first.v.length}→${last.v.length}</b>`) : nw(`매물 <b>${last.v.length}</b>`),
-      nw(`중간 <b style="color:var(--c1)">${has.length > 1 ? eok(first.m) + '→' : ''}${eok(last.m)}</b>`),
-      rl ? nw(`<span style="color:var(--c1);border-bottom:1.5px dashed var(--c1)">기준 ${eok(rl)}</span>`) : '', dls.length ? nw(`◆ 실거래 <b>${dls.length}</b>`) : ''].filter(Boolean).join(' · ');
+    // 2026-11-15 사용자: 위 칸(매물 수·중간 호가)과 겹치는 숫자는 빼고 '변화'만. 기준은 점선 끝 이름표로
+    if (rl) txt(tsvg, W - R, y(rl) - 4, '기준 ' + eokT(Math.round(rl / 1000) * 1000), 'end', { style: 'font-size:9px;font-weight:700;fill:var(--c1);paint-order:stroke;stroke:var(--surface);stroke-width:3px' });
+    const dot = `<i style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent);margin:0 3px 1px 0"></i>`;
+    $('#askTrendTitle').innerHTML = [has.length > 1 ? nw(`매물 <b>${first.v.length}→${last.v.length}</b>`) : '',
+      has.length > 1 ? nw(`중간 <b style="color:var(--c1)">${eok(first.m)}→${eok(last.m)}</b>`) : '',
+      nw(`<span style="font-size:var(--fs-note);color:var(--ink-3)">${dot}급매${dls.length ? ` · ◆ 실거래 ${dls.length}` : ''}</span>`)].filter(Boolean).join(' · ');
   }
   const pn = prevD ? snap(prevD).filter(x => x.t === '매매').length : null, gm = gap(med(sale));
   $('#askSum').innerHTML = !now.length ? '' : `
