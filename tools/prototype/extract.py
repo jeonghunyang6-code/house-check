@@ -346,17 +346,33 @@ out['v2_acad'] = {'n': int(_ac[0]['n']) if _ac else 0, 'd': {f"{r['rc']}|{r['umd
 # 신도시 일정 교차 확인(collector/newtowns.py, 2026-11-10): 청약홈 입주자모집공고 입주 예정 월 [첫, 마지막, 공고 수, 세대 합]
 from collector.newtowns import presale_sql as _nt_sql, presale_rows as _nt_rows
 out['v2_newtown_ps'] = _nt_rows(select(db, _nt_sql())) if _nt_sql() else {}
-# 관심 단지 소식(jobs/complex_news.py, 2026-11-15 사용자 요청): 최근 6개월, 같은 기사 묶음. {단지: [[날짜, 제목, 언론사, 주소, 딱지, 외 n곳, 제목에 이름]]}
-from collector import complex_news as _CN
-from datetime import date as _date
-_nw = {}
+# 재건축·리모델링 진행 단계(collector/remodel.py 손 관리 + remodel_auto 자동, 2026-11-15 사용자 요청). 관심·내 단지 + 손 관리 단지.
+# {단지: {k: 종류, s: [[단계, 날짜, 설명, 출처 이름, 출처 주소, 자동]], n: 다음, by: 준공 연도}} · 기록 없고 2010년 이전 준공이면 {none: 1, by}
+from collector import remodel as _RM
+from collector.complex_news import press_name as _pn
+import json as _json
+_st = {r['k']: r['v'] for r in select(db, "SELECT k, v FROM user_state WHERE k IN ('v2-watch2', 'v2-my2')")}
+_jv = lambda v: _json.loads(v) if isinstance(v, str) else v
+_ws = [x for x in [*(_jv(_st.get('v2-watch2')) or []), _jv(_st.get('v2-my2'))] if isinstance(x, str) and x]
+_rs = sorted(set(_ws) | set(_RM.REMODELS))
+_by = {r['apt_seq']: r['build_year'] for r in select(db, "SELECT apt_seq, build_year FROM complexes WHERE apt_seq IN (" + ",".join("'%s'" % x.replace("'", "") for x in _rs) + ")")} if _rs else {}
 try:
-    for r in select(db, "SELECT apt_seq, url, title, outlet, pub::text pub, in_title, tags FROM complex_news WHERE pub >= current_date - 183 AND in_title"):
-        _nw.setdefault(r['apt_seq'], []).append({**r, 'pub': _date.fromisoformat(r['pub']), 'tags': (r['tags'] or '').split(',') if r['tags'] else []})
-except Exception as e:   # 표가 아직 없을 때(0085 전)
-    print('  complex_news 없음:', e)
-out['v2_news'] = {s: [[g['pub'].isoformat(), g['title'], g['outlet'], g['url'], g['tags'], g['others'], bool(g['in_title'])] for g in _CN.group(rs)[:30]]
-                  for s, rs in _nw.items()}
+    _au = select(db, "SELECT apt_seq, stage, first_date::text d, n_press, urls FROM remodel_auto WHERE status = 'auto'")
+except Exception as e:   # 0086 전
+    print('  remodel_auto 없음:', e); _au = []
+out['v2_remodel'] = {}
+for _s in _rs:
+    _m = _RM.REMODELS.get(_s)
+    steps = [[x.stage, x.d, x.note, _pn(x.sources[0]) + (f' 외 {len(x.sources) - 1}곳' if len(x.sources) > 1 else ''), x.sources[0], False] for x in (_m.steps if _m else ())]
+    for a in _au:
+        if a['apt_seq'] == _s:
+            u = _jv(a['urls']) or []
+            steps.append([a['stage'], a['d'], a['stage'] + ' (기사 제목 기준)', f"기사 {a['n_press']}곳", u[0] if u else '', True])
+    steps.sort(key=lambda x: _RM.idx(x[0]))
+    if steps:
+        out['v2_remodel'][_s] = {'k': _m.kind if _m else '리모델링', 's': steps, 'n': _m.next if _m else '', 'by': _by.get(_s)}
+    elif _by.get(_s) and int(_by[_s]) <= 2010:
+        out['v2_remodel'][_s] = {'none': 1, 'by': _by[_s]}
 out['v2_proj'] = select(db, "SELECT name, status, status_date::text, outlook, cbd, region_codes, stations, new_stations FROM transit_projects")
 out['seqs'] = SEQS
 out['regions'] = {k: v for k, v in REGIONS.items()}
