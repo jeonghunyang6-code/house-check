@@ -84,6 +84,17 @@ jobs:
           HC_DB_BACKEND: psql
           PYTHONUNBUFFERED: "1"
         run: python -m jobs.volume
+      - name: 관심 단지 소식 (네이버 뉴스, 상세 탭·금요일 요약)
+        # 2026-11-15 사용자 요청. 규칙으로만 거름(AI 없음). 실패해도 다른 단계·사이트 갱신은 계속
+        if: ${{ !cancelled() && !inputs.dry_run }}
+        continue-on-error: true
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
+          NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
+          HC_DB_BACKEND: psql
+          PYTHONUNBUFFERED: "1"
+        run: python -m jobs.complex_news
       - name: 빈 공간 정리 (지표 표)
         # metrics 가 두 표를 여러 번 통째로 UPDATE 해서 빈 공간이 하루 수십 MB 쌓인다(2026-10-19 complex_metrics 9→50MB).
         # 무료 한도 500MB 를 지키려고 매일 다시 쓴다. 두 표 합 약 25MB 라 몇 초면 끝난다

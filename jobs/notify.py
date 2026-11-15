@@ -381,6 +381,30 @@ def check_lines(db: Db, today) -> list[str]:
     return out
 
 
+def news_lines(db: Db, seqs: list[str], names: dict[str, str], today) -> list[str]:
+    """이번 주(7일) 새로 모인 단지 소식(jobs/complex_news.py, 2026-11-15 사용자: 금요일 주간 요약에만). 처음 모은 날의 6개월치가 한꺼번에 뜨지 않게 기사 날짜도 14일 안.
+    단지마다 한 줄: 묶음 수·딱지 + 대표 제목(제목에 단지 이름 있는 것 먼저)."""
+    from datetime import date as _d, timedelta as _td
+    from collector import complex_news as CN
+    if not seqs:
+        return []
+    try:
+        rows = select(db, "SELECT apt_seq, url, title, outlet, pub::text pub, in_title, tags FROM complex_news WHERE first_seen > "
+                      f"{lit(today - _td(days=7))} AND pub > {lit(today - _td(days=14))} AND apt_seq IN (" + ", ".join(lit(s) for s in seqs) + ")")
+    except DbError:
+        return []
+    out = []
+    for s in seqs:
+        rs = [{**r, "pub": _d.fromisoformat(r["pub"]), "tags": (r["tags"] or "").split(",") if r["tags"] else []} for r in rows if r["apt_seq"] == s]
+        if not rs:
+            continue
+        g = CN.group(rs)
+        head = sorted(g, key=lambda x: (not x["in_title"], -x["others"]))[0]
+        tg = list(dict.fromkeys(t for x in g for t in x["tags"]))[:2]
+        out.append(f"▪️ <b>{html.escape(names.get(s, s))}</b> {len(g)}건{' · ' + '·'.join(tg) if tg else ''}\n   {html.escape(head['title'][:60], quote=False)}")
+    return out
+
+
 def weekly(db: Db, save: bool = True) -> str:
     """금요일 주간 요약. 관심 단지는 이번 주 신고가 있거나 저장 호가 매물 수가 바뀌었거나 기준 시세가 지난주보다 1% 🔧 넘게 바뀐 곳만(2026-10-25 사용자 요청: 줄이고 이모지)."""
     today = datetime.now(KST).date()
@@ -432,6 +456,10 @@ def weekly(db: Db, save: bool = True) -> str:
         out.append("\n📅 <b>정책</b>")
         out += [f"⏳ {d:%m/%d} (D-{(d - today).days}) {html.escape(t)}" for d, _, t, _ in up]
         out += [f"🆕 {r['d'][5:].replace('-', '/')} {r['kind']} 발표 후보 · 언론사 {r['n']}곳(확인 전)" for r in pn]
+    nw = news_lines(db, seqs, {k: v["name"] for k, v in info.items()}, today)
+    if nw:
+        out.append("\n📰 <b>단지 소식</b>")
+        out += nw
     ck = check_lines(db, today)
     if ck:
         out.append("\n🧾 <b>손 관리 자료 확인</b>")
