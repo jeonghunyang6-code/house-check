@@ -396,7 +396,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
         <div id="askTrendBox" hidden>
           <div class="row" style="justify-content:space-between;align-items:center;margin:8px 0 2px;gap:8px"><p id="askTrendTitle" style="font-size:13.5px;margin:0"></p>
             <div class="seg" id="askSpan" style="flex:none"><button type="button" data-v="8w" aria-pressed="true">8주</button><button type="button" data-v="6m" aria-pressed="false">6개월</button></div></div>
-          <svg class="chart" id="askTrend" viewBox="0 0 340 168" role="img" aria-label="주마다 매매 호가"></svg></div>
+          <svg class="chart" id="askTrend" viewBox="0 0 340 168" role="img" aria-label="주마다 매매 호가"></svg><div id="askLegend" style="font-size:var(--fs-note);color:var(--ink-3);text-align:right;margin-top:2px"></div></div>
         <div id="askList"></div>
         <details class="more-f" id="askPasteBox"><summary>네이버 부동산에서 붙여넣기</summary><div class="body">
           <textarea id="askPaste" rows="3" placeholder="'호가 저장' 버튼으로 복사한 내용을 붙여넣기" style="font:inherit;font-size:14px;width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:10px;padding:8px;background:var(--surface);color:var(--ink)"></textarea>
@@ -1339,9 +1339,9 @@ function drawDaily() {
   const wks = yr ? [...Array(Math.ceil((t1 - wk0) / (7 * 864e5)) + 1)].map((_, i) => wk0 + i * 7 * 864e5) : [], rws = yr ? refWeekly(dy, mainAg, wks) : [];
   const refT = (t) => { if (!yr) return ref; const i = Math.floor((t - wk0) / (7 * 864e5)); return rws[Math.max(0, Math.min(i, rws.length - 1))] || ref; };
   const vals = csame.map(x => x[4]).concat(ref ? [ref] : [], rws.filter(Boolean));
-  // 기준 시세는 점선 끝 이름표로(위 칸에도 있음). 점 색 범례: 기준보다 5% 넘게 싸면 청록(목록 '급매'와 같은 색), 3% 넘게 비싸면 빨강
+  // 기준 시세는 제목 줄에(2026-11-15 사용자: 점선 끝 이름표가 점을 가려 다시 위 줄로). 점 색 범례: 기준보다 5% 넘게 싸면 청록(목록 '급매'와 같은 색), 3% 넘게 비싸면 빨강
   const dot = (c) => `<i style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(${c});margin:0 3px 1px 0"></i>`;
-  $('#dChartTitle').innerHTML = `${mainAg}㎡ <b>${csame.length}건</b> <span style="font-size:var(--fs-note);color:var(--ink-3);white-space:nowrap">· ${dot('--accent')}급매 ${dot('--up2')}기준+3%↑</span>`;
+  $('#dChartTitle').innerHTML = `${mainAg}㎡ <b>${csame.length}건</b>${ref ? ' · ' + `<span style="color:var(--c1);border-bottom:1.5px dashed var(--c1);white-space:nowrap">기준 ${eok(ref)}</span>` : ''} <span style="font-size:var(--fs-note);color:var(--ink-3);white-space:nowrap">· ${dot('--accent')}급매 ${dot('--up2')}기준+3%↑</span>`;
   if (vals.length) {
     const AX = niceAx(Math.min(...vals) * 0.995, Math.max(...vals) * 1.005), lo = AX.lo, hi = AX.hi, y = (v) => T + (H - T - B) * (1 - (v - lo) / ((hi - lo) || 1));
     AX.ticks.forEach(t => { el('line', { x1: L, x2: W - R, y1: y(t), y2: y(t), stroke: 'var(--line)' }, svg); txt(svg, L - 4, y(t) + 3, eokT(t), 'end'); });
@@ -1356,8 +1356,6 @@ function drawDaily() {
         return `${i && (rws[i - 1] || ref) && w > t0 ? 'L' : 'M'}${xt(a).toFixed(1)},${y(v).toFixed(1)}L${xt(e).toFixed(1)},${y(v).toFixed(1)}`; }).join('');
       el('path', { d, fill: 'none', stroke: 'var(--c1)', 'stroke-dasharray': '4 3', 'stroke-width': 1.2 }, svg);
     } else if (ref) { el('line', { x1: L, x2: W - R, y1: y(ref), y2: y(ref), stroke: 'var(--c1)', 'stroke-dasharray': '4 3' }, svg); }
-    const rEnd = yr ? (rws.filter(Boolean).pop() || ref) : ref;
-    if (rEnd) txt(svg, W - R, y(rEnd) - 4, '기준 ' + eokT(Math.round(rEnd / 1000) * 1000), 'end', { style: 'font-size:9px;font-weight:700;fill:var(--c1);paint-order:stroke;stroke:var(--surface);stroke-width:3px' });
     const col = (x) => { const rf = refT(new Date(d2(x[1])).getTime()); return rf && x[4] <= rf * 0.95 ? 'var(--accent)' : rf && x[4] > rf * 1.03 ? 'var(--up2)' : 'var(--c3)'; };
     csame.forEach(x => { const dot = el('circle', { cx: xs(x[1]), cy: y(x[4]), r: yr ? 3.4 : 4, fill: col(x), ...(x[6] ? { fill: 'var(--surface)', stroke: 'var(--c1)', 'stroke-width': 1.6 } : {}) }, svg); hover(dot, `${dt(d2(x[1]))} · ${x[3]}층 · ${eok(x[4])}${x[6] ? ' · ' + x[6] : ''}`); });
     // 가격 이름표: 6건 이하면 전부, 많으면 최고·최저·가장 최근만. 점 위(맨 위 칸이면 아래)
@@ -1521,12 +1519,13 @@ function drawAsks() {
     // 값 이름표는 그래프 오른쪽 대신 위 한 줄에(2026-10-28 사용자: 가로를 끝까지 쓰기). 기준 = 지금 주 기준 시세, 점선 표시와 같은 색
     const rl = refs[refs.length - 1] || refs.filter(Boolean).pop();
     const nw = (h) => `<span style="white-space:nowrap">${h}</span>`;   // 좁은 화면에서 '기준 24.9 / 억'처럼 끊기지 않게 덩어리로 줄바꿈
-    // 2026-11-15 사용자: 위 칸(매물 수·중간 호가)과 겹치는 숫자는 빼고 '변화'만. 기준은 점선 끝 이름표로
-    if (rl) txt(tsvg, W - R, y(rl) - 4, '기준 ' + eokT(Math.round(rl / 1000) * 1000), 'end', { style: 'font-size:9px;font-weight:700;fill:var(--c1);paint-order:stroke;stroke:var(--surface);stroke-width:3px' });
+    // 2026-11-15 사용자: 위 칸(매물 수·중간 호가)과 겹치는 숫자는 빼고 '변화'만. 기준은 점·막대에 마우스 올리면 보여서 글줄에 안 씀(2026-11-15 사용자: 길어져 버튼이 다음 줄로 내려감), 점선 끝 이름표도 데이터를 가려 뺌
     const dot = `<i style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent);margin:0 3px 1px 0"></i>`;
     $('#askTrendTitle').innerHTML = [has.length > 1 ? nw(`매물 <b>${first.v.length}→${last.v.length}</b>`) : '',
       has.length > 1 ? nw(`중간 <b style="color:var(--c1)">${eok(first.m)}→${eok(last.m)}</b>`) : '',
-      nw(`<span style="font-size:var(--fs-note);color:var(--ink-3)">${dot}급매${dls.length ? ` · ◆ 실거래 ${dls.length}` : ''}</span>`)].filter(Boolean).join(' · ');
+    ].filter(Boolean).join(' · ');
+    // 범례는 그래프 아래 한 줄(2026-11-15 사용자: 위 글줄이 길어져 8주·6개월 버튼이 다음 줄로 내려가는 게 보기 싫음)
+    $('#askLegend').innerHTML = `${dot}급매${dls.length ? ` · ◆ 실거래 ${dls.length}` : ''}`;
   }
   const pn = prevD ? snap(prevD).filter(x => x.t === '매매').length : null, gm = gap(med(sale));
   $('#askSum').innerHTML = !now.length ? '' : `
