@@ -81,13 +81,15 @@ PROJECTS: tuple[Project, ...] = (
             more=("https://www.newspim.com/news/view/20260310001052", "https://www.newsis.com/view/NISX20260310_0003542416"), checked=date(2026, 11, 10)),
     # 2026-11-09 추가(사용자 질문: 골든센트로 9호선 연장): 고덕강일 → 신강일(943, 강동) → 신미사(944, 하남) → 왕숙·진접2, 정거장 8곳(서울 1·하남 1·남양주 6).
     # 944 위치 = '미사강변 4·7·8단지 사이 미사강변대로 교차로'(기사)인데 좌표를 잡을 도구가 없어 new_stations 비움(구산성지 쪽 주민이 위치 변경 요구 중)
-    # 2026-11-10 이름·전망을 9호선 4단계와 같은 꼴로(사용자). 강동구·서울시 매체는 '9호선 4단계 추가연장', 일부 언론은 '5단계' → 기사 2곳(시정일보·서울&)이 쓴 쪽.
-    # 착공: 2024 기본계획 2026 → 2025-07 경기도 계약 의뢰 때 '2027 상반기 착공, 2031 개통'(철도경제신문·기호일보, 2026-11-10 교차 확인)
-    Project("9호선 4단계 추가연장(강동하남남양주선, 고덕강일~미사~진접2)", "확정", date(2024, 12, 24), "착공 목표 2027 상반기 · 개통 목표 2031",
-            ("강남", "여의도"), ("11740", "41450", "41360"), "https://www.sijung.co.kr/news/articleView.html?idxno=405579",
-            more=("https://www.seouland.com/arti/society/society_general/19684.html", "https://www.munhwa.com/article/11474788",
+    # 2026-11-15 이름 '9호선 4단계 추가연장' → '9호선 5단계'(사용자 확인 요청): 서울시 공식 팩트브리핑(2026-07-22)이 '강동하남남양주선(9호선 5단계)',
+    # MTN·뉴시스도 '5단계'. '4단계 추가연장'은 강동구가 서울 구간(고덕강일1지구~강일동 1.25km)을 부르던 이름.
+    # 개통: 2025-07 경기도 '2031'(철도경제신문·기호일보) vs 2026-07 뉴시스 서울시 쪽 '2032 준공' → 규칙대로 범위
+    Project("9호선 5단계(강동하남남양주선, 고덕강일~미사~진접2)", "확정", date(2024, 12, 24), "착공 목표 2027 상반기 · 개통 목표 2031~2032",
+            ("강남", "여의도"), ("11740", "41450", "41360"), "https://mediahub.seoul.go.kr/archives/2018836",
+            more=("https://news.mtn.co.kr/news-detail/2026032615491963683", "https://mobile.newsis.com/view/NISX20260728_0003726855",
+                  "https://www.sijung.co.kr/news/articleView.html?idxno=405579", "https://www.seouland.com/arti/society/society_general/19684.html",
                   "https://www.redaily.co.kr/news/articleView.html?idxno=12924", "https://www.kihoilbo.co.kr/news/articleView.html?idxno=1152251"),
-            checked=date(2026, 11, 10)),
+            checked=date(2026, 11, 15)),
     Project("서부선 새절~서울대입구", "계획", None, "민자 우선협상대상자 지위 취소(2026-04 착수 · 07 확정), 재공고 준비 중(안 되면 재정 전환)", ("여의도",),
             ("11380", "11410", "11440", "11560", "11590", "11620"), "https://www.fnnews.com/news/202610100050441724",
             stations=('새절', '신촌', '여의도', '노량진', '장승배기', '서울대입구'),
