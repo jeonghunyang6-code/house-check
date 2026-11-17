@@ -63,7 +63,7 @@ def loc(seq):
     """E8 상급지까지 거리 + H3 학원가 순위."""
     z = next((x for x in d.get('cx_loc', []) if x['apt_seq'] == seq), None)
     return {k: v for k, v in z.items() if k != 'apt_seq'} if z else None
-from collector.policy import regulated_now, zones_for
+from collector.policy import regulated_now, toh_now, zones_for
 from collector.newtowns import NEWTOWNS
 from collector.projects import PROJECTS
 import calendar
@@ -324,7 +324,7 @@ json.dump({'monthly': monthly, 'cx': cx, 'today': today,
            'policy': [[r['d'], r['kind'], r['title']] for r in d.get('policy_events', [])]
                      + [[r['d'], r['kind'], r['title'], 'ok' if r['ok'] in (True, 't', 'true', 1) else 'auto'] for r in d.get('policy_auto', [])],   # 자동 추가(0082)
            'sentiment': {k: v for (sr, k), v in RM.items() if sr == 'sentiment'},
-           'reg_now': regulated_now(TODAY),
+           'reg_now': regulated_now(TODAY), 'v2_toh': toh_now(TODAY),
            # H4 호재 단계 [이름, 단계, 단계 날짜, 전망, 업무지구, 시군구들, 출처] (collector/projects.py)
            'projects': [[p.name, p.status, p.status_date and p.status_date.isoformat(), p.outlook, list(p.cbd), list(p.region_codes), p.source] for p in PROJECTS],
            # 풍선효과: 사건별 [시군구, 그룹, 13주, 26주, 주 수, 지금까지, 외지인 전, 후, 서울 전, 후] / 그룹 중앙값 경로 [그룹, 주, 중앙값, n]

@@ -256,6 +256,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
     <div class="top wrap"><h1>지금 시장은</h1><span class="asof num" id="hAsof"></span></div>
     <div class="tab wrap">
       <div class="card"><p class="lead" id="headline"></p><div class="row" id="headChips"></div></div>
+      <div class="card" id="todayCard" hidden><h2>오늘 볼 것 <small id="todayDate"></small></h2><div class="list" id="todayList"></div></div>
       <div class="card">
         <h2>핵심 신호 <small>바뀌면 알림</small></h2>
         <div class="sig" id="sigs"></div>
@@ -404,6 +405,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
       <div class="card" id="askPick" hidden style="display:grid;gap:8px;border:1.5px solid var(--accent)"></div>
       <label class="muted" for="dSel" style="display:grid;gap:4px">단지<select id="dSel" class="icon-btn" style="width:100%;text-align:left;font-size:15px"></select></label>
       <div class="card" id="dHead"></div>
+      <div class="card" id="dPriceCard" hidden><h2>가격 판단 <small id="dPriceSub"></small></h2><div id="dPrice"></div></div>
       <div class="card"><h2>최근 실거래 <small id="dSpanNote">최근 90일</small></h2><div class="row" style="justify-content:space-between;align-items:center;margin:8px 0 2px;gap:8px"><p id="dChartTitle" style="font-size:13.5px;margin:0"></p>
         <div class="seg" id="dSpan" style="flex:none" hidden><button type="button" data-v="90" aria-pressed="true">90일</button><button type="button" data-v="6m" aria-pressed="false">6개월</button></div></div><svg class="chart" id="dChart" viewBox="0 0 340 130" role="img" aria-label="최근 90일 실거래"></svg><div id="dDeals"></div></div>
       <div class="card">
@@ -426,7 +428,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
             <label for="a_price" style="grid-column:1/-1">매매 호가 (만원)<input id="a_price" inputmode="numeric" placeholder="네이버 부동산·중개소에서 본 가격"></label>
             <button type="submit" class="more" style="grid-column:1/-1">호가 기록</button>
           </form></div></details>
-        <p class="src">호가 ÷ 최근 실거래 기준 시세: 3% 이내 초록, 3~5% 노랑, 5% 넘으면 빨강, 5% 이상 싸면 청록(급매, 그래프 점·막대도 같은 색). 시안에서는 이 기기에만 저장됩니다.</p>
+        <p class="src">호가는 <b>주 1회</b> 저장이면 충분해요(그래프 한 칸 = 한 주, 같은 주에 여러 번 저장하면 마지막 것만 씀).<br>호가 ÷ 최근 실거래 기준 시세: 3% 이내 초록, 3~5% 노랑, 5% 넘으면 빨강, 5% 이상 싸면 청록(급매, 그래프 점·막대도 같은 색). 시안에서는 이 기기에만 저장됩니다.</p>
       </div>
       <div class="card"><h2>입지 사실표 <small>점수 없이 숫자 그대로</small></h2><div id="dFacts"></div></div>
       <div class="card"><h2>주변 지도 <small id="dMapSub">반경 1.5km</small><button type="button" class="icon-btn" id="dMapType" hidden style="margin-left:auto;font-size:12.5px">위성</button></h2><div class="src" id="dNear" hidden style="margin:0 0 8px;line-height:1.6"></div><div class="nmap" id="dNmap" hidden></div><svg class="lmap" id="dMap" viewBox="-1600 -1600 3200 3200" role="img" aria-label="단지 주변 역·병원·마트·중학교"></svg><div class="legend" id="dMapLg"></div>
@@ -440,6 +442,12 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
   <section class="tab-page" id="plan" aria-label="계획" hidden>
     <div class="top wrap"><h1>사고 나서 다음은</h1><div class="seg areaSeg" role="group" aria-label="평형"><button type="button" data-v="84" aria-pressed="true">84㎡</button><button type="button" data-v="59" aria-pressed="false">59㎡</button></div></div>
     <div class="tab wrap">
+      <div class="card">
+        <h2>기다림 비용 <small>지난 1년 흐름 그대로라면</small></h2>
+        <div class="seg" id="waitSeg"><button type="button" data-v="6" aria-pressed="false">6개월</button><button type="button" data-v="12" aria-pressed="true">1년</button><button type="button" data-v="18" aria-pressed="false">1년 반</button><button type="button" data-v="24" aria-pressed="false">2년</button></div>
+        <div id="waitTab"></div>
+        <p class="src" id="waitSrc"></p>
+      </div>
       <div class="card">
         <h2>어떻게 살까 <span class="pill ex">예시 값</span></h2>
         <form class="form" id="liveForm" autocomplete="off">
@@ -929,6 +937,9 @@ const budget = { price: 0 };
     $('#bLegend').innerHTML = parts.map(([n, v, c]) => `<span><i style="background:${c};height:8px"></i>${n} ${man(v)}</span>`).join('');
     $('#bRule').innerHTML = `${RULE.name}: 15억 이하(6억)·25억 이하(4억)·초과(2억).<br>LTV 규제지역 40%·그 밖 70%, 생애최초 70%.<br>은행 DSR과 생애최초 취득세 감면은 계산하지 않음.`   // 2026-11-10 사용자 문구. 생애최초 70% = 6개월 안 전입, DSR = 그 밖 대출 합산(은행·세무 확인)
       + (p > 140000 && p <= 160000 ? '<br>15억 경계 근처라 은행 시세(KB) 기준 구간 확인 필요.' : '');
+    // ④ 대출 규칙 경고(2026-11-17 사용자): 계산 기준(RULE) 날짜 뒤 '대출' 정책이 정책 이력에 있으면 확인 필요
+    { const later = (D.policy || []).filter(p => p[1] === '대출' && p[0] > RULE.from);
+      if (later.length) $('#bRule').innerHTML += `<br><span style="color:var(--warn);font-weight:600">⚠️ 계산 기준(${RULE.name}, ${dt(RULE.from)}) 뒤 대출 발표 ${later.length}건: ${later.map(p => `${dt(p[0])} ${(PSHORT[p[0] + '|대출'] || p[2]).slice(0, 30)}`).join(' · ')} — 이 계산에 반영 안 됨, 은행·정책 확인 필요</span>`; }
     drawCand(); myDeals();
   }
   ['input', 'change'].forEach(ev => $('#budgetForm').addEventListener(ev, calc)); $('#budgetForm').addEventListener('submit', e => e.preventDefault());
@@ -1032,6 +1043,51 @@ function remodelHtml(seq) {
     + (R.st ? `<p class="src">단계·날짜는 ${R.s[0][3]} 공공데이터 그대로(매주 갱신, 손 관리 아님). 건축심의는 날짜가 공개되지 않습니다.</p>`
       : `<p class="src">단계 날짜는 구청·서울시 발표나 언론사 2곳 이상으로 확인. '자동' = 같은 소식을 언론사 3곳 이상이 제목으로 보도해 자동으로 올린 단계(틀리면 텔레그램 답장 '빼줘').</p>`);
 }
+/* ① 가격 판단(2026-11-17 사용자): 흩어진 숫자를 한 카드에 — 작가 기준만(P1 실거래 기준, P2 호가 3% 설명 가능·5% 넘으면 설명 필요, P4 급매 −5%). 새 판정 없음 */
+function priceHtml(seq) {
+  const ref = cxRef(seq), r = areaRow(seq), ag = r ? r.ag : +AREA;
+  if (!ref) return '';
+  const A = store.get('v2-naver', {})[seq] || {}, dates = Object.keys(A).sort(), last = dates[dates.length - 1];
+  const sale = last ? (A[last] || []).filter(x => x.t === '매매' && x.ex != null && Math.abs(Math.floor(x.ex) - ag) <= 1).map(x => x.p).sort((a, b) => a - b) : [];
+  const quick = ref * 0.95, ok3 = ref * 1.03, ok5 = ref * 1.05;
+  const nq = sale.filter(p => p <= quick).length, n3 = sale.filter(p => p <= ok3).length, n5 = sale.filter(p => p > ok5).length;
+  const med = sale.length ? (sale[(sale.length - 1) >> 1] + sale[sale.length >> 1]) / 2 : null;
+  const tile = (k, v, d, c) => `<div class="kpi"><span class="k">${k}</span><span class="v"${c ? ` style="color:var(${c})"` : ''}>${v}</span><span class="d">${d}</span></div>`;
+  return `<div class="kpis">${tile('적정가(기준 시세)', eok(ref), `최근 실거래 중앙값 · ${ag}㎡`)}${tile('급매선', eok(quick), '기준보다 5% 싸면 급매', '--accent')}`
+    + `${tile('호가 설명 가능선', eok(ok3), '기준 +3%까지 · +5% 넘으면 설명 필요')}`
+    + `${tile('저장 호가', sale.length ? `최저 ${eok(sale[0])}` : '–', sale.length ? `중간 ${eok(med)} · ${sale.length}개 · ${dt(last)}` : '네이버에서 붙여넣으면 나와요')}</div>`
+    + (sale.length ? `<p class="rmnext" style="margin-top:8px">급매선 이하 매물 <b style="color:var(--accent)">${nq}개</b> · 설명 가능선(+3%) 안 ${n3}개 · +5% 넘는 매물 ${n5}개</p>` : '');
+}
+/* ⑤ 기다림 비용(2026-11-17 사용자): 관심 단지 고른 평형, 지난 1년 변화율이 그대로 이어진다고 '가정'하면 그때 가격 차이. 예측 아님(M1) */
+function drawWait() {
+  const m = +(document.querySelector('#waitSeg [aria-pressed="true"]') || { dataset: { v: 12 } }).dataset.v;
+  const rows = [...watch].map(seq => { const c = useFull(seq) ? CXS[seq] : null, r = main(seq), ref = cxRef(seq), ch = c && c.phase ? +c.phase.chg_12m : q1y(seq);
+    return ref && ch != null && isFinite(ch) ? { nm: cxName(seq), ref, ch, fut: ref * Math.pow(1 + ch / 100, m / 12) } : null; }).filter(Boolean).sort((a, b) => (b.fut - b.ref) - (a.fut - a.ref));
+  if (!rows.length) { $('#waitTab').innerHTML = '<p class="muted">관심 단지(♡)의 1년 변화가 있어야 계산해요.</p>'; return; }
+  const head = `<tr><th>단지</th><th>지금</th><th>1년 변화</th><th>${m}개월 뒤</th><th>차이</th></tr>`;
+  const tr = (x) => `<tr><td>${x.nm}</td><td>${eok(x.ref)}</td><td><span class="${x.ch > 0 ? 'up' : 'dn'}">${sgn(x.ch, 1)}</span></td><td>${eok(x.fut)}</td><td><b>${(x.fut - x.ref >= 0 ? '+' : '') + man(x.fut - x.ref)}</b><br><span class="muted" style="font-size:var(--fs-note)">월 ${man((x.fut - x.ref) / m)}</span></td></tr>`;
+  $('#waitTab').innerHTML = `<table class="per">${head}${rows.slice(0, 5).map(tr).join('')}</table>`
+    + (rows.length > 5 ? `<details class="more-f" style="margin-top:4px"><summary>나머지 ${rows.length - 5}곳</summary><table class="per">${head}${rows.slice(5).map(tr).join('')}</table></details>` : '');
+  $('#waitSrc').innerHTML = `<b>예측이 아니라 가정이에요.</b> 지난 1년 변화율이 ${m}개월 더 이어진다고 놓고 계산한 숫자예요. 하락장은 반드시 오지만 언제·얼마나일지는 모르고(작가), 무주택자는 하락장을 기다리다 원하는 가격까지 안 내려올 수 있다고 봐요(작가 F7). 반대로 같은 폭만큼 내리면 차이도 같은 크기로 반대가 돼요.`;
+}
+document.getElementById('waitSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return;
+  document.querySelectorAll('#waitSeg button').forEach(x => x.setAttribute('aria-pressed', x === b)); drawWait(); });
+watchChanged.push(drawWait);
+/* ⑨ 오늘 볼 것(2026-11-17 사용자): 관심 단지 새 실거래 · 주의/경고로 켜진 신호 · 60일 안 정책 일정, 최대 3줄 */
+function drawToday() {
+  const items = [];
+  const mine = (D.today || []).filter(t => watch.has(t.apt_seq));
+  if (mine.length) items.push(`🔔 관심 단지 새 실거래 <b>${mine.length}건</b>: ${mine.slice(0, 2).map(t => `${t.apt_name} ${Math.round(t.area_m2)}㎡ ${eok(t.price_10k)}${t.prev_high && t.price_10k > t.prev_high ? ' <span class="pill bad">신고가</span>' : ''}`).join(' · ')}${mine.length > 2 ? ` 외 ${mine.length - 2}건` : ''}`);
+  const NM = { b5_low_highs: '하위 급지 신고가', c11_outer: '경기 외곽 신고가', b4_class: '하락신호', g3_mortgage_rate: '주담대 금리', f3_unsold: '미분양', g4_household_loans: '가계대출' };
+  const on = Object.keys(NM).filter(k => S[k] && /주의|과열|경고|끝물|위험|증가|둔화/.test(S[k].state || ''));
+  if (on.length) items.push(`⚠️ 켜진 신호: ${on.map(k => `${NM[k]} <b>${S[k].state}</b>`).join(' · ')}`);
+  const t0 = new Date(D.asof).getTime(), up = (D.v2_upcoming || []).filter(u => { const d = (new Date(u[0]).getTime() - t0) / 864e5; return d >= 0 && d <= 60; });
+  if (up.length) { const u = up[0], dd = Math.round((new Date(u[0]).getTime() - t0) / 864e5); items.push(`📅 D-${dd} ${u[2]}${up.length > 1 ? ` 외 ${up.length - 1}건` : ''}`); }
+  $('#todayCard').hidden = !items.length;
+  $('#todayDate').textContent = D.asof.slice(5).replace('-', '월 ') + '일';
+  $('#todayList').innerHTML = items.slice(0, 3).map(x => `<div style="font-size:14px;line-height:1.5;padding:6px 0;border-bottom:1px dashed var(--line)">${x}</div>`).join('');
+}
+watchChanged.push(drawToday);
 function redevLeft(z) {
   const k = /재개발/.test(z.biz_type || '') ? 'r' : 'b', g = (s) => RDUR[k + s] || [0, 0, 0], BUILD = [3, 2.5, 3.5];
   const st = z.stage_no || 0;
@@ -1054,6 +1110,10 @@ function redevNote(z) {
 function factsHtml(seq) {
   const inf = infoOf(seq), la = inf[3], lo = inf[4], rc = inf[1] || (main(seq) || {}).rc, row = (k, v, o) => `<div class="fact"><span class="k">${k}</span><span class="v">${v}</span>${o ? `<span class="o">${o}</span>` : ''}</div>`;
   const out = [];
+  // ③ 규제(2026-11-17 사용자: 첫 매수 실거주 의무): 토허구역(collector/policy.py toh_now) + 규제지역(reg_now, LTV 40%)
+  { const tz = (D.v2_toh || {})[rc], inToh = tz && (!tz[0] || tz[0].includes(inf[2])), reg = (D.reg_now || []).includes(rc);
+    if (inToh || reg) out.push(row('규제', `${inToh ? '<span class="pill bad">토허구역</span> ' : ''}${reg ? '<span class="pill warn">규제지역</span>' : ''}`,
+      [inToh ? '토지거래허가: 살려면 구청 허가 + 실거주 의무(갭투자 안 됨)' : '', reg ? '조정대상지역: 주담대 LTV 40%' : ''].filter(Boolean).join(' · '))); }
   if (inf[5] && inf[6] != null) out.push(row('가까운 역', `<b>${inf[5]}역 ${inf[6].toLocaleString()}m</b> <span class="pill ${inf[6] <= 700 ? 'good' : 'none'}">${inf[6] <= 700 ? '역세권' : '700m 밖'}</span>`, '단지 중심에서 직선거리 · 역세권 = 평지 700m·도보 10분'));   // 📖 p.220~228 (2026-11-10 사용자: 화면에서 쪽수는 빼되 원칙은 그대로)
   const wk = [['강남', inf[9]], ['여의도', inf[8]], ['사대문', inf[7]]].filter(x => x[1] != null);
   if (wk.length) { const mn = Math.min(...wk.map(x => x[1]));
@@ -1409,6 +1469,7 @@ function drawDaily() {
     + (clist.length > 12 ? `<details class="more-f"><summary>나머지 ${clist.length - 12}건 보기</summary>${clist.slice(12).map(drow).join('')}</details>` : '')
     || `<p class="muted">최근 ${SPN} 거래가 없습니다.</p>`;
   drawAsks(); drawMap(seq); $('#dDev').innerHTML = devHtml(seq); $('#dFacts').innerHTML = factsHtml(seq); { const h = remodelHtml(seq); $('#dRemodel').innerHTML = h; $('#dRmCard').hidden = !h; }
+  { const h = priceHtml(seq), r = areaRow(seq); $('#dPrice').innerHTML = h; $('#dPriceCard').hidden = !h; $('#dPriceSub').textContent = r ? `${r.ag}㎡ · 작가 기준` : ''; }
 }
 /* 호가: 네이버 부동산 '호가 저장' 버튼(tools/pc/naver_ask_bookmarklet.js) 붙여넣기 + 직접 기록. 단지 → 날짜 → 매물 목록 */
 const NMAP = Object.assign({ '105286': '41450-298' }, store.get('v2-nmap', {}));   // 네이버 단지 번호 → 우리 단지 (105286 = 사용자가 준 미사강변 골든센트로 주소)
@@ -1861,6 +1922,6 @@ function drawPeriods() {
 document.getElementById('perKind').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; perSt.kind = b.dataset.v;
   document.querySelectorAll('#perKind button').forEach(x => x.setAttribute('aria-pressed', x === b)); drawPeriods(); });
 watchChanged.push(drawPeriods);
-syncArea(); drawWatch(); window.runBudget(); drawMove(); drawPeriods();
+syncArea(); drawWatch(); window.runBudget(); drawMove(); drawPeriods(); drawWait(); drawToday();
 if (location.hash.startsWith('#ask=')) importAskHash(); else go((location.hash || '').slice(1) || store.get('v2-tab', 'home'));
 </script>
