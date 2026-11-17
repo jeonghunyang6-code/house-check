@@ -358,7 +358,7 @@ def ask_reminder(info: dict[str, dict], seqs: list[str], today) -> list[str]:
     never = [s for s in seqs if not info[s]["ask_last"]]
     if not old and not never:
         return []
-    out = [f"\n📝 <b>호가 저장 챙기기</b>(네이버 부동산 단지 화면에서 북마크)"]
+    out = [f"\n📝 <b>호가 저장 챙기기</b>(네이버 부동산 단지 화면에서 북마크, 주 1회면 충분)"]
     if old:
         out.append("   " + " · ".join(f"{html.escape(info[s]['name'])} {d[5:].replace('-', '/')}" for s, d in sorted(old, key=lambda x: x[1])) + f" ({ASK_STALE_DAYS}일 넘음)")
     if never:

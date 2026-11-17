@@ -170,5 +170,21 @@ def regulated_now(today: date) -> list[str]:
     return sorted({c for z in ZONES if z.kind == "규제지역" and _on(z, today) for c in z.region_codes})
 
 
+def toh_now(today: date) -> dict[str, list]:
+    """오늘 토지거래허가구역인 시군구 → [동 목록(None = 시군구 전체), 설명]. 입지 사실표 '규제' 줄(2026-11-17 사용자: 첫 매수 실거주 의무)."""
+    out: dict[str, list] = {}
+    for z in ZONES:
+        if z.kind == "토허" and _on(z, today):
+            for c in z.region_codes:
+                cur = out.get(c)
+                if cur and cur[0] is None:
+                    continue
+                if z.umd_names is None:
+                    out[c] = [None, z.note]
+                else:
+                    out[c] = [sorted(set((cur[0] if cur else []) + list(z.umd_names))), z.note]
+    return out
+
+
 def _on(z: Zone, d: date) -> bool:
     return (z.start is None or z.start <= d) and (z.end is None or z.end >= d)
