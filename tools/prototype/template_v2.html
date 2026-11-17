@@ -358,7 +358,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
         </div></details>
         <div class="list" id="cList"></div>
         <button type="button" class="more" id="cMore">20곳 더 보기</button>
-        <p class="src">기준 시세가 예산의 80~100%인 단지.<br>세대수·출퇴근 시간을 모르는 단지는 조건 선택 시 제외.<br>'비싼 순': 작가 기준 "살 수 있는 것 중 가장 비싼 것, 건물값보다 땅값" — 같은 값이면 급지(동 시세) 높은 곳 먼저.</p>
+        <p class="src">기준 시세가 예산의 80~100%인 단지.<br>세대수·출퇴근 시간을 모르는 단지는 조건 선택 시 제외.</p>
       </div>
     </div>
   </section>
@@ -952,7 +952,7 @@ const MINF = { '30분 이내': 30, '45분 이내': 45, '60분 이내': 60, '90�
 const carMin = (seq, to) => { const api = (DRIVE[seq] || {})[to[2]]; if (api != null) return Math.round(api); const i = INFO[seq]; return i && i[3] ? Math.round(distM(i[3], i[4], to[0], to[1]) * 1.35 / 60000 * 60) : null; };
 const workMin = (seq) => { const w = WORK[cst.work]; return w == null ? null : Array.isArray(w) ? carMin(seq, w) : (INFO[seq] || [])[w] ?? null; };
 const STF = { '역 거리 무관': () => true, '역 700m 이내': (m) => m != null && m <= 700, '역 1km 이내': (m) => m != null && m <= 1000 };
-const SORTF = { '급지순': (a, c) => (a.grade || 9) - (c.grade || 9) || (c.newbig - a.newbig) || c.ref - a.ref, '싼 순': (a, c) => a.ref - c.ref, '비싼 순': (a, c) => c.ref - a.ref || (a.grade || 9) - (c.grade || 9) /* L14(송희구 26-11-06 25:41·1:06:10): 살 수 있는 것 중 가장 비싼 것, 같은 값이면 땅값(급지) 높은 곳 */, '새 아파트순': (a, c) => (c.by || 0) - (a.by || 0), '역 가까운 순': (a, c) => ((INFO[a.seq] || [])[6] ?? 9e9) - ((INFO[c.seq] || [])[6] ?? 9e9) };
+const SORTF = { '급지순': (a, c) => (a.grade || 9) - (c.grade || 9) || (c.newbig - a.newbig) || c.ref - a.ref, '싼 순': (a, c) => a.ref - c.ref, '새 아파트순': (a, c) => (c.by || 0) - (a.by || 0), '역 가까운 순': (a, c) => ((INFO[a.seq] || [])[6] ?? 9e9) - ((INFO[c.seq] || [])[6] ?? 9e9) };
 const phPill = (p) => p ? `<span class="pill ${p === '상승장' ? 'warn' : p === '하락장' ? 'bad' : 'none'}">지역 ${p}</span>` : '';
 let candList = [];
 function drawCand() {
