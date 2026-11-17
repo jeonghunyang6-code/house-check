@@ -298,6 +298,20 @@ def run(db: Db) -> dict[str, tuple]:
                             f" (🔧 {B5_SPREAD}배, 2021 불장 0.62~0.79). 하위 비중이 낮을 때는 비가 흔들려 과열 판정은 ②와 함께 본다")
     else:
         sig["b5_low_highs"] = (None, "데이터 없음", "하위 급지 신고가 비중")
+    # C11 끝물 신호(송희구 부읽남TV 26-11-06 34:40 '경기 완전 외곽까지 들썩여야 후반'): 경기 8급지(84㎡ 환산 6억 미만 동) 최근 4주 중개 거래 중 신고가 비중.
+    # 작가가 숫자 기준을 말하지 않아 판정 없이 참고(2026-11-17 사용자 요청). 오피스텔은 수집하지 않음
+    c11 = select(db, f"""WITH g AS (SELECT region_code, umd_name, grade FROM dong_grade WHERE asof = (SELECT max(asof) FROM dong_grade))
+      SELECT d.contract_date > {lit(today)}::date - 28 AS cur, count(*) n, count(*) FILTER (WHERE d.price_10k > d.prev_high_10k) h
+      FROM deals d JOIN complexes x USING (apt_seq) JOIN g ON g.region_code = d.region_code AND g.umd_name = x.umd_name
+      WHERE g.grade = 8 AND d.region_code LIKE '41%' AND NOT d.is_cancelled AND d.deal_type = '중개' AND d.prev_high_10k IS NOT NULL
+        AND d.contract_date > {lit(today)}::date - 56 GROUP BY 1""")
+    cc = {r["cur"]: r for r in c11}
+    if cc.get(True) and cc[True]["n"]:
+        now_p, pre = pct(cc[True]["h"], cc[True]["n"]), (pct(cc[False]["h"], cc[False]["n"]) if cc.get(False) else None)
+        sig["c11_outer"] = (now_p, "참고", f"경기 최하위 급지(8급, 84㎡ 환산 6억 미만 동) 최근 4주 거래 {cc[True]['n']:,}건 중 신고가 {now_p}%"
+                            + (f", 그 전 4주 {pre}%" if pre is not None else "") + ". 송희구: 경기 완전 외곽까지 들썩여야 상승장 후반(끝물), 기준 숫자 없음")
+    else:
+        sig["c11_outer"] = (None, "데이터 없음", "경기 최하위 급지 신고가 비중")
         sig["b5_spread"] = (None, "데이터 없음", "상위 대비 하위 급지 신고가 비중")
     # 반등 신호: 매매수급지수
     sup, sale = series(db, "sale_supply", 6), series(db, "sale", 6)

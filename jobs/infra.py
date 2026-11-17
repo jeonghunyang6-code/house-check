@@ -536,7 +536,13 @@ def run_hanbank(db: Db) -> int:
         print("  물가 선분이 너무 적음 → 쿼리 확인(DB 안 바꿈)", file=sys.stderr)
         return 1
     cx = select(db, "SELECT apt_seq, apt_name, lat, lng FROM complexes WHERE lat IS NOT NULL")
-    got = H.judge(cx, segs)
+    try:   # 2026-11-17: 건물 단위(OSM 아파트 건물). 못 받으면 단지 중심 한 점으로
+        blds = H.fetch_buildings()
+        print(f"  OSM 아파트 건물 {len(blds)}개", flush=True)
+        got = H.judge_buildings(cx, segs, blds) if len(blds) > 1000 else H.judge(cx, segs)
+    except (H.Stop, RuntimeError) as e:
+        print(f"  건물 못 받음({e}) → 단지 중심으로", file=sys.stderr)
+        got = H.judge(cx, segs)
     vals = [f"({lit(s)}, {d}, {'true' if fr else 'false'}, {lit(b)})" for s, (d, fr, b) in got.items()]
     stmts = ["BEGIN;", "UPDATE complexes SET han_bank_m = NULL, han_front = NULL, han_block = NULL WHERE han_bank_m IS NOT NULL;"]
     for i in range(0, len(vals), 1000):

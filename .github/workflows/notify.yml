@@ -1,14 +1,12 @@
 # 텔레그램 알림 (jobs/notify.py). 필요한 시크릿: TELEGRAM_BOT_TOKEN(@BotFather 로 만든 봇), DATABASE_URL.
 # 대화 번호는 봇에게 한 번 말을 걸어 두면 첫 실행 때 찾아 DB 에 저장한다. 변수 HC_SITE_URL 이 있으면 글 끝에 웹 주소
-# 매일: 수집(daily-snapshot)이 끝나면(실패해도) 관심 단지 새 실거래 + 지난번 뒤 실패한 자동 작업. 금요일 19:07 KST: 주간 요약. 22~07시는 보내지 않음
+# 매일: 수집(daily-snapshot)이 끝나면(실패해도) 관심 단지 새 실거래 + 지난번 뒤 실패한 자동 작업. 금요일엔 그 바로 뒤 주간 요약(2026-11-17, 예약 지연 때문). 22~07시는 보내지 않음
 name: notify
 
 on:
   workflow_run:
     workflows: [daily-snapshot]
     types: [completed]
-  schedule:
-    - cron: "7 10 * * 5"   # 금 19:07 KST
   workflow_dispatch:
     inputs:
       mode:
@@ -46,7 +44,7 @@ jobs:
         run: |
           if [ -z "$TELEGRAM_BOT_TOKEN" ]; then echo "TELEGRAM_BOT_TOKEN 없음 → 건너뜀"; exit 0; fi
           MODE="${{ inputs.mode }}"
-          if [ -z "$MODE" ]; then
-            if [ "${{ github.event_name }}" = "schedule" ]; then MODE=weekly; else MODE=daily; fi
-          fi
+          if [ -z "$MODE" ]; then MODE=daily; fi
           python -m jobs.notify "$MODE"
+          # 2026-11-17 사용자: 금요일 주간 요약은 예약(19:07)이 밀려 토요일 새벽에 온 적이 있어, 금요일 수집이 끝나면 매일 알림 바로 뒤에 보냄
+          if [ "${{ github.event_name }}" = "workflow_run" ] && [ "$(TZ=Asia/Seoul date +%u)" = 5 ]; then python -m jobs.notify weekly; fi
