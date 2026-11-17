@@ -14,7 +14,7 @@ from datetime import date, timedelta
 
 from collector.db import Db, DbError, connect, lit, select
 from collector.volume import not_bulk
-from collector.market import (_shift, B5_HOT, B5_SPREAD, B5_WATCH, b4_applies, b5_state, rebound_state, DOWN_RATIO, JEONSE_WEEKS, SUPPLY_WEEKS, UNEMP_JUMP, b4, loan_growth, new_jeonse, rate_price_relation, yoy_series, monthly, mortgage_band, phase, run_length,
+from collector.market import (_shift, B5_HOT, B5_SPREAD, B5_WATCH, C11_HOT, C11_WATCH, b4_applies, b5_state, rebound_state, DOWN_RATIO, JEONSE_WEEKS, SUPPLY_WEEKS, UNEMP_JUMP, b4, loan_growth, new_jeonse, rate_price_relation, yoy_series, monthly, mortgage_band, phase, run_length,
                              unemployment)
 
 SEOUL, CAPITAL = 50008, 50002
@@ -308,8 +308,10 @@ def run(db: Db) -> dict[str, tuple]:
     cc = {r["cur"]: r for r in c11}
     if cc.get(True) and cc[True]["n"]:
         now_p, pre = pct(cc[True]["h"], cc[True]["n"]), (pct(cc[False]["h"], cc[False]["n"]) if cc.get(False) else None)
-        sig["c11_outer"] = (now_p, "참고", f"경기 최하위 급지(8급, 84㎡ 환산 6억 미만 동) 최근 4주 거래 {cc[True]['n']:,}건 중 신고가 {now_p}%"
-                            + (f", 그 전 4주 {pre}%" if pre is not None else "") + ". 송희구: 경기 완전 외곽까지 들썩여야 상승장 후반(끝물), 기준 숫자 없음")
+        st = "끝물" if now_p >= C11_HOT else "주의" if now_p >= C11_WATCH else "보통"
+        sig["c11_outer"] = (now_p, st, f"경기 최하위 급지(8급, 84㎡ 환산 6억 미만 동) 최근 4주 거래 {cc[True]['n']:,}건 중 신고가 {now_p}%"
+                            + (f", 그 전 4주 {pre}%" if pre is not None else "") + ". 송희구: 경기 완전 외곽까지 들썩여야 상승장 후반(끝물), 작가 숫자 없음 →"
+                            f" 🔧 {C11_WATCH:.0f}% 이상 주의, {C11_HOT:.0f}% 이상 끝물 (백테스트: 2023~25년 1~3%, 2021 불장 27~37%)")
     else:
         sig["c11_outer"] = (None, "데이터 없음", "경기 최하위 급지 신고가 비중")
         sig["b5_spread"] = (None, "데이터 없음", "상위 대비 하위 급지 신고가 비중")

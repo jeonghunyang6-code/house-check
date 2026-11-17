@@ -597,7 +597,7 @@ $('#hAsof').textContent = `${D.asof.slice(5).replace('-', '월 ')}일 기준`;
     ['과열신호', `<span class="pill ${hotC}">${st('b5_low_highs') || '–'}</span>`,
       [['상승 지역', (v('b5_up_cap') ?? 0).toFixed(1) + '%', 'ref'], ['하위 신고가', (low ?? 0).toFixed(1) + '%', low >= 25 ? 'bad' : low >= 10 ? 'warn' : 'good'],
        ['상위 대비', (spread ?? 0).toFixed(2) + '배', spread >= 0.6 ? 'warn' : 'good'],
-       ...(v('c11_outer') != null ? [['경기 외곽 신고가', v('c11_outer').toFixed(1) + '%', 'ref']] : [])]],   // C11(2026-11-17): 기준 없는 참고
+       ...(v('c11_outer') != null ? [['경기 외곽 신고가', v('c11_outer').toFixed(1) + '%', st('c11_outer') === '끝물' ? 'bad' : st('c11_outer') === '주의' ? 'warn' : st('c11_outer') === '보통' ? 'good' : 'ref']] : [])]],   // C11: 🔧 5% 주의·25% 끝물(2026-11-17 백테스트)
     ['하락신호', `<span class="pill ${met >= 2 ? 'bad' : met === 1 ? 'warn' : 'good'}">${met}/3</span>`,
       [['하락 지역', (v('b4_down_ratio') ?? 0).toFixed(1) + '%', yes('b4_down_ratio')], ['전세 하락', (v('b4_jeonse_8w') ?? 0) + '주', yes('b4_jeonse_8w')],
        ['실업률', (v('b4_unemployment') ?? 0).toFixed(1) + '%', yes('b4_unemployment')]]],
