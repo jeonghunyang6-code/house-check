@@ -429,8 +429,12 @@ def weekly(db: Db, save: bool = True) -> str:
     if parts:
         out.append("  ".join(parts) + f"\n<i>부동산원 {wk[-1]['d'][5:].replace('-', '/')} 주</i>")
     seqs = watch(db)
-    rows = deals(db, seqs, 7)
     ag = my_area(db)
+    # 2026-11-17 사용자: 주간 요약 거래 줄도 사이트에서 고른 평형만(매일 알림과 같게), 다른 평형은 맨 끝 한 줄
+    lo, hi = BANDS[ag]
+    rows_all = deals(db, seqs, 7)
+    rows = [r for r in rows_all if lo <= float(r["area_m2"]) < hi]
+    other = [r for r in rows_all if not lo <= float(r["area_m2"]) < hi]
     info = watch_info(db, seqs, save, ag)
     moved = [s for s in seqs if any(r["apt_seq"] == s for r in rows) or info[s]["ask_moved"] or info[s]["px_moved"]]
     if not seqs:
@@ -443,6 +447,9 @@ def weekly(db: Db, save: bool = True) -> str:
             out += [short_deal(r) for r in mine[:5]] + ([f"   … 외 {len(mine) - 5}건"] if len(mine) > 5 else [])
             if i["ask"]:
                 out.append("   " + i["ask"])
+        if other:
+            out.append(f"\n↪️ 다른 평형 거래 {len(other)}건: " + " · ".join(f"{html.escape(r['apt_name'])} {float(r['area_m2']):.0f}㎡ {eok(r['price_10k'])}" for r in other[:3])
+                       + (f" 외 {len(other) - 3}건" if len(other) > 3 else ""))
         quiet = len(seqs) - len(moved)
         if quiet:
             out.append(f"\n😴 나머지 {quiet}곳: 이번 주 신고·호가 변동 없음")
