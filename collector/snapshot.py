@@ -128,8 +128,9 @@ def apply_snapshot(
              _iso(x.cancel_date), _iso(x.rgst_date), None if bootstrap else today.isoformat(), today.isoformat()),
         )
     for key, x in d.seen_again.items():
-        con.execute("UPDATE deals SET last_seen_date=?, disappeared=0, rgst_date=? WHERE deal_key=?",
-                    (today.isoformat(), _iso(x.rgst_date), key))
+        con.execute("UPDATE deals SET last_seen_date=?, disappeared=0, rgst_date=? "
+                    "WHERE deal_key=? AND (disappeared=1 OR rgst_date IS NOT ?)",        # pg_store 와 같이 바뀐 행만
+                    (today.isoformat(), _iso(x.rgst_date), key, _iso(x.rgst_date)))
     for key, x in d.newly_cancelled.items():
         con.execute("UPDATE deals SET is_cancelled=1, cancel_date=? WHERE deal_key=?", (_iso(x.cancel_date), key))
     for key in d.disappeared:

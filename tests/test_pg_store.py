@@ -125,3 +125,30 @@ def test_cross_region_duplicate_is_skipped():
     assert [(r["region_code"], r["n_deals"]) for r in runs] == [("11590", 2), ("11620", len(deals) - 2)]
     # 다음 날 같은 응답이 와도 관악구 칸에서 그 2건을 '사라짐'으로 잡지 않는다
     assert apply_snapshot_pg(db, "11620", "202608", deals, date(2026, 10, 13), False) == []
+
+
+def test_seen_again_rows_are_not_rewritten():
+    """2026-11-19: 매일 같은 거래를 last_seen_date 만 바꿔 다시 써서 DB 가 부풀었다 → 바뀐 행(다시 나타남·등기일)만 고쳐 쓴다."""
+    if not URL:
+        return
+    db = _db()
+    deals, _ = parse_trade_page(XML)
+    base = [replace(d, is_cancelled=False, cancel_date=None) for d in deals]
+    xmin = lambda: {r["deal_key"]: r["x"] for r in select(db, "SELECT deal_key, xmin::text AS x FROM deals")}
+    apply_snapshot_pg(db, "11680", "202608", base, date(2026, 10, 11), True)
+    a = xmin()
+    apply_snapshot_pg(db, "11680", "202608", base, date(2026, 10, 12), False)          # 똑같은 응답
+    assert xmin() == a
+    moved = [replace(base[0], rgst_date=date(2026, 10, 12))] + base[1:]                 # 등기일만 생김
+    apply_snapshot_pg(db, "11680", "202608", moved, date(2026, 10, 13), False)
+    b = xmin()
+    assert sum(a[k] != b[k] for k in a) == (0 if base[0].rgst_date == date(2026, 10, 12) else 1)
+    apply_snapshot_pg(db, "11680", "202608", moved[1:], date(2026, 10, 14), False)      # 하나 사라짐
+    apply_snapshot_pg(db, "11680", "202608", moved, date(2026, 10, 15), False)          # 다시 나타남
+    back = select(db, "SELECT disappeared, last_seen_date::text AS l FROM deals WHERE NOT disappeared ORDER BY last_seen_date DESC LIMIT 1")[0]
+    assert back["l"] == "2026-10-15"
+    rents, _ = parse_rent_page(RENT_XML)
+    apply_snapshot_pg(db, "11680", "202609", rents, date(2026, 10, 11), True, kind=RENT)
+    r0 = select(db, "SELECT count(*) AS n FROM rents WHERE last_seen_date = '2026-10-11'")[0]["n"]
+    apply_snapshot_pg(db, "11680", "202609", rents, date(2026, 10, 12), False, kind=RENT)
+    assert select(db, "SELECT count(*) AS n FROM rents WHERE last_seen_date = '2026-10-11'")[0]["n"] == r0 == len(rents)

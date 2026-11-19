@@ -52,7 +52,10 @@ def save(db: Db, rows: list[tuple[str, M.RightDeal]], backfill: bool = False) ->
         db.query("INSERT INTO right_deals (deal_key, region_code, apt_name, umd_name, jibun, contract_date, area_m2, area_group, floor, price_10k, "
                  "kind, deal_type, is_cancelled, cancel_date, first_seen_date) VALUES " + vals
                  + " ON CONFLICT (deal_key) DO UPDATE SET is_cancelled = EXCLUDED.is_cancelled, cancel_date = EXCLUDED.cancel_date, "
-                   "last_seen_date = (now() AT TIME ZONE 'Asia/Seoul')::date;")
+                   "last_seen_date = (now() AT TIME ZONE 'Asia/Seoul')::date "
+                   # 바뀐 행만(pg_store 와 같은 이유: 매일 통째로 다시 쓰면 DB 가 부푼다)
+                   "WHERE right_deals.is_cancelled IS DISTINCT FROM EXCLUDED.is_cancelled "
+                   "OR right_deals.cancel_date IS DISTINCT FROM EXCLUDED.cancel_date;")
 
 
 def link(db: Db) -> None:
