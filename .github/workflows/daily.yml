@@ -109,7 +109,8 @@ jobs:
         if: ${{ !cancelled() && !inputs.dry_run }}
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        # 2026-11-19: 다시 보인 행을 매일 통째로 다시 쓰던 것을 바뀐 행만으로 고침(collector/pg_store.py) → 부푸는 속도가 크게 줄 것. 392 → 340MB
         # 2026-11-14: 실거래·전월세 원본 표도 지우고 바꾼 자리가 쌓여 DB 432MB(한도 500) → VACUUM FULL 로 348MB. 일요일마다 이 표들도(실거래 16초 남짓)
         run: |
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "VACUUM FULL complex_metrics" -c "VACUUM FULL complexes"
-          if [ "$(TZ=Asia/Seoul date +%u)" = 7 ]; then psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "VACUUM FULL deals" -c "VACUUM FULL rents" -c "VACUUM FULL rent_events"; fi
+          if [ "$(TZ=Asia/Seoul date +%u)" = 7 ]; then psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "VACUUM FULL deals" -c "VACUUM FULL rents" -c "VACUUM FULL rent_events" -c "VACUUM FULL rent_monthly" -c "VACUUM FULL right_deals"; fi

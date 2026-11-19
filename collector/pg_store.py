@@ -75,12 +75,16 @@ def build_sql(
     ]
     for part in _chunks(ins):
         stmts.append(f"INSERT INTO {k.table} ({', '.join(cols)}) VALUES\n" + ",\n".join(part) + ";")
+    # 다시 보인 행은 바뀐 것(사라졌다 돌아옴·등기일)만 고쳐 쓴다. 2026-11-19: 매일 매매 4.7만·전월세 6만 행을
+    # last_seen_date 만 바꾸려고 통째로 다시 써서 DB 가 한 주 40MB 남짓 부풀었다(한도 500MB). last_seen_date 는 읽는 곳이 없고,
+    # 언제 확인했는지는 snapshot_runs(칸마다 수집한 날)로 안다 → 이제 '처음 보이거나 다시 나타난·등기일 바뀐 날'.
     if k.has_cancel:
         seen = [f"({lit(key)}, {lit(x.rgst_date)})" for key, x in d.seen_again.items()]
         for part in _chunks(seen):
             stmts.append(
                 f"UPDATE {k.table} AS t SET last_seen_date = {lit(today)}, disappeared = FALSE, rgst_date = v.rgst::date "
-                "FROM (VALUES " + ", ".join(part) + f") AS v(k, rgst) WHERE t.{k.key} = v.k;"
+                "FROM (VALUES " + ", ".join(part) + f") AS v(k, rgst) WHERE t.{k.key} = v.k "
+                "AND (t.disappeared OR t.rgst_date IS DISTINCT FROM v.rgst::date);"
             )
         canc = [f"({lit(key)}, {lit(x.cancel_date)})" for key, x in d.newly_cancelled.items()]
         for part in _chunks(canc):
@@ -92,7 +96,7 @@ def build_sql(
         for part in _chunks(list(d.seen_again)):
             stmts.append(
                 f"UPDATE {k.table} SET last_seen_date = {lit(today)}, disappeared = FALSE "
-                f"WHERE {k.key} IN (" + ", ".join(lit(x) for x in part) + ");"
+                f"WHERE disappeared AND {k.key} IN (" + ", ".join(lit(x) for x in part) + ");"
             )
     for part in _chunks(d.disappeared):
         stmts.append(f"UPDATE {k.table} SET disappeared = TRUE WHERE {k.key} IN (" + ", ".join(lit(x) for x in part) + ");")
