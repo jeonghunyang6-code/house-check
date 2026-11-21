@@ -436,6 +436,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
         <div class="seg" id="dSpan" style="flex:none" hidden><button type="button" data-v="90" aria-pressed="true">90일</button><button type="button" data-v="6m" aria-pressed="false">6개월</button></div></div><svg class="chart" id="dChart" viewBox="0 0 340 130" role="img" aria-label="최근 90일 실거래"></svg><div id="dDeals"></div></div>
       <div class="card">
         <h2>호가 매물 <small id="askAsof"></small></h2>
+        <div id="askLadder"></div>
         <div class="kpis" id="askSum"></div>
         <div id="askTrendBox" hidden>
           <div class="row" style="justify-content:space-between;align-items:center;margin:8px 0 2px;gap:8px"><p id="askTrendTitle" style="font-size:13.5px;margin:0"></p>
@@ -552,6 +553,31 @@ const man = (v) => Math.abs(v) >= 10000 ? (v / 10000).toFixed(2).replace(/\.?0+$
 const sgn = (v, d = 1) => v == null || isNaN(v) ? '–' : (v > 0 ? '+' : '') + Number(v).toFixed(d) + '%';
 const NS = 'http://www.w3.org/2000/svg';
 function el(tag, attrs = {}, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+/* 가격 사다리(2026-11-21 사용자: '딱 원하던 스타일'): 구간 막대(급매선·기준·설명 가능선) 위에 매물·거래를 점 하나씩. bands = [[from, to, 색, 투명도]],
+   marks = [{v, t, s, c, b, line, a, dx}], pts = [{v, c, ring}]. 같은 칸 점은 위로 쌓고 cap 넘으면 +n(noMore 면 생략) */
+function ladder(o) {
+  const { lo, hi, w = 340, h = 112, base = 66, bar = 8, bin = 6, cap = 8, r = 2.1 } = o, L = 6, R = 6, x = (v) => L + (w - L - R) * (Math.max(lo, Math.min(v, hi)) - lo) / ((hi - lo) || 1);
+  let s = `<svg viewBox="0 0 ${w} ${h}" style="width:100%;display:block" aria-hidden="true">`;
+  (o.bands || []).forEach(([a, z, c, op], i, A) => { s += `<rect x="${x(a)}" y="${base}" width="${Math.max(0, x(z) - x(a))}" height="${bar}" fill="${c}" opacity="${op}"${i === 0 || i === A.length - 1 ? ' rx="2"' : ''}/>`; });
+  const bins = {}; (o.pts || []).forEach(q => { const k = Math.round(x(q.v) / bin); (bins[k] = bins[k] || []).push(q); });
+  Object.entries(bins).forEach(([k, qs]) => { qs.sort((a, b) => (b.ring ? 1 : 0) - (a.ring ? 1 : 0)); qs.slice(0, cap).forEach((q, i) => { const cy = base - 6 - i * (r * 2.2);
+    s += q.ring ? `<circle cx="${k * bin}" cy="${cy}" r="${r}" fill="var(--surface)" stroke="${q.c}" stroke-width="1.3"/>` : `<circle cx="${k * bin}" cy="${cy}" r="${r}" fill="${q.c}"/>`; });
+    if (qs.length > cap && !o.noMore) s += `<text x="${k * bin}" y="${base - 8 - cap * r * 2.2}" text-anchor="middle" style="font-size:8.5px;fill:var(--ink-3)">+${qs.length - cap}</text>`; });
+  (o.marks || []).forEach(m => { if (m.line) s += `<line x1="${x(m.v)}" x2="${x(m.v)}" y1="${base - 4}" y2="${base + bar + 6}" stroke="var(--ink)" stroke-width="2"/>`;
+    if (m.t) s += `<text x="${x(m.v) + (m.dx || 0)}" y="${base + bar + 20}" text-anchor="${m.a || 'middle'}" style="font-size:${m.b ? 10.5 : 10}px;fill:${m.c || 'var(--ink-2)'};font-weight:${m.b ? 800 : 700}">${m.t}</text>`;
+    if (m.s) s += `<text x="${x(m.v) + (m.dx || 0)}" y="${base + bar + 32}" text-anchor="${m.a || 'middle'}" style="font-size:9px;fill:var(--ink-3)">${m.s}</text>`; });
+  return s + '</svg>';
+}
+const colAsk = (v, ref) => v <= ref * 0.95 ? 'var(--accent)' : v <= ref * 1.03 ? 'var(--ink-3)' : v > ref * 1.05 ? 'var(--up2)' : 'var(--warn)';   // 급매선 −5%·설명 가능선 +3%·+5%(가격 판단과 같은 기준)
+const bandsAt = (ref, lo, hi) => [[lo, ref * 0.95, 'var(--accent)', 0.75], [ref * 0.95, ref * 1.03, 'var(--line)', 1], [ref * 1.03, ref * 1.05, 'var(--warn)', 0.55], [ref * 1.05, hi, 'var(--up2)', 0.5]];
+/* 저장 호가(v2-naver) 가장 최근 저장의 같은 평형 매매, 그 전 저장보다 내린 매물 표시(같은 동·전체 층·층·전용 정수 = 같은 매물) */
+function asksOf(seq, ag) {
+  const A = store.get('v2-naver', {})[seq] || {}, ds = Object.keys(A).sort(); if (!ds.length) return null;
+  const pick = (d) => (A[d] || []).filter(x => x.t === '매매' && x.ex != null && Math.abs(Math.floor(x.ex) - ag) <= 1);
+  const cur = pick(ds[ds.length - 1]), prev = ds.length > 1 ? pick(ds[ds.length - 2]) : [], k = (x) => [x.dong || '', x.tot || '', x.fl || '', Math.floor(x.ex)].join('|'), pm = {};
+  prev.forEach(x => (pm[k(x)] = Math.min(pm[k(x)] || 1e9, x.p)));
+  return { d: ds[ds.length - 1], xs: cur.map(x => ({ p: x.p, down: !!(pm[k(x)] && x.p < pm[k(x)]) })) };
+}
 function txt(p, x, y, s, a = 'middle', extra = {}) { const t = el('text', { x, y, 'text-anchor': a, ...extra }, p); t.textContent = s; return t; }
 const tip = $('#tip');
 function hover(node, html) {
@@ -770,12 +796,14 @@ function myDeals() {
     const g = gapOf(seq, x); return `<div class="deal"><span class="muted num">${x[1].slice(2, 4)}.${x[1].slice(4)}</span><span>${cxName(seq)} <span class="muted">${x[2]}㎡ ${x[3]}층</span>${g != null && g <= -5 ? ' <span class="pill acc">급매</span>' : ''}</span><span class="p"><span class="${g == null ? 'muted' : g <= -5 ? 'dn' : g >= 3 ? 'up' : 'muted'}" style="font-size:12px;font-weight:500">${g == null ? '' : sgn(g, 0)}</span> ${eok(x[4])}</span></div>`; }).join('') + '</div>';
   // 내 예산대
   const b = budget.price, rows = b ? CAND.filter(r => r.ref <= b && r.ref >= b * 0.8) : [], seen = new Set(rows.map(r => r.seq + '|' + r.ag));
-  let n = 0, cheap = 0, dear = 0;
-  new Set(rows.map(r => r.seq)).forEach(seq => recent(seq).forEach(x => { if (!seen.has(seq + '|' + x[2])) return; n++; const g = gapOf(seq, x); if (g <= -5) cheap++; else if (g >= 3) dear++; }));
+  let n = 0, cheap = 0, dear = 0; const gs = [];
+  new Set(rows.map(r => r.seq)).forEach(seq => recent(seq).forEach(x => { if (!seen.has(seq + '|' + x[2])) return; n++; const g = gapOf(seq, x); if (g != null) gs.push(g); if (g <= -5) cheap++; else if (g >= 3) dear++; }));
   const mid = n - cheap - dear, pct = (v) => n ? v / n * 100 : 0;
   const bHtml = b ? `<div><p style="font-weight:700;font-size:13.5px">내 예산대 ${eok(b * 0.8)}~${eok(b)} <span class="muted" style="font-weight:400">${rows.length ? new Set(rows.map(r => r.seq)).size.toLocaleString() + '개 단지 · ' : ''}거래 ${n.toLocaleString()}건</span></p>
-    <div class="stack" style="margin-top:6px"><span style="width:${pct(cheap)}%;background:var(--dn2)">${pct(cheap) > 12 ? '급매 ' + cheap : ''}</span><span style="width:${pct(mid)}%;background:var(--c3)">${pct(mid) > 12 ? '시세 근처 ' + mid : ''}</span><span style="width:${pct(dear)}%;background:var(--up2)">${pct(dear) > 12 ? '비싸게 ' + dear : ''}</span></div>
-    <div class="legend" style="margin-top:4px"><span><i style="background:var(--dn2);height:8px"></i>급매 ${cheap}건 (${Math.round(pct(cheap))}%)</span><span><i style="background:var(--c3);height:8px"></i>시세 근처 ${mid}</span><span><i style="background:var(--up2);height:8px"></i>비싸게 ${dear}건 (${Math.round(pct(dear))}%)</span></div></div>` : '';
+    <p class="muted" style="margin:4px 0 0;font-size:12.5px">점 하나 = 거래 하나 (그 단지 기준 시세 대비 %) · 가운데가 몰리면 위는 잘라 보여요</p>
+    ${ladder({ lo: -15, hi: 15, bin: 3, cap: 16, r: 1.2, h: 110, base: 64, noMore: 1, bands: [[-15, -5, 'var(--accent)', 0.75], [-5, 3, 'var(--line)', 1], [3, 15, 'var(--up2)', 0.5]],
+      pts: gs.map(g => ({ v: g, c: g <= -5 ? 'var(--accent)' : g >= 3 ? 'var(--up2)' : 'var(--ink-3)' })), marks: [{ v: -5, t: '−5%', s: '급매', c: 'var(--accent)' }, { v: 0, t: '0', s: '기준 시세', b: 1, line: 1, c: 'var(--ink)' }, { v: 3, t: '+3%', s: '비싸게', c: 'var(--up2)' }] })}
+    <div class="legend" style="margin-top:2px"><span style="color:var(--accent);font-weight:700">급매 ${cheap}건 (${Math.round(pct(cheap))}%)</span><span>시세 근처 ${mid}</span><span style="color:var(--up2)">비싸게 ${dear}건 (${Math.round(pct(dear))}%)</span></div></div>` : '';
   const r = D.recent || {};
   $('#myDeals').innerHTML = wHtml + bHtml + `<p class="muted">전체: 최근 등록 ${(r.n || 0).toLocaleString()}건 중 신고가 ${(r.highs || 0).toLocaleString()}건 (${r.n ? Math.round(r.highs / r.n * 100) : 0}%)</p>`;
 }
@@ -1085,12 +1113,12 @@ function priceHtml(seq) {
   const nq = sale.filter(p => p <= quick).length, n3 = sale.filter(p => p <= ok3).length, n5 = sale.filter(p => p > ok5).length;
   const med = sale.length ? (sale[(sale.length - 1) >> 1] + sale[sale.length >> 1]) / 2 : null;
   const tile = (k, v, d, c) => `<div class="kpi"><span class="k">${k}</span><span class="v"${c ? ` style="color:var(${c})"` : ''}>${v}</span><span class="d">${d}</span></div>`;
-  return `<div class="kpis">${tile('적정가(기준 시세)', eok(ref), (() => { const q = refInfo(seq, () => { if (dSeq === seq) drawDaily(); }); if (!q) return `최근 실거래 중앙값 · ${ag}㎡`; const ch = q1y(seq); return `최근 ${q.days}일${q.n ? ` ${q.n}건` : ''} 중앙값${q.n ? ` · 범위 ${eok(q.lo)}~${eok(q.hi)} · 마지막 ${q.last.slice(0, 2)}.${q.last.slice(2, 4)}.${q.last.slice(4)}` : ''}` + (q.days === 180 && ch > 0 ? '<br><span style="color:var(--warn)">거래가 적어 6개월로 넓혀 잡았어요. 오르는 중이라 실제보다 낮게 나왔을 수 있어요.</span>' : ''); })())}${tile('급매선', eok(quick), '기준보다 5% 싸면 급매', '--accent')}`
-    + `${tile('호가 설명 가능선', eok(ok3), '기준 +3%까지 · +5% 넘으면 설명 필요')}`
-    + `${tile('저장 호가', sale.length ? `최저 ${eok(sale[0])}` : '–', sale.length ? `중간 ${eok(med)} · ${sale.length}개 · ${dt(last)}` : '네이버에서 붙여넣으면 나와요')}</div>`
-    + (r && r.js && ref ? (() => { const jr = r.js / ref * 100, [a, b] = bandFor(ref);   // 2026-11-21 사용자: 전세 그래프 대신 한 줄. D1 가격대별 정상 범위(p.152), D3 역전세
-      return `<p class="rmnext" style="margin-top:8px">전세가율 <b>${jr.toFixed(0)}%</b> (이 가격대 정상 ${a}~${b}%${jr < a ? ' · 낮은 편' : jr > b ? ' · 높은 편' : ''}) · 역전세 위험 ${r.rr ? '<b style="color:var(--warn)">있음</b>' : '없음'}</p>`; })() : '')
-    + (sale.length ? `<p class="rmnext" style="margin-top:8px">급매선 이하 매물 <b style="color:var(--accent)">${nq}개</b> · 설명 가능선(+3%) 안 ${n3}개 · +5% 넘는 매물 ${n5}개</p>` : '');
+  // 2026-11-21 사용자 A안: 기준 시세는 위 카드에 있으니 적정가 칸을 빼고 3칸 + 한 줄씩. 매물 분포 그림은 아래 '호가 매물' 맨 위 사다리
+  const ch = q1y(seq), q = refInfo(seq);
+  return `<div class="kpis" style="grid-template-columns:repeat(3,1fr)">${tile('급매선', eok(quick), '기준 −5%', '--accent')}${tile('설명 가능선', eok(ok3), '기준 +3%')}${tile('저장 호가 최저', sale.length ? eok(sale[0]) : '–', sale.length ? `${sale.length}개 · ${dt(last).slice(-5)}` : '붙여넣으면 나와요')}</div>`
+    + `<p class="rmnext" style="margin-top:8px">${sale.length ? `급매선 이하 매물 <b style="color:var(--accent)">${nq}개</b> · 설명 가능선 안 ${n3}개 · +5% 넘음 ${n5}개<br>` : ''}`
+    + (r && r.js ? (() => { const jr = r.js / ref * 100, [a, b] = bandFor(ref); return `전세가율 <b>${jr.toFixed(0)}%</b> (정상 ${a}~${b}%${jr < a ? ' · 낮은 편' : jr > b ? ' · 높은 편' : ''}) · 역전세 위험 ${r.rr ? '<b style="color:var(--warn)">있음</b>' : '없음'}`; })() : '') + '</p>'
+    + (q && q.days === 180 && ch > 0 ? '<p class="src" style="margin:6px 0 0;color:var(--warn)">거래가 적어 6개월치로 잡은 기준이라, 오르는 중이면 실제보다 낮을 수 있어요.</p>' : '');
 }
 /* ⑤ 기다림 비용(2026-11-17 사용자): 관심 단지 고른 평형, 지난 1년 변화율이 그대로 이어진다고 '가정'하면 그때 가격 차이. 예측 아님(M1) */
 function drawWait() {
@@ -1367,12 +1395,8 @@ const confPill = (q) => { const cl = q.days === 60 ? 'good' : q.days === 90 ? 'w
   return `<span class="pill ${cl}" style="font-size:10.5px;padding:0 6px;vertical-align:1px">${lab}</span>`; };
 /* ⑦·⑧ 저장 호가(v2-naver): 가장 최근 저장의 같은 평형 매매 최저가, 그 전 저장 대비 내린 매물 수(같은 동·전체 층·층·전용 정수 = 같은 매물, 호가 그래프 비교보다 단순) */
 function lastAsks(seq) {
-  const A = (store.get('v2-naver', {})[seq]) || {}, ds = Object.keys(A).sort(), r = main(seq), ag = r ? r.ag : +AREA;
-  if (!ds.length) return null;
-  const pick = (d) => (A[d] || []).filter(x => x.t === '매매' && x.ex != null && Math.abs(Math.floor(x.ex) - ag) <= 1);
-  const cur = pick(ds[ds.length - 1]), prev = ds.length > 1 ? pick(ds[ds.length - 2]) : [];
-  const k = (x) => [x.dong || '', x.tot || '', x.fl || '', Math.floor(x.ex)].join('|'), pm = {}; prev.forEach(x => (pm[k(x)] = Math.min(pm[k(x)] || 1e9, x.p)));
-  return { d: ds[ds.length - 1], min: cur.length ? Math.min(...cur.map(x => x.p)) : null, n: cur.length, down: cur.filter(x => pm[k(x)] && x.p < pm[k(x)]).length };
+  const r = main(seq), a = asksOf(seq, r ? r.ag : +AREA); if (!a) return null; const p = a.xs.map(x => x.p);
+  return { d: a.d, min: p.length ? Math.min(...p) : null, n: p.length, down: a.xs.filter(x => x.down).length };
 }
 const rmTag = (seq) => { const R = (D.v2_remodel || {})[seq]; return R && !R.none && R.s && R.s.length ? `${R.k} ${R.s[R.s.length - 1][0]}` : ''; };
 /* ⑦ 관심 목록 태그(2026-11-21 사용자): 모두 같던 '지역 상승장' 대신 단지마다 30일 변화. 급매 −5%↓·비싼 +3%↑ = 상세 탭 점 색과 같은 기준 */
@@ -1398,7 +1422,8 @@ function drawDrops() {
   if (rows === 'p') return;
   const row = (r) => { const [seq, nm, rc, umd, d, ag, fl, p, h, hh, rg] = r, g = (p / h - 1) * 100;
     return `<div class="irow"><button type="button" class="open" data-s="${seq}"><span class="nm">${nm}</span><span class="sub">${rn(rc)} ${umd || ''}${hh ? ' · ' + Number(hh).toLocaleString() + '세대' : ''} · ${d.slice(0, 2)}.${d.slice(2, 4)}.${d.slice(4)} · ${ag}㎡ · ${fl}층</span>
-      <span class="tags"><span class="pill" style="background:var(--accent-bg);color:var(--accent)">최고가 ${eok(h)} 대비 −${eok(h - p)} (${g.toFixed(0)}%)</span>${rg ? '<span class="pill good">등기</span>' : '<span class="pill none">등기 전</span>'}${watch.has(seq) ? '<span class="pill acc">관심</span>' : ''}</span></button>
+      <span style="display:flex;align-items:center;gap:6px"><svg viewBox="0 0 200 22" style="width:200px;display:block;margin-top:4px" aria-hidden="true"><rect x="6" y="9" width="188" height="4" rx="2" fill="var(--line)"/><rect x="${6 + 188 * (Math.max(-20, g) + 20) / 20}" y="9" width="${188 * Math.min(20, -g) / 20}" height="4" fill="var(--accent)" opacity=".55"/><line x1="194" x2="194" y1="4" y2="18" stroke="var(--ink-2)" stroke-width="1.5"/><line x1="${6 + 188 * 15 / 20}" x2="${6 + 188 * 15 / 20}" y1="7" y2="15" stroke="var(--ink-3)" stroke-dasharray="2 2"/><circle cx="${6 + 188 * (Math.max(-20, g) + 20) / 20}" cy="11" r="4" fill="var(--accent)"/></svg><span class="muted" style="font-size:11px">최고가 ${eok(h)}</span></span>
+      <span class="tags"><span class="pill" style="background:var(--accent-bg);color:var(--accent)">−${eok(h - p)} (${g.toFixed(0)}%)</span>${rg ? '<span class="pill good">등기</span>' : '<span class="pill none">등기 전</span>'}${watch.has(seq) ? '<span class="pill acc">관심</span>' : ''}</span></button>
       <span class="side"><span class="pr">${eok(p)}</span></span></div>`; };
   $('#dropList').innerHTML = rows.length ? rows.slice(0, 10).map(row).join('') + (rows.length > 10 ? `<details class="more-f"><summary>나머지 ${rows.length - 10}건 보기</summary>${rows.slice(10).map(row).join('')}</details>` : '')
     : '<p class="muted">최근 30일에 최고가보다 5% 이상 싸게 팔린 거래가 없어요.</p>';
@@ -1464,6 +1489,8 @@ function drawWatch() {
       const meta = [inf[5] && inf[6] != null ? `${inf[5]} ${Math.round(inf[6])}m` : '', by ? `${YEAR - by}년차` : '', hh ? Number(hh).toLocaleString() + '세대' : ''].filter(Boolean).join(' · ');
       return `<tr><td style="min-width:150px"><b>${n.length > 12 ? n.slice(0, 12) + '…' : n}</b>
         <div style="font-size:12px;margin-top:2px">기준 <b>${eok(ref)}</b>${a && a.min ? ` · 최저 호가 ${eok(a.min)} <span class="${g > 3 ? 'up' : g < -3 ? 'dn' : 'muted'}">${g >= 0 ? '+' : ''}${g.toFixed(0)}%</span>` : ' · <span class="muted">호가 없음</span>'}</div>
+        ${a && a.min && ref ? (() => { const r2 = main(seq), aa = asksOf(seq, r2.ag), lo = ref * 0.88, hi = ref * 1.14;
+          return `<div style="width:170px;margin:2px 0 0">${ladder({ lo, hi, w: 170, h: 30, base: 22, bar: 5, bin: 4, cap: 5, r: 1.5, bands: bandsAt(ref, lo, hi), pts: aa.xs.map(x => ({ v: x.p, c: colAsk(x.p, ref), ring: x.down })), marks: [{ v: ref, line: 1 }] })}</div>`; })() : ''}
         <div class="muted" style="font-size:11.5px">${meta}</div>
         ${(hh && hh < 250) || rm ? `<div style="margin-top:3px;display:flex;gap:4px;flex-wrap:wrap">${hh && hh < 250 ? '<span class="pill warn">250세대 미만</span>' : ''}${rm ? `<span class="pill none">${rm}</span>` : ''}</div>` : ''}</td>${k.map(x => `<td><span class="dot ${x[1]}" style="display:inline-block" title="${x[2]}"></span></td>`).join('')}<td class="sc num">${ok}/3</td></tr>`; }).join('') + '</tbody>';
   // 임장 기록 단지 목록
@@ -1576,7 +1603,7 @@ function drawDaily() {
     if (use.length < 3) return null; const v = use.map(x => x[4]).sort((p, q) => p - q), h = v.length >> 1;
     return { v: Math.round(v.length % 2 ? v[h] : (v[h - 1] + v[h]) / 2), n: use.length, ip: use.some(x => x[6] === '입주권'), bun: use.some(x => x[6] === '분양권') }; })() : null;
   $('#dHead').innerHTML = `<div class="row" style="justify-content:space-between"><b style="font-size:17px">${cxName(seq)} ${lite ? '<span class="pill none">기준 시세 없음</span>' : agTag(seq)}</b><button type="button" class="icon-btn" id="dOpen">단지 상세 →</button></div><div class="row" id="dSub" style="justify-content:space-between;flex-wrap:nowrap"><span class="muted" style="font-size:var(--fs-note);min-width:0">${D.asof.slice(5).replace('-', '월 ')}일 아침 갱신${lite && sx ? ` · ${rn(sx.rc)} ${sx.umd || ''}${sx.pre ? ' · ' + preNote(sx) : sx.by ? ' · ' + sx.by + '년' : ''}${sx.hh ? ' · ' + Number(sx.hh).toLocaleString() + '세대' : ''}` : ''}</span></div>
-    <div class="kpis"><div class="kpi"><span class="k">${tmp ? mainAg + '㎡ 임시 기준 <span class="pill warn" style="font-size:10.5px;padding:0 6px">🔧 임시</span>' : lite ? '최근 거래가' : mainAg + '㎡ 기준 시세'}</span><span class="v">${tmp ? eok(tmp.v) : lite ? eok(lp && lp.p) : eok(ref)}</span>${!lite && refInfo(seq) ? (() => { const q = refInfo(seq); return `<span class="d">최근 ${q.days}일${q.n ? ` ${q.n}건` : ''} 중앙값 ${confPill(q)}</span>`; })() : ''}${tmp ? `<span class="d">최근 ${tmp.n}건 중앙값${tmp.ip ? ' · 입주권 포함' : tmp.bun ? ' · 분양권 포함' : ''}</span>` : lite && lp ? `<span class="d">${lp.k} · ${lp.d.slice(0, 2)}.${lp.d.slice(2, 4)}.${lp.d.slice(4)} · ${lp.ag}㎡</span>` : ''}</div><div class="kpi"><span class="k">최근 ${lite ? '1년' : '90일'} 거래</span><span class="v">${deals.length}건</span><span class="d">${mainAg}㎡ ${same.length}건${(RG[seq] || []).length ? ' · 분양권·입주권 포함' : ''}${TODAY_NEW.has(seq) ? ' · 오늘 새로 등록' : ''}</span></div></div>
+    <div class="kpis"><div class="kpi"><span class="k">${tmp ? mainAg + '㎡ 임시 기준 <span class="pill warn" style="font-size:10.5px;padding:0 6px">🔧 임시</span>' : lite ? '최근 거래가' : mainAg + '㎡ 기준 시세'}</span><span class="v">${tmp ? eok(tmp.v) : lite ? eok(lp && lp.p) : eok(ref)}</span>${!lite && refInfo(seq) ? (() => { const q = refInfo(seq); return `<span class="d">${q.days}일${q.n ? ` ${q.n}건` : ''}${q.n ? ` · ${eok(q.lo)}~${eok(q.hi)}` : ' 중앙값'} ${confPill(q)}</span>`; })() : ''}${tmp ? `<span class="d">최근 ${tmp.n}건 중앙값${tmp.ip ? ' · 입주권 포함' : tmp.bun ? ' · 분양권 포함' : ''}</span>` : lite && lp ? `<span class="d">${lp.k} · ${lp.d.slice(0, 2)}.${lp.d.slice(2, 4)}.${lp.d.slice(4)} · ${lp.ag}㎡</span>` : ''}</div><div class="kpi"><span class="k">최근 ${lite ? '1년' : '90일'} 거래</span><span class="v">${deals.length}건</span><span class="d">${mainAg}㎡ ${same.length}건${(RG[seq] || []).length ? ' · 분양권·입주권 포함' : ''}${TODAY_NEW.has(seq) ? ' · 오늘 새로 등록' : ''}</span></div></div>
     ${lite ? '<p class="src" style="margin:0">거래가 적거나 등기 전(입주권·분양권만 신고)이라 기준 시세를 정하지 못했습니다. 입주권 가격은 추가분담금이 빠져 실제 집값보다 낮게 보일 수 있습니다.</p>' : ''}`;
   $('#dOpen').addEventListener('click', () => openCx(seq));
   xlinks(seq);
@@ -1710,7 +1737,17 @@ function nameSeq(nm) {
   const hit = searchList().filter(([seq]) => { const n = (cxName(seq) + ' ' + ((SR[seq] || {}).n || '')).replace(/[\s()·.\-]/g, '').toLowerCase(); return n.includes(q) || q.includes(cxName(seq).replace(/[\s()·.\-]/g, '').toLowerCase()); }).map(x => x[0]);
   const w = hit.filter(s => watch.has(s)); return w.length === 1 ? w[0] : hit.length === 1 ? hit[0] : null;
 }
+function askLadder(seq) {   // ① 호가 매물 맨 위: 저장 매물 하나하나를 급매선·기준·설명 가능선 위에(○ = 지난 저장보다 내림)
+  const ref = cxRef(seq), r = areaRow(seq), a = ref && r && asksOf(seq, r.ag); if (!a || !a.xs.length) return '';
+  const v = a.xs.map(x => x.p), lo = Math.min(ref * 0.95, ...v) * 0.985, hi = Math.min(Math.max(ref * 1.05, ...v), ref * 1.15) * 1.01;
+  const nd = a.xs.filter(x => x.down).length, nq = v.filter(x => x <= ref * 0.95).length, n3 = v.filter(x => x > ref * 0.95 && x <= ref * 1.03).length, n5 = v.filter(x => x > ref * 1.05).length;
+  return `<p class="muted" style="margin:0 0 2px;font-size:12.5px">${a.d.slice(5).replace('-', '.')} 저장 ${v.length}개 · 점 하나 = 매물 하나${nd ? ` · <span style="color:var(--accent)">○ 지난 저장보다 내린 매물 ${nd}개</span>` : ''}</p>`
+    + ladder({ lo, hi, bands: bandsAt(ref, lo, hi), pts: a.xs.map(x => ({ v: x.p, c: colAsk(x.p, ref), ring: x.down })),
+      marks: [{ v: ref * 0.95, t: eok(ref * 0.95), s: '급매선', c: 'var(--accent)' }, { v: ref, t: eok(ref), s: '기준', c: 'var(--ink)', b: 1, line: 1 }, { v: ref * 1.03, t: eok(ref * 1.03), s: '설명 가능선', a: 'start', dx: 4 }] })
+    + `<p class="rmnext" style="margin:2px 0 10px"><b style="color:var(--accent)">급매선 아래 ${nq}개</b> · 기준 근처 ${n3}개 · +3~5% ${v.length - nq - n3 - n5}개 · +5% 넘음 ${n5}개</p>`;
+}
 function drawAsks() {
+  $('#askLadder').innerHTML = askLadder(dSeq);
   const A = store.get('v2-naver', {})[dSeq] || {}, dates = Object.keys(A).sort(), ref = cxRef(dSeq), r = areaRow(dSeq), ag = r ? r.ag : +AREA;
   const inArea = (x) => x.ex != null && Math.abs(Math.floor(x.ex) - ag) <= 1;
   const snap = (d) => (A[d] || []).filter(inArea), last = dates[dates.length - 1], now = last ? snap(last) : [], prevD = dates[dates.length - 2];
