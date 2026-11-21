@@ -134,6 +134,7 @@ svg.chart:not(.map) text { fill: var(--ink-3); font-size: 10px; font-family: var
 .xl .set { font-size: 13px; color: var(--ink-3); background: none; border: 0; cursor: pointer; padding: 0 2px; }
 .xled { margin-top: 6px; display: grid; gap: 6px; }
 .xled[hidden] { display: none; }
+.card[hidden], .seg[hidden] { display: none !important; }   /* 2026-11-21: display 가 hidden 을 덮어 빈 '가격 판단' 카드·6개월 버튼이 보이던 것 */
 .xled .r { display: flex; gap: 6px; }
 .xled input { flex: 1; min-width: 0; font: inherit; font-size: 13px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); }
 .xled .sv { font-size: var(--fs-note); color: var(--ink-3); display: flex; flex-wrap: wrap; gap: 4px 10px; }
@@ -1446,13 +1447,20 @@ function drawDaily() {
   const seq = dSeq, c = useFull(seq) ? CXS[seq] : null, r = main(seq), inf = infoOf(seq), ref = cxRef(seq), lite = light(seq), DAYS = lite ? 365 : 90;
   // 매매(90일) + 분양권·입주권(1년). 기준 시세 없는 단지는 1년 창으로 본다
   const t1d = new Date(D.asof).getTime(), within = (x) => t1d - new Date(`20${x[1].slice(0, 2)}-${x[1].slice(2, 4)}-${x[1].slice(4)}`).getTime() <= DAYS * 864e5;
-  const deals = [...(DEALS[seq] || []), ...(RG[seq] || []).filter(within)].sort((a, b) => a[1] < b[1] ? 1 : -1);
+  // 기준 시세 없는 단지는 매매도 1년(2026-11-21): data.json 엔 90일뿐이라 /api/deals(370일, 비밀 문구 있을 때)에서 받아 다시 그림
+  const ly = lite ? dealsY(seq, () => { if (dSeq === seq) drawDaily(); }) : null;
+  const deals = [...(ly ? ly.filter(within) : DEALS[seq] || []), ...(RG[seq] || []).filter(within)].sort((a, b) => a[1] < b[1] ? 1 : -1);
   const mainAg = c ? 84 : r ? r.ag : +AREA;
   const same = deals.filter(x => Math.abs(x[2] - mainAg) <= 1 && !x[5]);
   const d2 = (s) => `20${s.slice(0, 2)}-${s.slice(2, 4)}-${s.slice(4)}`;
   const lp = lastPx(seq), sx = SR[seq];
+  // 임시 기준 시세(2026-11-21 사용자 ②, 🔧 출처 없는 우리 규칙 — 백테스트 전): 기준 시세 없는 단지의 같은 평형(±1㎡) 1년 거래
+  // 최근 5건(매매·분양권·입주권, 직거래 뺌) 중앙값, 3건 미만이면 없음. 입주권은 추가분담금이 빠져 낮게 나올 수 있어 섞이면 표시
+  const tmp = lite ? (() => { const use = deals.filter(x => Math.abs(x[2] - mainAg) <= 1 && !x[5]).slice(0, 5);
+    if (use.length < 3) return null; const v = use.map(x => x[4]).sort((p, q) => p - q), h = v.length >> 1;
+    return { v: Math.round(v.length % 2 ? v[h] : (v[h - 1] + v[h]) / 2), n: use.length, ip: use.some(x => x[6] === '입주권'), bun: use.some(x => x[6] === '분양권') }; })() : null;
   $('#dHead').innerHTML = `<div class="row" style="justify-content:space-between"><b style="font-size:17px">${cxName(seq)} ${lite ? '<span class="pill none">기준 시세 없음</span>' : agTag(seq)}</b><button type="button" class="icon-btn" id="dOpen">단지 상세 →</button></div><div class="row" id="dSub" style="justify-content:space-between;flex-wrap:nowrap"><span class="muted" style="font-size:var(--fs-note);min-width:0">${D.asof.slice(5).replace('-', '월 ')}일 아침 갱신${lite && sx ? ` · ${rn(sx.rc)} ${sx.umd || ''}${sx.pre ? ' · ' + preNote(sx) : sx.by ? ' · ' + sx.by + '년' : ''}${sx.hh ? ' · ' + Number(sx.hh).toLocaleString() + '세대' : ''}` : ''}</span></div>
-    <div class="kpis"><div class="kpi"><span class="k">${lite ? '최근 거래가' : mainAg + '㎡ 기준 시세'}</span><span class="v">${lite ? eok(lp && lp.p) : eok(ref)}</span>${lite && lp ? `<span class="d">${lp.k} · ${lp.d.slice(0, 2)}.${lp.d.slice(2, 4)}.${lp.d.slice(4)} · ${lp.ag}㎡</span>` : ''}</div><div class="kpi"><span class="k">최근 ${lite ? '1년' : '90일'} 거래</span><span class="v">${deals.length}건</span><span class="d">${mainAg}㎡ ${same.length}건${(RG[seq] || []).length ? ' · 분양권·입주권 포함' : ''}${TODAY_NEW.has(seq) ? ' · 오늘 새로 등록' : ''}</span></div></div>
+    <div class="kpis"><div class="kpi"><span class="k">${tmp ? mainAg + '㎡ 임시 기준 <span class="pill warn" style="font-size:10.5px;padding:0 6px">🔧 임시</span>' : lite ? '최근 거래가' : mainAg + '㎡ 기준 시세'}</span><span class="v">${tmp ? eok(tmp.v) : lite ? eok(lp && lp.p) : eok(ref)}</span>${tmp ? `<span class="d">최근 ${tmp.n}건 중앙값${tmp.ip ? ' · 입주권 포함' : tmp.bun ? ' · 분양권 포함' : ''}</span>` : lite && lp ? `<span class="d">${lp.k} · ${lp.d.slice(0, 2)}.${lp.d.slice(2, 4)}.${lp.d.slice(4)} · ${lp.ag}㎡</span>` : ''}</div><div class="kpi"><span class="k">최근 ${lite ? '1년' : '90일'} 거래</span><span class="v">${deals.length}건</span><span class="d">${mainAg}㎡ ${same.length}건${(RG[seq] || []).length ? ' · 분양권·입주권 포함' : ''}${TODAY_NEW.has(seq) ? ' · 오늘 새로 등록' : ''}</span></div></div>
     ${lite ? '<p class="src" style="margin:0">거래가 적거나 등기 전(입주권·분양권만 신고)이라 기준 시세를 정하지 못했습니다. 입주권 가격은 추가분담금이 빠져 실제 집값보다 낮게 보일 수 있습니다.</p>' : ''}`;
   $('#dOpen').addEventListener('click', () => openCx(seq));
   xlinks(seq);
@@ -1471,10 +1479,10 @@ function drawDaily() {
   const wk0 = ((t) => { t.setDate(t.getDate() - (t.getDay() + 6) % 7); return t.getTime(); })(new Date(new Date(t0).setHours(0, 0, 0, 0)));
   const wks = yr ? [...Array(Math.ceil((t1 - wk0) / (7 * 864e5)) + 1)].map((_, i) => wk0 + i * 7 * 864e5) : [], rws = yr ? refWeekly(dy, mainAg, wks) : [];
   const refT = (t) => { if (!yr) return ref; const i = Math.floor((t - wk0) / (7 * 864e5)); return rws[Math.max(0, Math.min(i, rws.length - 1))] || ref; };
-  const vals = csame.map(x => x[4]).concat(ref ? [ref] : [], rws.filter(Boolean));
+  const vals = csame.map(x => x[4]).concat(ref ? [ref] : tmp ? [tmp.v] : [], rws.filter(Boolean));
   // 기준 시세는 제목 줄에(2026-11-15 사용자: 점선 끝 이름표가 점을 가려 다시 위 줄로). 점 색 범례: 기준보다 5% 넘게 싸면 청록(목록 '급매'와 같은 색), 3% 넘게 비싸면 빨강
   const dot = (c) => `<i style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(${c});margin:0 3px 1px 0"></i>`;
-  $('#dChartTitle').innerHTML = `${mainAg}㎡ <b>${csame.length}건</b>${ref ? ' · ' + `<span style="color:var(--c1);border-bottom:1.5px dashed var(--c1);white-space:nowrap">기준 ${eok(ref)}</span>` : ''} <span style="font-size:var(--fs-note);color:var(--ink-3);white-space:nowrap">· ${dot('--accent')}급매 ${dot('--up2')}기준+3%↑</span>`;
+  $('#dChartTitle').innerHTML = `${mainAg}㎡ <b>${csame.length}건</b>${ref ? ' · ' + `<span style="color:var(--c1);border-bottom:1.5px dashed var(--c1);white-space:nowrap">기준 ${eok(ref)}</span>` : ''} ${ref ? `<span style="font-size:var(--fs-note);color:var(--ink-3);white-space:nowrap">· ${dot('--accent')}급매 ${dot('--up2')}기준+3%↑</span>` : ''}${tmp ? ` · <span style="color:var(--ink-2);border-bottom:1.5px dotted var(--ink-3);white-space:nowrap">임시 기준 ${eok(tmp.v)}</span>` : ''}`;
   if (vals.length) {
     const AX = niceAx(Math.min(...vals) * 0.995, Math.max(...vals) * 1.005), lo = AX.lo, hi = AX.hi, y = (v) => T + (H - T - B) * (1 - (v - lo) / ((hi - lo) || 1));
     AX.ticks.forEach(t => { el('line', { x1: L, x2: W - R, y1: y(t), y2: y(t), stroke: 'var(--line)' }, svg); txt(svg, L - 4, y(t) + 3, eokT(t), 'end'); });
@@ -1489,6 +1497,7 @@ function drawDaily() {
         return `${i && (rws[i - 1] || ref) && w > t0 ? 'L' : 'M'}${xt(a).toFixed(1)},${y(v).toFixed(1)}L${xt(e).toFixed(1)},${y(v).toFixed(1)}`; }).join('');
       el('path', { d, fill: 'none', stroke: 'var(--c1)', 'stroke-dasharray': '4 3', 'stroke-width': 1.2 }, svg);
     } else if (ref) { el('line', { x1: L, x2: W - R, y1: y(ref), y2: y(ref), stroke: 'var(--c1)', 'stroke-dasharray': '4 3' }, svg); }
+    else if (tmp) { el('line', { x1: L, x2: W - R, y1: y(tmp.v), y2: y(tmp.v), stroke: 'var(--ink-3)', 'stroke-dasharray': '2 3', 'stroke-width': 1.3 }, svg); }   // 임시 기준: 회색 잔 점선
     const col = (x) => { const rf = refT(new Date(d2(x[1])).getTime()); return rf && x[4] <= rf * 0.95 ? 'var(--accent)' : rf && x[4] > rf * 1.03 ? 'var(--up2)' : 'var(--c3)'; };
     csame.forEach(x => { const dot = el('circle', { cx: xs(x[1]), cy: y(x[4]), r: yr ? 3.4 : 4, fill: col(x), ...(x[6] ? { fill: 'var(--surface)', stroke: 'var(--c1)', 'stroke-width': 1.6 } : {}) }, svg); hover(dot, `${dt(d2(x[1]))} · ${x[3]}층 · ${eok(x[4])}${x[6] ? ' · ' + x[6] : ''}`); });
     // 가격 이름표: 6건 이하면 전부, 많으면 최고·최저·가장 최근만. 점 위(맨 위 칸이면 아래)
