@@ -14,6 +14,7 @@
 | `docs/INSIGHT_SOURCES.md` | 출처 등급 정책 |
 | `docs/BENCHMARK_GAP.md` | 외부 서비스(집의 기준) 기능 148개 대조·보강 우선순위 (2026-11-02) |
 | `docs/LADDERPRICE_GAP.md` | 외부 서비스(Ladderprice) 기능 64개 대조·도입 순서·1단계 범위 (2026-11-09) |
+| `docs/HOGANG_ASIL_GAP.md` | 호갱노노·아실 공개 화면 기능 대조·추천 (2026-11-21) |
 
 ## 규칙
 

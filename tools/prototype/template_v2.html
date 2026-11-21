@@ -355,6 +355,12 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
         <div class="legend" id="bLegend"></div>
         <p class="src" id="bRule"></p>
       </div>
+      <div class="card" id="dropCard">
+        <h2>최고가 대비 하락 거래 <small>최근 30일 계약</small></h2>
+        <div class="row" id="dropTags" style="gap:6px;margin-bottom:6px"></div>
+        <div class="list" id="dropList"></div>
+        <p class="src">최고가 = 같은 단지·평형의 그 계약 전 중개 거래 최고가(역대, 보관 파일 포함). 5% 이상 싸게(🔧), 직거래·1층 제외, 하락 폭 큰 순. 저층·비선호 동일 수 있어 층을 같이 봐 주세요. 오르는 장에서도 나오는 '그 단지 최고가보다 싼 거래'라 급매와 같지는 않아요.</p>
+      </div>
       <div class="card">
         <h2>예산 안 후보 <small id="cCount"></small></h2>
         <div class="chips" id="fRegion" aria-label="지역"></div>
@@ -381,6 +387,13 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
     <div class="top wrap"><h1>고른 단지들</h1><div class="seg areaSeg" role="group" aria-label="평형"><button type="button" data-v="84" aria-pressed="true">84㎡</button><button type="button" data-v="59" aria-pressed="false">59㎡</button></div></div>
     <div class="tab wrap">
       <div class="card"><h2>관심 단지 <small id="wCount"></small></h2><div class="list" id="wList"></div></div>
+      <div class="card" id="ovlCard">
+        <h2>시세 흐름 겹쳐 보기 <small id="ovlSub"></small></h2>
+        <div class="row" id="ovlPick" style="gap:6px;margin-bottom:6px"></div>
+        <div class="seg" id="ovlMode" style="margin-bottom:6px"><button type="button" data-v="p" aria-pressed="true">가격</button><button type="button" data-v="i" aria-pressed="false">2년 전 = 100</button></div>
+        <svg class="chart" id="ovlChart" viewBox="0 0 340 170" role="img" aria-label="관심 단지 시세 흐름"></svg>
+        <p class="src" id="ovlNote">관심 단지 실거래(중개·1층 제외) 그 달 포함 3개월 중앙값, 최대 4곳. 거래 없는 달은 이어 그리지 않음. '2년 전 = 100'은 오른 정도만 비교.</p>
+      </div>
       <div class="card">
         <h2>비교</h2>
         <div class="seg" id="cmpSort" style="margin-bottom:8px"><button type="button" data-v="ok" aria-pressed="true">충족순</button><button type="button" data-v="ask" aria-pressed="false">호가 싼 순</button><button type="button" data-v="st" aria-pressed="false">역 가까운 순</button><button type="button" data-v="new" aria-pressed="false">신축 순</button></div>
@@ -877,11 +890,14 @@ function q1y(seq) {   // 최근 분기 vs 4분기 전 (둘 다 값이 있을 때
 const DEALS = {}; (D.v2_deals || []).forEach(r => (DEALS[r[0]] = DEALS[r[0]] || []).push(r));
 // 1년 + 180일 실거래(web/api/deals.js, 비밀 문구가 맞을 때만, 2026-10-28 사용자 요청). 단지마다 한 번 받아 둔다. DEALS 와 같은 모양 [단지, 날짜, 평형, 층, 가격, 직거래]
 const DY = {}, DYP = {};
+const DYC = {};   // 받는 중인 단지마다 기다리는 다시 그리기들(2026-11-21: 상세·관심 겹쳐 보기가 같은 단지를 함께 기다림)
 function dealsY(seq, then) {
   if (DY[seq]) return DY[seq];
-  if (!(window.HC_WEB && HC_WEB.ok) || !/^\d{5}-/.test(seq) || DYP[seq]) return null;
+  if (!(window.HC_WEB && HC_WEB.ok) || !/^\d{5}-/.test(seq)) return null;
+  if (then) (DYC[seq] = DYC[seq] || []).push(then);
+  if (DYP[seq]) return null;
   DYP[seq] = fetch('/api/deals?s=' + encodeURIComponent(seq), { headers: { 'x-hc-key': HC_WEB.key } }).then(r => r.ok ? r.json() : null)
-    .then(j => { if (j && j.d) { DY[seq] = j.d.map(x => [seq, ...x]); then && then(); } }).catch(() => {});
+    .then(j => { if (j && j.d) { DY[seq] = j.d.map(x => [seq, ...x]); (DYC[seq] || []).splice(0).forEach(f => f()); } }).catch(() => {});
   return null;
 }
 // 주별 기준 시세(A1 규칙: 그 주 끝까지 60일 중개·1층 제외 중앙값, 3건 미만이면 90 → 180일). starts = 주 월요일 시각들
@@ -1072,6 +1088,8 @@ function priceHtml(seq) {
   return `<div class="kpis">${tile('적정가(기준 시세)', eok(ref), (() => { const q = refInfo(seq, () => { if (dSeq === seq) drawDaily(); }); if (!q) return `최근 실거래 중앙값 · ${ag}㎡`; const ch = q1y(seq); return `최근 ${q.days}일${q.n ? ` ${q.n}건` : ''} 중앙값${q.n ? ` · 범위 ${eok(q.lo)}~${eok(q.hi)} · 마지막 ${q.last.slice(0, 2)}.${q.last.slice(2, 4)}.${q.last.slice(4)}` : ''}` + (q.days === 180 && ch > 0 ? '<br><span style="color:var(--warn)">거래가 적어 6개월로 넓혀 잡았어요. 오르는 중이라 실제보다 낮게 나왔을 수 있어요.</span>' : ''); })())}${tile('급매선', eok(quick), '기준보다 5% 싸면 급매', '--accent')}`
     + `${tile('호가 설명 가능선', eok(ok3), '기준 +3%까지 · +5% 넘으면 설명 필요')}`
     + `${tile('저장 호가', sale.length ? `최저 ${eok(sale[0])}` : '–', sale.length ? `중간 ${eok(med)} · ${sale.length}개 · ${dt(last)}` : '네이버에서 붙여넣으면 나와요')}</div>`
+    + (r && r.js && ref ? (() => { const jr = r.js / ref * 100, [a, b] = bandFor(ref);   // 2026-11-21 사용자: 전세 그래프 대신 한 줄. D1 가격대별 정상 범위(p.152), D3 역전세
+      return `<p class="rmnext" style="margin-top:8px">전세가율 <b>${jr.toFixed(0)}%</b> (이 가격대 정상 ${a}~${b}%${jr < a ? ' · 낮은 편' : jr > b ? ' · 높은 편' : ''}) · 역전세 위험 ${r.rr ? '<b style="color:var(--warn)">있음</b>' : '없음'}</p>`; })() : '')
     + (sale.length ? `<p class="rmnext" style="margin-top:8px">급매선 이하 매물 <b style="color:var(--accent)">${nq}개</b> · 설명 가능선(+3%) 안 ${n3}개 · +5% 넘는 매물 ${n5}개</p>` : '');
 }
 /* ⑤ 기다림 비용(2026-11-17 사용자): 관심 단지 고른 평형, 지난 1년 변화율이 그대로 이어진다고 '가정'하면 그때 가격 차이. 예측 아님(M1) */
@@ -1366,6 +1384,63 @@ function sigPills(seq, ag) {
     a && a.down ? `<span class="pill good">호가 내림 ${a.down}</span>` : '', rm ? `<span class="pill none">${rm}</span>` : ''].join('');
   return out || '<span class="pill none" style="opacity:.75">30일 변화 없음</span>';
 }
+/* ② 최고가 대비 하락 거래(2026-11-21 사용자, 아실 '최근 하락'): /api/drops(비밀 문구 있을 때). 관심 단지들의 시군구, 고른 평형(59 = 58~61, 84 = 83~86㎡) */
+const DROPS = {};
+function drawDrops() {
+  const rcs = [...new Set([...watch].map(s => (infoOf(s) || [])[1] || (main(s) || {}).rc).filter(x => /^\d{5}$/.test(x || '')))].slice(0, 12);
+  const [lo, hi] = AREA === '84' ? [83, 86] : [58, 61], key = rcs.join(',') + '|' + lo;
+  $('#dropTags').innerHTML = (rcs.length ? `<span class="pill acc">관심 지역: ${rcs.map(rn).join('·')}</span>` : '') + `<span class="pill acc">${AREA}㎡</span><span class="pill none">−5% 이상</span>`;
+  if (!rcs.length) { $('#dropList').innerHTML = '<p class="muted">관심 단지(♡)가 있는 시군구에서 찾아요.</p>'; return; }
+  if (!(window.HC_WEB && HC_WEB.ok)) { $('#dropList').innerHTML = '<p class="muted">비밀 문구로 연 화면에서 보여요.</p>'; return; }
+  const rows = DROPS[key];
+  if (!rows) { DROPS[key] = 'p'; fetch(`/api/drops?r=${rcs.join(',')}&lo=${lo}&hi=${hi}`, { headers: { 'x-hc-key': HC_WEB.key } }).then(r => r.ok ? r.json() : null)
+    .then(j => { DROPS[key] = j && j.d ? j.d : []; drawDrops(); }).catch(() => { DROPS[key] = []; drawDrops(); }); $('#dropList').innerHTML = '<p class="muted">불러오는 중…</p>'; return; }
+  if (rows === 'p') return;
+  const row = (r) => { const [seq, nm, rc, umd, d, ag, fl, p, h, hh, rg] = r, g = (p / h - 1) * 100;
+    return `<div class="irow"><button type="button" class="open" data-s="${seq}"><span class="nm">${nm}</span><span class="sub">${rn(rc)} ${umd || ''}${hh ? ' · ' + Number(hh).toLocaleString() + '세대' : ''} · ${d.slice(0, 2)}.${d.slice(2, 4)}.${d.slice(4)} · ${ag}㎡ · ${fl}층</span>
+      <span class="tags"><span class="pill" style="background:var(--accent-bg);color:var(--accent)">최고가 ${eok(h)} 대비 −${eok(h - p)} (${g.toFixed(0)}%)</span>${rg ? '<span class="pill good">등기</span>' : '<span class="pill none">등기 전</span>'}${watch.has(seq) ? '<span class="pill acc">관심</span>' : ''}</span></button>
+      <span class="side"><span class="pr">${eok(p)}</span></span></div>`; };
+  $('#dropList').innerHTML = rows.length ? rows.slice(0, 10).map(row).join('') + (rows.length > 10 ? `<details class="more-f"><summary>나머지 ${rows.length - 10}건 보기</summary>${rows.slice(10).map(row).join('')}</details>` : '')
+    : '<p class="muted">최근 30일에 최고가보다 5% 이상 싸게 팔린 거래가 없어요.</p>';
+}
+$('#dropList').addEventListener('click', (e) => { const o = e.target.closest('.open'); if (o) openCx(o.dataset.s); });
+watchChanged.push(drawDrops);
+
+/* ③ 시세 흐름 겹쳐 보기(2026-11-21 사용자, 아실 '여러단지비교'): /api/deals(760일)로 관심 단지 최대 4곳 월별 3개월 중앙값(중개·1층 제외, 고른 평형) */
+let ovlSel = null, ovlMode = 'p';
+function drawOvl() {
+  const cands = [...watch].filter(s => !light(s) && main(s));
+  if (!ovlSel) ovlSel = cands.slice(0, 4);
+  ovlSel = ovlSel.filter(s => cands.includes(s));
+  const COL = ['var(--c1)', 'var(--c2)', 'var(--good)', '#8a5cf6'];
+  $('#ovlPick').innerHTML = cands.map(s => { const i = ovlSel.indexOf(s); return `<button type="button" class="pill" data-s="${s}" style="cursor:pointer;border:1px solid ${i >= 0 ? COL[i] : 'var(--line)'};background:none;color:${i >= 0 ? 'var(--ink)' : 'var(--ink-3)'}">${i >= 0 ? `<i style="display:inline-block;width:10px;height:3px;background:${COL[i]};margin:0 4px 3px 0;border-radius:2px"></i>` : ''}${cxName(s)}</button>`; }).join('');
+  $$('#ovlMode button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === ovlMode));
+  const svg = $('#ovlChart'); svg.innerHTML = '';
+  if (!(window.HC_WEB && HC_WEB.ok)) { $('#ovlSub').textContent = ''; txt(svg, 170, 85, '비밀 문구로 연 화면에서 보여요', 'middle', { style: 'font-size:11px;fill:var(--ink-3)' }); return; }
+  const wait = ovlSel.filter(s => !DY[s]); wait.forEach(s => dealsY(s, () => drawOvl()));
+  if (wait.length) { txt(svg, 170, 85, '불러오는 중…', 'middle', { style: 'font-size:11px;fill:var(--ink-3)' }); return; }
+  const t1 = new Date(D.asof), months = []; for (let i = 23; i >= 0; i--) months.push(new Date(t1.getFullYear(), t1.getMonth() - 1 - i, 1));   // 지난달까지 24개월
+  const med = (a) => { a.sort((x, y) => x - y); const n = a.length; return n ? (a[(n - 1) >> 1] + a[n >> 1]) / 2 : null; };
+  const ser = ovlSel.map(s => { const ag = main(s).ag, xs = DY[s].filter(x => x[2] === ag && !x[5] && String(x[3]) !== '1').map(x => [new Date(`20${x[1].slice(0, 2)}-${x[1].slice(2, 4)}-${x[1].slice(4)}`), x[4]]);
+    let v = months.map(m => { const a = new Date(m.getFullYear(), m.getMonth() - 2, 1), b = new Date(m.getFullYear(), m.getMonth() + 1, 1); return med(xs.filter(([d]) => d >= a && d < b).map(x => x[1])); });
+    if (ovlMode === 'i') { const b0 = v.find(x => x != null); v = v.map(x => x == null || !b0 ? null : x / b0 * 100); }
+    return { s, v }; });
+  $('#ovlSub').textContent = `${AREA}㎡ · 3개월 중앙값`;
+  const vals = ser.flatMap(x => x.v).filter(x => x != null);
+  if (!vals.length) { txt(svg, 170, 85, '이 평형 거래가 없어요', 'middle', { style: 'font-size:11px;fill:var(--ink-3)' }); return; }
+  const W = 340, H = 170, L = 34, R = 50, T = 8, B = 20, AX = niceAx(Math.min(...vals) * 0.99, Math.max(...vals) * 1.01), y = (v) => T + (H - T - B) * (1 - (v - AX.lo) / ((AX.hi - AX.lo) || 1)), x = (i) => L + (W - L - R) * i / (months.length - 1);
+  AX.ticks.forEach(t => { el('line', { x1: L, x2: W - R, y1: y(t), y2: y(t), stroke: 'var(--line)' }, svg); txt(svg, L - 4, y(t) + 3, ovlMode === 'i' ? Math.round(t) : eokT(t), 'end'); });
+  months.forEach((m, i) => { if (m.getMonth() % 6 === 0 || i === months.length - 1) txt(svg, x(i), H - 4, `${String(m.getFullYear()).slice(2)}.${String(m.getMonth() + 1).padStart(2, '0')}`, 'middle', { style: 'font-size:9px;fill:var(--ink-3)' }); });
+  const used = [];
+  ser.forEach(({ s, v }, k) => { let d = '', pen = false; v.forEach((a, i) => { if (a == null) { pen = false; return; } d += (pen ? 'L' : 'M') + x(i).toFixed(1) + ',' + y(a).toFixed(1); pen = true; });
+    el('path', { d, fill: 'none', stroke: COL[k], 'stroke-width': 2, 'stroke-linejoin': 'round' }, svg);
+    const lv = v.filter(a => a != null).pop(); if (lv == null) return; let ly = y(lv) + 3; while (used.some(u => Math.abs(u - ly) < 10)) ly += 10; used.push(ly);
+    txt(svg, W - R + 3, ly, ovlMode === 'i' ? Math.round(lv) + '' : eok(lv), 'start', { style: `font-size:9px;font-weight:700;fill:${COL[k]}` }); });
+}
+$('#ovlPick').addEventListener('click', (e) => { const b = e.target.closest('button[data-s]'); if (!b) return; const s = b.dataset.s, i = ovlSel.indexOf(s);
+  if (i >= 0) ovlSel.splice(i, 1); else if (ovlSel.length < 4) ovlSel.push(s); drawOvl(); });
+$('#ovlMode').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; ovlMode = b.dataset.v; drawOvl(); });
+watchChanged.push(drawOvl);
 let cmpSort = 'ok';   // ⑧ 비교 정렬: ok 충족순 · ask 호가 싼 순(최저 호가/기준) · st 역 가까운 순 · new 신축 순
 function drawWatch() {
   const all = [...watch].filter(s => CXS[s] || main(s) || SR[s]), lights = all.filter(light), seqs = all.filter(s => !light(s));
@@ -1555,13 +1630,18 @@ function drawDaily() {
       const ly = [cy < T + 12 ? cy + 13 : cy - 7, cy + 13].find(v => !hit(v)); if (ly == null) return; put.push([cx, ly]);
       txt(svg, cx, ly, eok(x[4]), 'middle', { style: `font-size:9.5px;font-weight:700;fill:${col(x)};paint-order:stroke;stroke:var(--surface);stroke-width:3px` }); });
   }
+  // ④ 등기(2026-11-21 사용자, 호갱노노 참고): /api/deals 의 8번째 칸(1/0). 계약 60일(🔧) 넘게 등기 전이면 잔금 전이거나 해제될 수 있어 노랑. 비밀 문구 없으면 표시 안 함
+  const RGM = DY[seq] ? new Map(DY[seq].map(r => [`${r[1]}|${r[3]}|${r[4]}`, r[7]])) : null;
+  const rgPill = (x) => { if (x[6] || !RGM) return ''; const v = RGM.get(`${x[1]}|${x[3]}|${x[4]}`); if (v == null) return '';
+    return v ? ' <span class="pill good">등기</span>' : (t1d - new Date(d2(x[1])).getTime()) / 864e5 > 60 ? ' <span class="pill warn" title="계약 60일이 넘었는데 등기 전 — 잔금 전이거나 해제될 수 있어요">등기 전</span>' : ' <span class="pill none">등기 전</span>'; };
   const drow = (x) => { const g = ref ? (x[4] / ref - 1) * 100 : null, cl = g == null ? '' : g <= -5 ? 'acc-t' : g >= 3 ? 'up' : 'muted';   // 급매(-5%↓) 청록 = 그래프 점과 같은 색
-    return `<div class="deal"${Math.abs(x[2] - mainAg) <= 1 ? '' : ' style="opacity:.45"'}><span class="muted num">${dt(d2(x[1]))}</span><span>${x[2]}㎡ · ${x[3]}층${x[5] ? ' · 직거래' : ''}${x[6] ? ` <span class="pill none">${x[6]}</span>` : ''}${g != null && g <= -5 && Math.abs(x[2] - mainAg) <= 1 ? ' <span class="pill acc">급매</span>' : ''}</span><span class="p"><span class="${cl}" style="font-size:12px;font-weight:500">${Math.abs(x[2] - mainAg) <= 1 && g != null ? sgn(g, 0) : ''}</span> ${eok(x[4])}</span></div>`; };
+    return `<div class="deal"${Math.abs(x[2] - mainAg) <= 1 ? '' : ' style="opacity:.45"'}><span class="muted num">${dt(d2(x[1]))}</span><span>${x[2]}㎡ · ${x[3]}층${x[5] ? ' · 직거래' : ''}${x[6] ? ` <span class="pill none">${x[6]}</span>` : ''}${g != null && g <= -5 && Math.abs(x[2] - mainAg) <= 1 ? ' <span class="pill acc">급매</span>' : ''}${rgPill(x)}</span><span class="p"><span class="${cl}" style="font-size:12px;font-weight:500">${Math.abs(x[2] - mainAg) <= 1 && g != null ? sgn(g, 0) : ''}</span> ${eok(x[4])}</span></div>`; };
   // 2026-11-09 사용자: 59㎡ 를 골랐으면 목록도 59㎡ 만(다른 면적 흐리게 보여 주던 것 뺌)
   const clist = cdeals.filter(x => Math.abs(x[2] - mainAg) <= 1);
   $('#dDeals').innerHTML = clist.slice(0, 12).map(drow).join('')
     + (clist.length > 12 ? `<details class="more-f"><summary>나머지 ${clist.length - 12}건 보기</summary>${clist.slice(12).map(drow).join('')}</details>` : '')
     || `<p class="muted">최근 ${SPN} 거래가 없습니다.</p>`;
+  if (RGM) $('#dDeals').insertAdjacentHTML('beforeend', '<p class="src" style="margin-top:6px">등기 = 소유권 이전 등기 끝남(국토부 등기일). 계약 60일이 넘었는데 등기 전이면 잔금 전이거나 해제될 수 있어요(노랑).</p>');
   drawAsks(); drawMap(seq); $('#dDev').innerHTML = devHtml(seq); $('#dFacts').innerHTML = factsHtml(seq); { const h = remodelHtml(seq); $('#dRemodel').innerHTML = h; $('#dRmCard').hidden = !h; }
   { const h = priceHtml(seq), r = areaRow(seq); $('#dPrice').innerHTML = h; $('#dPriceCard').hidden = !h; $('#dPriceSub').textContent = r ? `${r.ag}㎡ · 작가 기준` : ''; }
 }
@@ -2016,6 +2096,6 @@ function drawPeriods() {
 document.getElementById('perKind').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; perSt.kind = b.dataset.v;
   document.querySelectorAll('#perKind button').forEach(x => x.setAttribute('aria-pressed', x === b)); drawPeriods(); });
 watchChanged.push(drawPeriods);
-syncArea(); drawWatch(); window.runBudget(); drawMove(); drawPeriods(); drawWait(); drawToday();
+syncArea(); drawWatch(); window.runBudget(); drawMove(); drawPeriods(); drawWait(); drawToday(); drawDrops(); drawOvl();
 if (location.hash.startsWith('#ask=')) importAskHash(); else go((location.hash || '').slice(1) || store.get('v2-tab', 'home'));
 </script>
