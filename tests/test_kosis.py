@@ -34,3 +34,31 @@ def test_from_year_to_date():
     from collector.sources.kosis import from_year_to_date
     cum = [("202511", 90.0), ("202512", 100.0), ("202601", 10.0), ("202602", 25.0), ("202604", 50.0)]
     assert from_year_to_date(cum) == [("202512", 10.0), ("202601", 10.0), ("202602", 15.0)]   # 3월이 빠져 4월은 버림
+
+
+def test_call_retries_cut_off_response(monkeypatch):
+    """2026-11-21 rone 실패 재현: KOSIS 응답이 중간에 끊김(IncompleteRead) → 재시도해서 받는다."""
+    import http.client
+    import io
+
+    from collector.sources import kosis
+
+    calls = []
+
+    class R(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def fake(url, timeout):
+        calls.append(url)
+        if len(calls) == 1:
+            raise http.client.IncompleteRead(b"x" * 10)
+        return R(b'[{"PRD_DE": "202610"}]')
+
+    monkeypatch.setenv("KOSIS_API_KEY", "k")
+    monkeypatch.setattr(kosis.urllib.request, "urlopen", fake)
+    monkeypatch.setattr(kosis.time, "sleep", lambda s: None)
+    assert kosis._call({"a": 1}) == [{"PRD_DE": "202610"}] and len(calls) == 2
