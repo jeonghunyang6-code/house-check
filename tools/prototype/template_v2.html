@@ -427,7 +427,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
         <p class="src">전세가율: 가격대별 정상 범위 안이고 80% 이하. 거래: 월 회전율 0.5% 이상. 하락기: 2022~23 하락 구간 거래가 같은 구 가운데 이상.<br>최저 호가 = 마지막으로 저장한 네이버 호가 중 같은 평형 최저(보통 저층·비선호 동이라 '−%'가 커도 바로 싸다는 뜻은 아님). 250세대 미만은 관리비·환금성 주의.</p>
       </div>
       <div class="card">
-        <h2>임장 기록 <span class="pill ex">시안: 이 기기에만 저장</span></h2>
+        <h2>임장 기록 <span class="pill ex">이 기기에만 저장</span></h2>
         <form class="form" id="visitForm" autocomplete="off">
           <label for="v_cx" style="grid-column:1/-1">단지<select id="v_cx"></select></label>
           <label for="v_date">다녀온 날<input id="v_date" type="date"></label>
@@ -480,7 +480,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
             <label for="a_price" style="grid-column:1/-1">매매 호가 (만원)<input id="a_price" inputmode="numeric" placeholder="네이버 부동산·중개소에서 본 가격"></label>
             <button type="submit" class="more" style="grid-column:1/-1">호가 기록</button>
           </form></div></details>
-        <p class="src">호가는 <b>주 1회</b> 저장이면 충분해요(그래프 한 칸 = 한 주, 같은 주에 여러 번 저장하면 마지막 것만 씀).<br>호가 ÷ 최근 실거래 기준 시세: 3% 이내 초록, 3~5% 노랑, 5% 넘으면 빨강, 5% 이상 싸면 청록(급매, 그래프 점·막대도 같은 색). 시안에서는 이 기기에만 저장됩니다.</p>
+        <p class="src">호가는 <b>주 1회</b> 저장이면 충분해요(그래프 한 칸 = 한 주, 같은 주에 여러 번 저장하면 마지막 것만 씀).<br>호가 ÷ 최근 실거래 기준 시세: 3% 이내 초록, 3~5% 노랑, 5% 넘으면 빨강, 5% 이상 싸면 청록(급매, 그래프 점·막대도 같은 색). 비밀 문구로 연 화면에서는 모든 기기에 저장돼요.</p>
       </div>
       <div class="card"><h2>입지 사실표 <small>점수 없이 숫자 그대로</small></h2><div id="dFacts"></div></div>
       <div class="card"><h2>주변 지도 <small id="dMapSub">반경 1.5km</small><button type="button" class="icon-btn" id="dMapType" hidden style="margin-left:auto;font-size:12.5px">위성</button></h2><div class="src" id="dNear" hidden style="margin:0 0 8px;line-height:1.6"></div><div class="nmap" id="dNmap" hidden></div><svg class="lmap" id="dMap" viewBox="-1600 -1600 3200 3200" role="img" aria-label="단지 주변 역·병원·마트·중학교"></svg><div class="legend" id="dMapLg"></div>
@@ -1436,7 +1436,7 @@ function openCx(seq) {
       ${sec('개발 호재', devHtml(seq))}
       ${redev || (b && b.vl_rat) || (r && r.vl) ? sec('재건축', `<dl class="kv">${redev ? `<dt>정비사업</dt><dd>${redev.zone_nm} · <b>${redev.stage}</b></dd>` : ''}${b && b.vl_rat ? `<dt>용적률</dt><dd>${Math.round(+b.vl_rat)}%${zoneTag(b.use_zone || (r && r.uz), +b.vl_rat)}</dd>` : r && r.vl ? `<dt>용적률</dt><dd>${Math.round(r.vl)}%${zoneTag(r.uz, r.vl)}</dd>` : ''}${b && b.land_per_hh ? `<dt>세대당 대지</dt><dd>${(+b.land_per_hh).toFixed(0)}㎡</dd>` : ''}</dl>`) : ''}
       ${sec('현장에서 확인할 것', `<ul style="margin:0;padding-left:18px;display:grid;gap:4px"><li>역까지 실제로 걸어 보기: 평지인지, 밝은 상권길인지</li><li>동·층 차이: 저층은 중고층보다 약 10%, 로얄동과 기피동 5~10%</li><li>호가가 최근 실거래보다 5% 넘게 높으면 이유 물어보기</li><li>부동산 여러 곳에서 급매·전세 매물 분위기</li></ul>`)}
-    </div>${c ? '' : '<p class="src">시안에서는 예시 9개 단지의 84㎡만 가격 차트·전고점이 있습니다. 실제 서비스는 모든 단지·평형이 같은 화면입니다.</p>'}</div>`;
+    </div></div>`;
   detail.hidden = false; detail.scrollTop = 0;
   $('#dBack').addEventListener('click', closeDetail);
   $('#dWatch').addEventListener('click', () => { toggleWatch(seq); const o = watch.has(seq); $('#dWatch').setAttribute('aria-pressed', o); $('#dWatch').textContent = o ? '♥ 관심' : '♡ 관심'; });
@@ -2050,7 +2050,7 @@ function drawSvg(seq) {
   el('path', { d: 'M0,-130l110,95v125h-220v-125z', fill: 'var(--accent)', stroke: 'var(--surface)', 'stroke-width': 18 }, svg);
   txt(svg, 0, 210, cxName(seq), 'middle', { style: 'font-size:124px;font-weight:700;fill:var(--ink)' });
   $('#dMapLg').innerHTML = [['var(--accent)', '이 단지·관심 단지'], ['var(--c1)', '역'], ['var(--bad)', '큰 병원'], ['var(--warn)', '대형마트'], ['var(--c3)', '중학교']].map(([c, n]) => `<span><i style="background:${c};height:8px;width:8px;border-radius:2px"></i>${n}</span>`).join('')
-    + '<span style="flex-basis:100%">시안: 지도 그림 없이 위치만 표시. 실제 서비스는 카카오맵 위에 같은 정보를 올립니다.</span>';
+    + '<span style="flex-basis:100%">네이버 지도를 불러오지 못해 위치만 그림으로 보여요.</span>';
 }
 $('#dSel').addEventListener('change', () => { dSeq = $('#dSel').value; drawDaily(); });
 $('#dMapType').addEventListener('click', () => { const M = window.naver && naver.maps; if (!M || !NMAPS.map) return; NMAPS.sat = !NMAPS.sat; NMAPS.map.setMapTypeId(NMAPS.sat ? M.MapTypeId.HYBRID : M.MapTypeId.NORMAL); $('#dMapType').textContent = NMAPS.sat ? '일반' : '위성'; });
