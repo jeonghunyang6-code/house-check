@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import re
@@ -68,7 +69,8 @@ def _call(params: dict, retries: int = 5) -> list | dict:
             if e.code == 429:
                 raise QuotaExceeded("HTTP 429") from None
             raise ApiError(f"HTTP {e.code}") from None
-        except (urllib.error.URLError, ConnectionError, TimeoutError, json.JSONDecodeError):
+        # 2026-11-21: 응답이 중간에 끊긴 것(http.client.IncompleteRead)은 재시도 대상에 없어 rone 작업 전체가 실패했다 → HTTPException 도 재시도
+        except (urllib.error.URLError, http.client.HTTPException, ConnectionError, TimeoutError, json.JSONDecodeError):
             if attempt == retries - 1:
                 raise ApiError("connection failed") from None
             time.sleep(2 * 2**attempt)
