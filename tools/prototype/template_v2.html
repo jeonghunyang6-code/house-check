@@ -139,7 +139,8 @@ svg.chart:not(.map) text { fill: var(--ink-3); font-size: 10px; font-family: var
 .xl .set { font-size: 13px; color: var(--ink-3); background: none; border: 0; cursor: pointer; padding: 0 2px; }
 .xled { margin-top: 6px; display: grid; gap: 6px; }
 .xled[hidden] { display: none; }
-.card[hidden], .seg[hidden] { display: none !important; }   /* 2026-11-21: display 가 hidden 을 덮어 빈 '가격 판단' 카드·6개월 버튼이 보이던 것 */
+.card[hidden], .seg[hidden] { display: none !important; }
+form[hidden] { display: none !important; }   /* 2026-11-21: display 가 hidden 을 덮어 빈 '가격 판단' 카드·6개월 버튼이 보이던 것 */
 .xled .r { display: flex; gap: 6px; }
 .xled input { flex: 1; min-width: 0; font: inherit; font-size: 13px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); }
 .xled .sv { font-size: var(--fs-note); color: var(--ink-3); display: flex; flex-wrap: wrap; gap: 4px 10px; }
@@ -150,6 +151,8 @@ svg.chart:not(.map) text { fill: var(--ink-3); font-size: 10px; font-family: var
 .dot { width: 14px; height: 14px; border-radius: 50%; margin-top: 2px; background: var(--ink-3); }
 .dot.good { background: var(--good); } .dot.warn { background: var(--warn); } .dot.bad { background: var(--bad); } .dot.none { background: var(--line); }
 details { border-top: 1px solid var(--line); padding-top: 10px; }
+details.card { border-top: 1px solid var(--line); padding-top: 16px; }   /* 계획 탭 '집 산 뒤에' */
+#pLater[open] > summary { margin-bottom: 6px; }
 details summary { cursor: pointer; font-weight: 700; list-style: none; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 details summary::-webkit-details-marker { display: none; }
 details summary::after { content: "펼치기"; font-size: 12px; font-weight: 500; color: var(--accent); }
@@ -359,7 +362,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
         <div class="list" id="qList"></div>
       </div>
       <div class="card">
-        <h2>내 예산 <span class="pill ex" id="bEx">예시 값</span></h2>
+        <h2>내 예산 <span class="pill ex" id="bEx">예시 값</span><button type="button" class="icon-btn" id="bEdit" hidden style="margin-left:auto;font-size:12.5px">고치기</button></h2>
         <form class="form" id="budgetForm" autocomplete="off">
           <label for="b_seed">종잣돈 (만원)<input id="b_seed" inputmode="numeric" value="40000"></label>
           <label for="b_income">세후 월소득 (만원)<input id="b_income" inputmode="numeric" value="600"></label>
@@ -492,13 +495,25 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
 
   <!-- ⑤ 계획 -->
   <section class="tab-page" id="plan" aria-label="계획" hidden>
-    <div class="top wrap"><h1>사고 나서 다음은</h1><div class="seg areaSeg" role="group" aria-label="평형"><button type="button" data-v="84" aria-pressed="true">84㎡</button><button type="button" data-v="59" aria-pressed="false">59㎡</button></div></div>
+    <div class="top wrap"><h1>언제, 어떻게 살까</h1><div class="seg areaSeg" role="group" aria-label="평형"><button type="button" data-v="84" aria-pressed="true">84㎡</button><button type="button" data-v="59" aria-pressed="false">59㎡</button></div></div>
     <div class="tab wrap">
+      <div class="card" id="pWhen">
+        <h2>언제 살 수 있나 <small>내 예산 기준</small></h2>
+        <div class="kpis"><div class="kpi"><span class="k">지금 가진 돈</span><span class="v" id="pSeed">–</span><span class="d" id="pSeedNote"></span></div>
+          <div class="kpi"><span class="k">한 달 저축 (만원)</span><input id="pSave" inputmode="numeric" value="250" style="font:inherit;font-size:20px;font-weight:700;width:100%;border:1px solid var(--line);border-radius:8px;padding:4px 8px;background:var(--surface);color:var(--ink)"><span class="d">모든 기기에 저장</span></div></div>
+        <div id="pWhenTab"></div>
+        <p class="src">필요 현금 = 기준 시세 − 주담대(찾기 탭 예산의 대출 종류·지역, 10·15 대책 한도) + 취득세·중개·법무·이사. DSR·신용대출은 안 넣음(은행 확인). '1년 흐름대로'는 지난 1년 변화율이 이어진다는 가정이지 예측이 아니에요.</p>
+      </div>
       <div class="card">
         <h2>기다림 비용 <small>지난 1년 흐름 그대로라면</small></h2>
         <div class="seg" id="waitSeg"><button type="button" data-v="6" aria-pressed="false">6개월</button><button type="button" data-v="12" aria-pressed="true">1년</button><button type="button" data-v="18" aria-pressed="false">1년 반</button><button type="button" data-v="24" aria-pressed="false">2년</button></div>
         <div id="waitTab"></div>
         <p class="src" id="waitSrc"></p>
+      </div>
+      <div class="card" id="pSteps">
+        <h2>살 때 순서 <small>서울·토지거래허가구역 실거주</small></h2>
+        <div class="list" id="pStepList" style="gap:0"></div>
+        <p class="src">제도는 자주 바뀌어요. 계약 전에 구청·은행에서 지금 기준을 다시 확인하세요. 체크는 이 기기에 기억.</p>
       </div>
       <div class="card">
         <h2>어떻게 살까 <span class="pill ex">예시 값</span></h2>
@@ -512,7 +527,9 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
         <p id="liveNote" style="font-size:14px"></p>
         <p class="src">주담대 금리·기간은 찾기 탭 값, 원리금 균등. 부대비용은 두 방식 같아 뺌.</p>
       </div>
-      <div class="card">
+      <details class="card" id="pLater">
+        <summary><span style="font-size:16px">집 산 뒤에</span><span class="muted" style="font-weight:400;font-size:12.5px">갈아타기·재개발 3개</span></summary>
+      <div class="msub">
         <h2>언제 갈아탈까</h2>
         <div class="form">
           <label for="mySel" style="grid-column:1/-1">내 집 (관심 단지)<select id="mySel"></select></label>
@@ -522,7 +539,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
         <details class="more-f"><summary>추천 목표 단지는 이렇게 골랐어요</summary><div class="body"><div id="moveAuto"></div>
           <p class="src">84㎡ 분기 중앙가로 지금 집의 1.5~2.5배, 직선 10km 안, 2021Q4~ 12분기 이상 거래가 있는 단지 중 '격차 위치'가 낮은 순 5곳(jobs/gap.py). 원하는 단지는 관심에 담으면 '갈아탈 곳'에서 고를 수 있습니다.</p></div></details>
       </div>
-      <div class="card">
+      <div class="msub">
         <h2>갈아타기 자금 <small id="fundTitle"></small></h2>
         <form class="form" id="fundForm" autocomplete="off">
           <label for="f_cur">지금 집 시세 (만원)<input id="f_cur" inputmode="numeric"></label>
@@ -537,7 +554,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
         <div class="legend" id="fundLegend"></div>
         <p class="src">쓸 수 있는 돈 = 판 돈 − 매도 중개보수 − 남은 대출 + 현금.<br>1주택 갈아타기(양도세 비과세 가정), 목표 집 부대비용 포함.</p>
       </div>
-      <div class="card">
+      <div class="msub">
         <h2>재개발로 분리하면 <small>지금 집에 살면서</small></h2>
         <form class="form" id="rdForm" autocomplete="off">
           <label for="r_price">재개발 물건 매수가 (만원)<input id="r_price" inputmode="numeric" value="70000"></label>
@@ -550,6 +567,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
         <div class="kpis" id="rdKpis"></div>
         <p class="src">지금 들어갈 현금 = 매수가 − 보증금 + 취득세 + 중개·법무.<br>취득세 8.4% = 물건 종류(주택·입주권)·지역에 따라 다르니 세무 확인.<br>기다리는 해 = 서울 재개발 단계 사이 중앙값 합 + 착공 뒤 3년.<br>이주비 대출·이자는 넣지 않음.</p>
       </div>
+      </details>
     </div>
   </section>
 
@@ -1030,8 +1048,12 @@ const budget = { price: 0 };
   const raw = (id) => String($('#' + id).value).replace(/,/g, '').trim();
   const num = (id) => { const v = parseFloat(raw(id)); return isFinite(v) ? v : 0; };
   const won = (v) => Math.round(v * 10000).toLocaleString() + '원';
+  // 2026-11-21 사용자: 직접 넣은 예산이 있으면 입력칸을 접고 결과만(고치기로 펼침). 예시 값일 땐 펼친 채로
+  const fold = (on) => { $('#budgetForm').hidden = on; $('#bEdit').hidden = !on && !mine(); $('#bEdit').textContent = on ? '고치기' : '접기'; };
+  const mine = () => { const v = store.get('v2-budget3', null); return !!(v && ids.some(k => k !== 'b_rate' && v[k] != null && String(v[k]) !== String(def[k]))); };
+  $('#bEdit').addEventListener('click', () => fold(!$('#budgetForm').hidden));
   const exOff = () => { const v = store.get('v2-budget3', null); if (v && ids.some(k => k !== 'b_rate' && v[k] != null && String(v[k]) !== String(def[k]))) $('#bEx').style.display = 'none'; };
-  exOff();   // 예시 값과 다른 숫자가 저장돼 있으면 '예시 값' 표시를 뗀다(예전엔 열 때마다 예시 값도 저장됐음)
+  exOff(); if (mine()) fold(true);   // 예시 값과 다른 숫자가 저장돼 있으면 '예시 값' 표시를 뗀다(예전엔 열 때마다 예시 값도 저장됐음)
   function calc(e) {
     // 2026-11-21: 예산도 서버 저장(모든 기기, web/sync.js). 직접 고칠 때만(e = 입력 이벤트) 저장 → 예시 값이 서버에 올라가거나 열 때마다 쓰지 않게
     if (e) { const v = Object.fromEntries(ids.map(k => [k, $('#' + k).value])); if (JSON.stringify(v) !== JSON.stringify(store.get('v2-budget3', null))) { store.set('v2-budget3', v); exOff(); } }
@@ -1065,7 +1087,7 @@ const budget = { price: 0 };
     // ④ 대출 규칙 경고(2026-11-17 사용자): 계산 기준(RULE) 날짜 뒤 '대출' 정책이 정책 이력에 있으면 확인 필요
     { const later = (D.policy || []).filter(p => p[1] === '대출' && p[0] > RULE.from);
       if (later.length) $('#bRule').innerHTML += `<br><span style="color:var(--warn);font-weight:600">⚠️ 계산 기준(${RULE.name}, ${dt(RULE.from)}) 뒤 대출 발표 ${later.length}건: ${later.map(p => `${dt(p[0])} ${(PSHORT[p[0] + '|대출'] || p[2]).slice(0, 30)}`).join(' · ')} — 이 계산에 반영 안 됨, 은행·정책 확인 필요</span>`; }
-    drawCand(); myDeals();
+    drawCand(); myDeals(); if (e) drawWhen();   // 계획 탭 '언제 살 수 있나'도 같은 예산
   }
   ['input', 'change'].forEach(ev => $('#budgetForm').addEventListener(ev, calc)); $('#budgetForm').addEventListener('submit', e => e.preventDefault());
   window.runBudget = calc;
@@ -1185,6 +1207,41 @@ function priceHtml(seq) {
     + (r && r.js ? (() => { const jr = r.js / ref * 100, [a, b] = bandFor(ref); return `전세가율 <b>${jr.toFixed(0)}%</b> (정상 ${a}~${b}%${jr < a ? ' · 낮은 편' : jr > b ? ' · 높은 편' : ''}) · 역전세 위험 ${r.rr ? '<b style="color:var(--warn)">있음</b>' : '없음'}`; })() : '') + '</p>'
     + (q && q.days === 180 && ch > 0 ? '<p class="src" style="margin:6px 0 0;color:var(--warn)">거래가 적어 6개월치로 잡은 기준이라, 오르는 중이면 실제보다 낮을 수 있어요.</p>' : '');
 }
+/* 계획 탭(2026-11-21 사용자 '진행'): ① 언제 살 수 있나 — 찾기 탭 예산(가진 돈·대출 종류·지역)과 한 달 저축(v2-plan, 서버 저장)으로
+   관심 단지마다 필요 현금(기준 시세 − 주담대 + 부대비용)에 닿는 달. 저축만 / 지난 1년 변화율이 이어진다면(기다림 비용과 같은 가정, 예측 아님) */
+function drawWhen() {
+  const seed = +String($('#b_seed').value).replace(/,/g, '') || 0, first = $('#b_type').value === 'first', reg = $('#b_reg').value === '1';
+  const ltv = first ? RULE.ltvFirst : RULE.ltv(reg), loan = (p) => Math.min(RULE.cap(p), p * ltv), need = (p) => p - loan(p) + Calc.costs(p);
+  const save = Math.max(0, +String($('#pSave').value).replace(/,/g, '') || 0);
+  $('#pSeed').textContent = eok(seed); $('#pSeedNote').textContent = `찾기 탭 예산 · ${first ? '생애최초' : reg ? '규제지역' : '비규제'}`;
+  const rows = [...watch].map(s => { const ref = cxRef(s); if (!ref) return null; const c = useFull(s) ? CXS[s] : null, ch = c && c.phase ? +c.phase.chg_12m : q1y(s);
+    const when = (g) => { for (let m = 0; m <= 72; m++) { const p = ref * Math.pow(1 + g / 100, m / 12); if (seed + save * m >= need(p)) return m; } return null; };
+    return { nm: cxName(s).replace(/아파트$/, ''), ref, need: need(ref), loan: loan(ref), m0: when(0), m1: ch != null && isFinite(ch) ? when(ch) : undefined, ch }; }).filter(Boolean).sort((a, b) => a.need - b.need);
+  const fm = (m) => m === undefined ? '<span class="muted">–</span>' : m == null ? '<span class="up">6년 넘게</span>' : m === 0 ? '<b style="color:var(--good)">지금</b>'
+    : (() => { const d = new Date(D.asof); d.setMonth(d.getMonth() + m); return `${m}개월 <span class="muted">(${String(d.getFullYear()).slice(2)}.${String(d.getMonth() + 1).padStart(2, '0')})</span>`; })();
+  $('#pWhenTab').innerHTML = rows.length ? `<table class="per" style="margin-top:6px"><tr><th>관심 단지</th><th>필요 현금</th><th>저축만</th><th>1년 흐름대로 오르면</th></tr>${rows.map(r =>
+    `<tr><td>${r.nm.length > 8 ? r.nm.slice(0, 8) + '…' : r.nm}<br><span class="muted" style="font-size:11.5px">${eok(r.ref)} · 대출 ${eok(r.loan)}</span></td><td><b>${eok(r.need)}</b></td><td>${fm(r.m0)}</td><td>${fm(r.m1)}${r.ch != null && isFinite(r.ch) ? `<br><span class="muted" style="font-size:11px">1년 ${sgn(r.ch, 0)}</span>` : ''}</td></tr>`).join('')}</table>`
+    : '<p class="muted">관심 단지(♡)에 기준 시세가 있어야 계산해요.</p>';
+}
+$('#pSave').value = (store.get('v2-plan', {}) || {}).save ?? 250;
+$('#pSave').addEventListener('input', () => { store.set('v2-plan', { ...(store.get('v2-plan', {}) || {}), save: $('#pSave').value }); drawWhen(); });
+watchChanged.push(drawWhen);
+/* ③ 살 때 순서(2026-11-21). 손 관리 사실, 출처 2곳 이상:
+   - 토허 허가 신청 → 허가 → 계약 → 잔금 → 등기, 무허가 계약은 무효·처벌: 서울시 주택분야 누리집(news.seoul.go.kr/citybuild/?p=512421), 비즈워치 2025-03-28, 다음(뉴스1) 2025-03-29
+   - 등기일부터 2년 실거주, 그동안 임대·매도 불가(세입자 있으면 전세 끝난 뒤에야 실거주): 비즈워치 2025-03-28, 다음 2025-03-29, 서울시 누리집
+   - 실거래 신고·자금조달계획서 계약 30일 안, 규제지역은 금액과 상관없이 계획서: 뉴시스 2025-10-15(10·15 대책), 파이낸셜뉴스 2025-10-15, 부동산거래신고법(30일)
+   - 주담대 한도 15억 이하 6억·25억 이하 4억·초과 2억, 규제지역 LTV 40%(생애최초 70%): collector/policy.py S_LOAN_1015·S_LOAN_0627 */
+(function buySteps() {
+  const S = [['예산·대출 미리 보기', '은행 가심사로 한도·금리 확인(DSR 포함). 주담대는 15억 이하 6억·25억 이하 4억·넘으면 2억(10·15 대책)'],
+    ['토지거래허가 받기', '계약 전에 구청에 허가 신청 → 허가 뒤 계약. 허가 없이 한 계약은 효력 없음'],
+    ['계약 · 계약금', '등기부·건축물대장 확인, 세입자 있으면 전세 끝나는 날(그 뒤에야 실거주 가능)'],
+    ['실거래 신고 · 자금조달계획서', '계약 30일 안. 규제지역은 금액과 상관없이 계획서 제출(증빙 서류는 구청 안내 확인)'],
+    ['대출 실행 · 잔금 · 등기', '잔금일에 소유권 이전 등기'],
+    ['전입 · 실거주', '등기일부터 2년 직접 거주, 그동안 임대·매도 안 됨']];
+  const done = store.get('v2-steps', []);
+  $('#pStepList').innerHTML = S.map(([t, d], i) => `<label style="display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--line);cursor:pointer"><input type="checkbox" data-i="${i}"${done.includes(i) ? ' checked' : ''} style="margin-top:3px"><span><b style="font-size:14px">${i + 1}. ${t}</b><br><span class="muted" style="font-size:12.5px">${d}</span></span></label>`).join('');
+  $('#pStepList').addEventListener('change', () => store.set('v2-steps', $$('#pStepList input:checked').map(x => +x.dataset.i)));
+})();
 /* ⑤ 기다림 비용(2026-11-17 사용자): 관심 단지 고른 평형, 지난 1년 변화율이 그대로 이어진다고 '가정'하면 그때 가격 차이. 예측 아님(M1) */
 function drawWait() {
   const m = +(document.querySelector('#waitSeg [aria-pressed="true"]') || { dataset: { v: 12 } }).dataset.v;
@@ -2191,6 +2248,6 @@ function drawPeriods() {
 document.getElementById('perKind').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; perSt.kind = b.dataset.v;
   document.querySelectorAll('#perKind button').forEach(x => x.setAttribute('aria-pressed', x === b)); drawPeriods(); });
 watchChanged.push(drawPeriods);
-syncArea(); drawWatch(); window.runBudget(); drawMove(); drawPeriods(); drawWait(); drawToday(); drawDrops(); drawRise();
+syncArea(); drawWatch(); window.runBudget(); drawMove(); drawPeriods(); drawWait(); drawToday(); drawDrops(); drawRise(); drawWhen();
 if (location.hash.startsWith('#ask=')) importAskHash(); else go((location.hash || '').slice(1) || store.get('v2-tab', 'home'));
 </script>
