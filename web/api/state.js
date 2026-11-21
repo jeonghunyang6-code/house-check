@@ -1,7 +1,7 @@
 // 개인 기록 읽기·쓰기 (user_state, 0068). HC_KEY 를 아는 요청만. Vercel 서버 함수(Node)
 // 환경 변수: DATABASE_URL(Supabase), HC_KEY(사용자가 정한 비밀 문구) — site.yml 이 배포 때 넣는다
 const { Client } = require('pg');
-const KEYS = /^v2-(watch2|visits|naver|nmap|area)$/;
+const KEYS = /^v2-(watch2|visits|naver|nmap|area|xlinks)$/;
 
 module.exports = async (req, res) => {
   if (!process.env.HC_KEY || req.headers['x-hc-key'] !== process.env.HC_KEY) return res.status(401).json({ error: 'key' });
