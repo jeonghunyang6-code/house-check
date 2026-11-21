@@ -82,10 +82,17 @@ def summary_sql(month: str, regions: list[str], sums: list[dict], keep: bool = T
         stmts.append(f"INSERT INTO rent_region_month ({', '.join(REGION_COLUMNS)}) VALUES " + ", ".join(rr) + ";")
     if not keep:
         return stmts
-    stmts.append(f"DELETE FROM rent_monthly WHERE contract_month = {lit(month)} AND region_code IN ({rl});")
+    # 2026-11-21: 매일 그 달을 통째로 지우고 다시 넣어 빈 자리(죽은 행)가 쌓였다(이틀에 4만여 개) → 없어진 단지·면적군만 지우고, 값이 바뀐 행만 고쳐 쓴다
+    keys = ", ".join(f"({lit(s['apt_seq'])}, {lit(s['area_group'])})" for s in sums)
+    stmts.append(f"DELETE FROM rent_monthly WHERE contract_month = {lit(month)} AND region_code IN ({rl})"
+                 + (f" AND (apt_seq, area_group) NOT IN ({keys});" if sums else ";"))
+    cols = [c for c in SUMMARY_COLUMNS if c not in ("apt_seq", "area_group", "contract_month")]
+    upd = ", ".join(f"{c} = EXCLUDED.{c}" for c in cols)
+    diff = "(" + ", ".join(f"rent_monthly.{c}" for c in cols) + ") IS DISTINCT FROM (" + ", ".join(f"EXCLUDED.{c}" for c in cols) + ")"
     vals = ["(" + ", ".join(lit(s[c]) for c in SUMMARY_COLUMNS) + ")" for s in sums]
     for i in range(0, len(vals), CHUNK):
-        stmts.append(f"INSERT INTO rent_monthly ({', '.join(SUMMARY_COLUMNS)}) VALUES\n" + ",\n".join(vals[i:i + CHUNK]) + ";")
+        stmts.append(f"INSERT INTO rent_monthly ({', '.join(SUMMARY_COLUMNS)}) VALUES\n" + ",\n".join(vals[i:i + CHUNK])
+                     + f"\nON CONFLICT (apt_seq, area_group, contract_month) DO UPDATE SET {upd} WHERE {diff};")
     return stmts
 
 

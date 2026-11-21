@@ -223,3 +223,23 @@ def test_fetch_retry_only_5xx():
         assert False
     except ApiError as e:
         assert str(e) == "HTTP 400" and waits == [30]      # 4xx 는 다시 안 함
+
+
+def test_summary_sql_rewrites_only_changed():
+    """2026-11-21: 같은 달을 다시 계산해도 값이 같은 행은 다시 쓰지 않고(빈 자리 X), 없어진 단지는 지우고, 바뀐 단지만 고친다."""
+    if not URL:
+        return
+    db = _db()
+    from jobs.rent_archive import summary_sql
+    rows = _rows("11680", "202609")
+    run = (lambda rs: db.query("\n".join(["BEGIN;", *summary_sql("202609", ["11680"], summarize(rs)), "COMMIT;"])))
+    run(rows)
+    xmin = lambda: {(r["apt_seq"], r["area_group"]): r["x"] for r in select(db, "SELECT apt_seq, area_group, xmin::text AS x FROM rent_monthly")}
+    a = xmin()
+    run(rows)
+    assert xmin() == a
+    keys = sorted(a)
+    gone = keys[0]
+    run([r for r in rows if r["apt_seq"] != gone[0]])                 # 한 단지가 빠짐
+    b = xmin()
+    assert all(k[0] != gone[0] for k in b) and b and all(b[k] == a[k] for k in b)
