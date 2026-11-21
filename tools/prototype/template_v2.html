@@ -127,6 +127,19 @@ svg.chart:not(.map) text { fill: var(--ink-3); font-size: 10px; font-family: var
 .dtop { position: sticky; top: 0; z-index: 2; background: var(--bg); padding-block: calc(10px + env(safe-area-inset-top, 0px)) 8px; display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; }
 .icon-btn { font: inherit; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 10px; padding: 6px 10px; cursor: pointer; font-size: 14px; }
 .icon-btn[aria-pressed="true"] { background: var(--accent); color: var(--on-strong); border-color: var(--accent); }
+/* 상세 탭 바로가기(2026-11-21 A안): 다른 사이트 단지 페이지 링크. 글을 가져오지 않고 링크만 */
+.xl { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.xl .lb { font-size: var(--fs-note); color: var(--ink-3); margin-right: 2px; }
+.xl a { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--ink); text-decoration: none; border: 1px solid var(--line); background: var(--sunk); border-radius: 999px; padding: 4px 8px; white-space: nowrap; }
+.xl a .m { font-size: 11px; color: var(--ink-3); }
+.xl a.ok .m { color: var(--accent); }
+.xl .set { margin-left: auto; font-size: 15px; color: var(--ink-3); background: none; border: 0; cursor: pointer; padding: 2px 0 2px 2px; }
+.xled { margin-top: 8px; display: grid; gap: 6px; }
+.xled[hidden] { display: none; }
+.xled .r { display: flex; gap: 6px; }
+.xled input { flex: 1; min-width: 0; font: inherit; font-size: 13px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); }
+.xled .sv { font-size: var(--fs-note); color: var(--ink-3); display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.xled .sv button { background: none; border: 0; color: var(--ink-3); cursor: pointer; padding: 0 2px; font: inherit; }
 .dtop h1 { font-size: 18px; margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .checks { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .checks div { display: grid; grid-template-columns: 18px 1fr; gap: 6px; align-items: start; font-size: 13px; line-height: 1.4; }
@@ -1402,6 +1415,37 @@ watchChanged.push(drawWatch);
 
 /* ───── ④ 상세: 관심 단지 매일 보기 ───── */
 let dSeq = null;
+/* 바로가기(2026-11-21 사용자 A안): 네이버부동산·호갱노노(이야기 탭)·아실. 커뮤니티 글은 가져오지 않고 링크만(약관·접근 제한, CLAUDE.md).
+   세 사이트 모두 검색어가 주소에 안 남아(사용자가 준 주소로 확인) 기본은 네이버 통합검색 '사이트 이름 + 동 + 단지 이름'.
+   붙여넣은 주소에서 단지 번호만 뽑아 저장(v2-xlinks, 서버 동기화)하고 링크는 여기서 만든다 → 네이버 지도 위치 등 주소 뒤쪽이 바뀌어도,
+   사이트가 주소 형식을 바꿔도 아래 한 줄만 고치면 저장한 단지가 그대로 산다. 아실은 단지마다 고정 주소가 없어(asil.kr/asil/index.jsp) 검색만 */
+const XSITES = [
+  ['nv', '네이버부동산', /(^|\.)land\.naver\.com$/, (u) => (u.pathname.match(/\/complexes\/(\d+)/) || [])[1], (id) => `https://new.land.naver.com/complexes/${id}`],
+  // 호갱노노 이야기 탭: 사용자가 준 주소 /apt/<단지>/0/3/review (0·3 뜻은 확인 못 함 — 그 주소 그대로 따름)
+  ['hg', '호갱노노 이야기', /(^|\.)hogangnono\.com$/, (u) => (u.pathname.match(/^\/apt\/([A-Za-z0-9]+)/) || [])[1], (id) => `https://hogangnono.com/apt/${id}/0/3/review`],
+  ['as', '아실', /(^|\.)asil\.kr$/, () => null, null]];
+const escA = (x) => String(x).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function xlinks(seq) {
+  const X = store.get('v2-xlinks', {}), mine = X[seq] || {}, umd = infoOf(seq)[2] || '';
+  const q = (nm) => 'https://search.naver.com/search.naver?query=' + encodeURIComponent(`${nm} ${umd} ${cxName(seq)}`.replace(/\s+/g, ' ').trim());
+  const row = document.createElement('div'); row.className = 'xl';
+  row.innerHTML = `${XSITES.map(([k, nm, , , link]) => `<a href="${escA(mine[k] && link ? link(mine[k]) : q(nm.split(' ')[0]))}" target="_blank" rel="noopener noreferrer"${mine[k] ? ' class="ok"' : ''}>${nm} <span class="m">${mine[k] ? '↗' : '검색'}</span></a>`).join('')}<button type="button" class="set" title="단지 페이지 주소 고치기" aria-expanded="false">✎</button>`;
+  const ed = document.createElement('div'); ed.className = 'xled'; ed.hidden = true;
+  const saved = XSITES.filter(([k]) => mine[k]);
+  ed.innerHTML = `<div class="r"><input type="url" inputmode="url" placeholder="단지 페이지 주소 붙여넣기 (네이버부동산·호갱노노)"><button type="button" class="icon-btn">저장</button></div>
+    <div class="sv"><span class="msg">검색에서 이 단지 페이지를 연 뒤 주소를 붙여넣으면 다음부터 바로 가요.</span>${saved.map(([k, nm]) => `<span>${nm} 저장됨 <button type="button" data-k="${k}" title="지우기">×</button></span>`).join('')}</div>`;
+  $('#dHead').append(row, ed);
+  const btn = row.querySelector('.set'), inp = ed.querySelector('input'), msg = ed.querySelector('.msg');
+  btn.addEventListener('click', () => { ed.hidden = !ed.hidden; btn.setAttribute('aria-expanded', !ed.hidden); if (!ed.hidden) inp.focus(); });
+  const put = (k, v) => { const A = store.get('v2-xlinks', {}), m = { ...(A[seq] || {}) }; if (v) m[k] = v; else delete m[k]; if (Object.keys(m).length) A[seq] = m; else delete A[seq]; store.set('v2-xlinks', A); };
+  ed.querySelector('.icon-btn').addEventListener('click', () => {
+    let u = null; try { u = new URL(inp.value.trim()); } catch (e) {}
+    const s = u && /^https?:$/.test(u.protocol) && XSITES.find(([, , rx]) => rx.test(u.hostname)), id = s && s[3](u);
+    if (!id) { msg.textContent = s && s[0] === 'as' ? '아실은 단지마다 고정 주소가 없어 검색으로만 열어요.' : '네이버부동산·호갱노노 단지 페이지 주소만 저장할 수 있어요.'; return; }
+    put(s[0], id); drawDaily();
+  });
+  ed.querySelectorAll('.sv button').forEach(b => b.addEventListener('click', () => { put(b.dataset.k, null); drawDaily(); }));
+}
 function drawDaily() {
   const seqs = [...watch].filter(s => CXS[s] || main(s) || SR[s]);
   if (!seqs.includes(dSeq)) dSeq = seqs[0] || null;
@@ -1419,6 +1463,7 @@ function drawDaily() {
     <div class="kpis"><div class="kpi"><span class="k">${lite ? '최근 거래가' : mainAg + '㎡ 기준 시세'}</span><span class="v">${lite ? eok(lp && lp.p) : eok(ref)}</span>${lite && lp ? `<span class="d">${lp.k} · ${lp.d.slice(0, 2)}.${lp.d.slice(2, 4)}.${lp.d.slice(4)} · ${lp.ag}㎡</span>` : ''}</div><div class="kpi"><span class="k">최근 ${lite ? '1년' : '90일'} 거래</span><span class="v">${deals.length}건</span><span class="d">${mainAg}㎡ ${same.length}건${(RG[seq] || []).length ? ' · 분양권·입주권 포함' : ''}${TODAY_NEW.has(seq) ? ' · 오늘 새로 등록' : ''}</span></div></div>
     ${lite ? '<p class="src" style="margin:0">거래가 적거나 등기 전(입주권·분양권만 신고)이라 기준 시세를 정하지 못했습니다. 입주권 가격은 추가분담금이 빠져 실제 집값보다 낮게 보일 수 있습니다.</p>' : ''}`;
   $('#dOpen').addEventListener('click', () => openCx(seq));
+  xlinks(seq);
   // 90일 차트: 면적 같은 거래 점, 기준 시세 점선. 2026-10-28 사용자: 점 옆 가격, 가로축 달 이름, 기준은 위 한 줄(호가 그래프와 같게)
   // '6개월'(비밀 문구가 맞을 때만, web/api/deals.js. 2026-10-28 사용자: 1년 대신 6개월): 기준 시세는 주마다 그때 값(계단 점선), 점 색도 그 주 기준과 비교
   const dy = lite ? null : dealsY(seq, () => { if (dSeq === seq) { if (store.get('v2-dspan', '90') === '6m') drawDaily(); else drawAsks(); } });
