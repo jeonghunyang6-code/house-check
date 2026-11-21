@@ -1415,37 +1415,30 @@ watchChanged.push(drawWatch);
 
 /* ───── ④ 상세: 관심 단지 매일 보기 ───── */
 let dSeq = null;
-/* 바로가기(2026-11-21 사용자 A안): 네이버부동산·호갱노노(이야기 탭)·아실. 커뮤니티 글은 가져오지 않고 링크만(약관·접근 제한, CLAUDE.md).
-   세 사이트 모두 검색어가 주소에 안 남아(사용자가 준 주소로 확인) 저장 안 한 단지는 네이버부동산 = 네이버 통합검색 '네이버부동산 + 동 + 단지 이름',
-   호갱노노·아실 = 사이트 첫 화면(2026-11-21 사용자: 통합검색으로 가면 광고·네이버 화면만 나옴).
-   붙여넣은 주소에서 단지 번호만 뽑아 저장(v2-xlinks, 서버 동기화)하고 링크는 여기서 만든다 → 네이버 지도 위치 등 주소 뒤쪽이 바뀌어도,
-   사이트가 주소 형식을 바꿔도 아래 한 줄만 고치면 저장한 단지가 그대로 산다. 아실은 단지마다 고정 주소가 없어(asil.kr/asil/index.jsp) 검색만 */
-const XSITES = [
-  ['nv', '네이버부동산', /(^|\.)land\.naver\.com$/, (u) => (u.pathname.match(/\/complexes\/(\d+)/) || [])[1], (id) => `https://new.land.naver.com/complexes/${id}`],
-  // 호갱노노 이야기 탭: 사용자가 준 주소 /apt/<단지>/0/3/review (0·3 뜻은 확인 못 함 — 그 주소 그대로 따름)
-  ['hg', '호갱노노 이야기', /(^|\.)hogangnono\.com$/, (u) => (u.pathname.match(/^\/apt\/([A-Za-z0-9]+)/) || [])[1], (id) => `https://hogangnono.com/apt/${id}/0/3/review`, 'https://hogangnono.com/'],
-  ['as', '아실', /(^|\.)asil\.kr$/, () => null, null, 'https://asil.kr/asil/index.jsp']];
+/* 바로가기(2026-11-21 사용자 A안 → 같은 날 '호갱노노만'): 호갱노노 이야기 탭 링크. 커뮤니티 글은 가져오지 않고 링크만(약관·접근 제한, CLAUDE.md).
+   네이버부동산·아실은 사용자가 뺌(아실은 단지마다 고정 주소가 없음). 호갱노노는 검색어가 주소에 안 남아 저장 안 한 단지는 첫 화면.
+   붙여넣은 주소에서 단지 코드만 뽑아 저장(v2-xlinks {단지: {hg: 코드}}, 서버 동기화)하고 링크는 여기서 만든다 → 주소 형식이 바뀌면 HG_URL 한 줄만.
+   이야기 탭 경로 /0/3/review 는 사용자가 준 주소 그대로(0·3 뜻은 확인 못 함) */
+const HG_URL = (id) => `https://hogangnono.com/apt/${id}/0/3/review`, HG_ID = (u) => (u.pathname.match(/^\/apt\/([A-Za-z0-9]+)/) || [])[1];
 const escA = (x) => String(x).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 function xlinks(seq) {
-  const X = store.get('v2-xlinks', {}), mine = X[seq] || {}, umd = infoOf(seq)[2] || '';
-  const q = (nm) => 'https://search.naver.com/search.naver?query=' + encodeURIComponent(`${nm} ${umd} ${cxName(seq)}`.replace(/\s+/g, ' ').trim());
+  const id = (store.get('v2-xlinks', {})[seq] || {}).hg;
   const row = document.createElement('div'); row.className = 'xl';
-  row.innerHTML = `${XSITES.map(([k, nm, , , link, home]) => `<a href="${escA(mine[k] && link ? link(mine[k]) : home || q(nm))}" target="_blank" rel="noopener noreferrer"${mine[k] ? ' class="ok"' : ''}>${nm} <span class="m">${mine[k] ? '↗' : home ? '첫 화면' : '검색'}</span></a>`).join('')}<button type="button" class="set" title="단지 페이지 주소 고치기" aria-expanded="false">✎</button>`;
+  row.innerHTML = `<a href="${escA(id ? HG_URL(id) : 'https://hogangnono.com/')}" target="_blank" rel="noopener noreferrer"${id ? ' class="ok"' : ''}>호갱노노 이야기 <span class="m">${id ? '↗' : '첫 화면'}</span></a><button type="button" class="set" title="호갱노노 단지 주소 고치기" aria-expanded="false">✎</button>`;
   const ed = document.createElement('div'); ed.className = 'xled'; ed.hidden = true;
-  const saved = XSITES.filter(([k]) => mine[k]);
-  ed.innerHTML = `<div class="r"><input type="url" inputmode="url" placeholder="단지 페이지 주소 붙여넣기 (네이버부동산·호갱노노)"><button type="button" class="icon-btn">저장</button></div>
-    <div class="sv"><span class="msg">검색에서 이 단지 페이지를 연 뒤 주소를 붙여넣으면 다음부터 바로 가요.</span>${saved.map(([k, nm]) => `<span>${nm} 저장됨 <button type="button" data-k="${k}" title="지우기">×</button></span>`).join('')}</div>`;
+  ed.innerHTML = `<div class="r"><input type="url" inputmode="url" placeholder="호갱노노 단지 주소 붙여넣기"><button type="button" class="icon-btn">저장</button></div>
+    <div class="sv"><span class="msg">호갱노노에서 이 단지를 연 뒤 주소를 붙여넣으면 다음부터 이야기 탭으로 바로 가요.</span>${id ? '<span>저장됨 <button type="button" title="지우기">×</button></span>' : ''}</div>`;
   $('#dHead').append(row, ed);
   const btn = row.querySelector('.set'), inp = ed.querySelector('input'), msg = ed.querySelector('.msg');
   btn.addEventListener('click', () => { ed.hidden = !ed.hidden; btn.setAttribute('aria-expanded', !ed.hidden); if (!ed.hidden) inp.focus(); });
-  const put = (k, v) => { const A = store.get('v2-xlinks', {}), m = { ...(A[seq] || {}) }; if (v) m[k] = v; else delete m[k]; if (Object.keys(m).length) A[seq] = m; else delete A[seq]; store.set('v2-xlinks', A); };
+  const put = (v) => { const A = store.get('v2-xlinks', {}), m = { ...(A[seq] || {}) }; if (v) m.hg = v; else delete m.hg; if (Object.keys(m).length) A[seq] = m; else delete A[seq]; store.set('v2-xlinks', A); };
   ed.querySelector('.icon-btn').addEventListener('click', () => {
     let u = null; try { u = new URL(inp.value.trim()); } catch (e) {}
-    const s = u && /^https?:$/.test(u.protocol) && XSITES.find(([, , rx]) => rx.test(u.hostname)), id = s && s[3](u);
-    if (!id) { msg.textContent = s && s[0] === 'as' ? '아실은 단지마다 고정 주소가 없어 첫 화면으로 열어요.' : '네이버부동산·호갱노노 단지 페이지 주소만 저장할 수 있어요.'; return; }
-    put(s[0], id); drawDaily();
+    const v = u && /^https?:$/.test(u.protocol) && /(^|\.)hogangnono\.com$/.test(u.hostname) && HG_ID(u);
+    if (!v) { msg.textContent = '호갱노노 단지 주소(hogangnono.com/apt/…)만 저장할 수 있어요.'; return; }
+    put(v); drawDaily();
   });
-  ed.querySelectorAll('.sv button').forEach(b => b.addEventListener('click', () => { put(b.dataset.k, null); drawDaily(); }));
+  const del = ed.querySelector('.sv button'); if (del) del.addEventListener('click', () => { put(null); drawDaily(); });
 }
 function drawDaily() {
   const seqs = [...watch].filter(s => CXS[s] || main(s) || SR[s]);
