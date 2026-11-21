@@ -316,3 +316,22 @@ def test_metrics_d4_a5():
     db.query(render(TODAY, 120))
     assert select(db, "SELECT d4_cause FROM complex_metrics WHERE apt_seq = 'P' AND area_group = 84")[0]["d4_cause"] == "매매 하락"
     assert select(db, "SELECT region_name, phase, sido_level FROM complex_region_phase")[0] == {"region_name": "강남구", "phase": "하락장", "sido_level": False}
+
+
+def test_metrics_prev_high_not_rewritten():
+    """2026-11-21: 전고점이 그대로면 매일 다시 써서 빈 자리(죽은 행)를 만들지 않는다(DB 340 → 370MB)."""
+    if not URL:
+        return
+    db = _db()
+    db.query("INSERT INTO complexes (apt_seq, apt_name, region_code, umd_name, updated_at) VALUES ('A', 'a', '11680', '역삼동', '2026-10-01');")
+    _deal(db, "A", "2026-09-10", 120000)
+    _deal(db, "A", "2026-10-01", 125000)
+    db.query(render(TODAY, 90))
+    xmin = lambda: {r["deal_key"]: r["x"] for r in select(db, "SELECT deal_key, xmin::text AS x FROM deals")}
+    a = xmin()
+    db.query(render(TODAY, 90))
+    assert xmin() == a
+    _deal(db, "A", "2026-09-20", 130000)                 # 사이에 더 비싼 거래가 늦게 들어오면 그 뒤 거래만 고쳐 쓴다
+    db.query(render(TODAY, 90))
+    b = xmin()
+    assert [k for k in a if a[k] != b[k]] == [k for k in a if select(db, f"SELECT contract_date::text d FROM deals WHERE deal_key = {lit(k)}")[0]["d"] == "2026-10-01"]
