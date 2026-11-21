@@ -334,7 +334,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
         <div class="list" id="qList"></div>
       </div>
       <div class="card">
-        <h2>내 예산 <span class="pill ex">예시 값</span></h2>
+        <h2>내 예산 <span class="pill ex" id="bEx">예시 값</span></h2>
         <form class="form" id="budgetForm" autocomplete="off">
           <label for="b_seed">종잣돈 (만원)<input id="b_seed" inputmode="numeric" value="40000"></label>
           <label for="b_income">세후 월소득 (만원)<input id="b_income" inputmode="numeric" value="600"></label>
@@ -914,14 +914,17 @@ document.addEventListener('click', (e) => { const b = e.target.closest('.areaSeg
 const budget = { price: 0 };
 (function budgetCalc() {
   const ids = ['b_seed', 'b_income', 'b_reg', 'b_type', 'b_mort', 'b_rate', 'b_years', 'b_other', 'b_orate', 'b_orep', 'b_oyears'];
-  const saved = store.get('v2-budget3', null);
+  const saved = store.get('v2-budget3', null), def = Object.fromEntries(ids.map(k => [k, $('#' + k).value]));   // def = 화면에 적힌 예시 값
   if (S.g3_mortgage_rate && S.g3_mortgage_rate.value) $('#b_rate').value = Number(S.g3_mortgage_rate.value).toFixed(2);
   if (saved) ids.forEach(k => { if (saved[k] != null) $('#' + k).value = saved[k]; });
   const raw = (id) => String($('#' + id).value).replace(/,/g, '').trim();
   const num = (id) => { const v = parseFloat(raw(id)); return isFinite(v) ? v : 0; };
   const won = (v) => Math.round(v * 10000).toLocaleString() + '원';
-  function calc() {
-    store.set('v2-budget3', Object.fromEntries(ids.map(k => [k, $('#' + k).value])));
+  const exOff = () => { const v = store.get('v2-budget3', null); if (v && ids.some(k => k !== 'b_rate' && v[k] != null && String(v[k]) !== String(def[k]))) $('#bEx').style.display = 'none'; };
+  exOff();   // 예시 값과 다른 숫자가 저장돼 있으면 '예시 값' 표시를 뗀다(예전엔 열 때마다 예시 값도 저장됐음)
+  function calc(e) {
+    // 2026-11-21: 예산도 서버 저장(모든 기기, web/sync.js). 직접 고칠 때만(e = 입력 이벤트) 저장 → 예시 값이 서버에 올라가거나 열 때마다 쓰지 않게
+    if (e) { const v = Object.fromEntries(ids.map(k => [k, $('#' + k).value])); if (JSON.stringify(v) !== JSON.stringify(store.get('v2-budget3', null))) { store.set('v2-budget3', v); exOff(); } }
     const seed = num('b_seed'), inc = num('b_income'), reg = $('#b_reg').value === '1', first = $('#b_type').value === 'first';
     const want = raw('b_mort') === '' ? Infinity : num('b_mort'), rate = num('b_rate'), yrs = Math.max(1, num('b_years'));
     const other = num('b_other'), [oPay, oInt] = Calc.other(other, num('b_orate'), num('b_oyears'), $('#b_orep').value);

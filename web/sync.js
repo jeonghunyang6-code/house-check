@@ -1,7 +1,7 @@
 /* 웹 화면 저장 동기화: 처음 한 번 '주소?k=비밀문구' 로 열면 이 기기에 기억 → 서버(user_state)의 기록을 읽어 와 화면 기록으로 쓰고,
    바뀔 때마다 서버에 저장(store.set → hcSync). 비밀 문구가 없거나 틀리면 이 기기에만 저장(시안과 같음). build_v2.py --web 이 머리에 넣는다 */
 (function () {
-  var K = 'hc-key', SYNC = /^v2-(watch2|visits|naver|nmap|area|xlinks)$/, key = null;
+  var K = 'hc-key', SYNC = /^v2-(watch2|visits|naver|nmap|area|xlinks|budget3)$/, key = null;
   try { var q = new URLSearchParams(location.search).get('k'); if (q) { localStorage.setItem(K, q); history.replaceState(null, '', location.pathname); } key = localStorage.getItem(K); } catch (e) {}
   var W = window.HC_WEB = { key: key, ok: false };
   if (!key) return;
