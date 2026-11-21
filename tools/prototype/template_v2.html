@@ -39,6 +39,11 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .top h1 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
 .top .asof { font-size: 12px; color: var(--ink-3); white-space: nowrap; }
 .tab { display: grid; gap: 14px; padding-block: 4px 20px; }
+.mpane { display: grid; gap: 0; }   /* 2026-11-21 시장 탭 A안: '시장 자세히' 탭 묶음 */
+.mpane[hidden] { display: none; }
+.msub { display: grid; gap: 10px; min-width: 0; }
+.msub + .msub { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.msub h2 { font-size: 15px; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 10px; min-width: 0; }
 .card h2 { font-size: 16px; margin: 0; font-weight: 700; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .card h2 small { font-size: 12px; font-weight: 400; color: var(--ink-3); }
@@ -274,7 +279,11 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
         <div class="sig" id="sigs"></div>
         <div class="dotlegend"><span><i style="background:var(--good)"></i>안정</span><span><i style="background:var(--warn)"></i>주의</span><span><i style="background:var(--bad)"></i>경고</span><span><i style="border:1.5px solid var(--c3);box-sizing:border-box"></i>참고(기준 없음)</span></div>
       </div>
-      <div class="card">
+      <div class="card" id="mBox">
+        <h2>시장 자세히</h2>
+        <div class="seg" id="mSeg"><button type="button" data-v="p" aria-pressed="true">가격</button><button type="button" data-v="s" aria-pressed="false">심리·거래</button><button type="button" data-v="m" aria-pressed="false">내 거래</button><button type="button" data-v="g" aria-pressed="false">정책</button></div>
+        <div class="mpane" data-p="p">
+      <div class="msub">
         <h2>이번 주 가격 <small id="wkDate"></small></h2>
         <div class="row" style="justify-content:space-between">
           <div class="seg" id="wkScope"><button type="button" data-v="mine" aria-pressed="true">관심권</button><button type="button" data-v="seoul" aria-pressed="false">서울</button><button type="button" data-v="sudo" aria-pressed="false">수도권</button></div>
@@ -287,27 +296,41 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
         <details id="wkAll" style="margin-top:6px"><summary class="muted" style="font-size:12.5px;cursor:pointer">전체 순위</summary><div class="rank" id="wkAllRows" style="margin-top:6px"></div></details>
         <p class="src" id="wkSrc"></p>
       </div>
-      <div class="card">
+      <div class="msub">
         <h2>기간별 변동 <small id="perDate"></small></h2>
         <div class="seg" id="perKind"><button type="button" data-v="t" aria-pressed="true">매매</button><button type="button" data-v="j" aria-pressed="false">전세</button></div>
         <div id="perTab"></div>
         <p class="src" id="perSrc"></p>
       </div>
-      <div class="card">
+        </div>
+        <div class="mpane" data-p="s" hidden>
+      <div class="msub" id="supCard">
+        <h2>매수심리 <small id="supDate"></small></h2>
+        <p class="muted" style="margin:0;font-size:13.5px">100보다 크면 사려는 사람이 더 많고, 작으면 팔려는 사람이 더 많아요.</p>
+        <div class="kpis" id="supKpis" style="grid-template-columns:repeat(3,1fr)"></div>
+        <div class="seg" id="supSpan"><button type="button" data-v="52" aria-pressed="false">1년</button><button type="button" data-v="156" aria-pressed="true">3년</button><button type="button" data-v="0" aria-pressed="false">2012~</button></div>
+        <svg class="chart" id="supChart" viewBox="0 0 340 170" role="img" aria-label="매매수급지수 추이"></svg>
+        <p class="src">한국부동산원 주간 아파트 매매수급지수(중개업소 설문, 0~200). 구 단위는 발표하지 않아 강동은 동남권(강동·송파·강남·서초)으로 봐요. 작가 기준이 없는 지표라 판정은 붙이지 않아요.</p>
+      </div>
+      <div class="msub">
         <h2>서울 거래량 <small>최근 2년, 계약월 기준</small></h2>
         <svg class="chart" id="volChart" viewBox="0 0 340 150" role="img" aria-label="서울 월별 아파트 매매 거래량"></svg>
         <div class="legend"><span><i style="background:var(--c1)"></i>신고 끝난 달</span><span><i style="background:var(--c1);opacity:.35"></i>아직 신고 중</span><span><i style="background:none;border:1px dashed var(--c1);height:8px"></i>보정 추정</span></div>
         <p class="src" id="volNote"></p>
       </div>
-      <div class="card">
+      <div class="msub">
         <h2>가격대별 1년 변화 <small>84㎡로 환산</small></h2>
         <div class="seg" id="pbScope"><button type="button" data-v="서울" aria-pressed="true">서울</button><button type="button" data-v="경기·인천" aria-pressed="false">경기·인천</button></div>
         <div class="list" id="pbBars" style="gap:8px"></div>
         <p class="src">단지별 12개월 기준 시세 변화의 가격대별 중앙값.</p>
       </div>
-      <div class="card"><h2>나와 관련된 거래 <small>최근 30일 계약</small></h2><div id="myDeals" style="display:grid;gap:12px"></div>
+        </div>
+        <div class="mpane" data-p="m" hidden>
+      <div class="msub"><h2>나와 관련된 거래 <small>최근 30일 계약</small></h2><div id="myDeals" style="display:grid;gap:12px"></div>
         <p class="src">국토부 실거래가(중개). 급매 = 그 단지·평형 기준 시세보다 5% 이상 싸게, 비싸게 = 3% 이상 비싸게. 최근 거래는 신고 기한(30일) 전이라 더 늘어납니다.</p></div>
-      <div class="card">
+        </div>
+        <div class="mpane" data-p="g" hidden>
+      <div class="msub">
         <h2>정책·규제 <small>발표 뒤 서울 집값</small></h2>
         <div class="row" style="gap:10px" id="polLegend"></div>
         <div id="polNew"></div>
@@ -319,6 +342,8 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
           <p class="src">토허제가 시군구 전체에 새로 걸린 날 기준, 지정 15주 뒤 R-ONE 매매지수 누적 변화 중앙값.</p>
         </div></details>
         <p class="src">오른쪽 = 서울 주간 매매 변동률 평균, 발표 전 4주 → 뒤 8주. 금리 등 다른 일도 섞여 있어 정책만의 효과는 아닙니다. 줄을 누르면 내용이 펼쳐집니다.</p>
+      </div>
+        </div>
       </div>
       <p class="fontchk" id="fontChk"></p>
     </div>
@@ -814,6 +839,46 @@ const PSHORT = { '2026-10-01|세금': '조정지역 일시적 2주택 처분 3�
   '2026-05-12|토허': '토허 실거주 의무 유예 확대', '2026-05-10|세금': '다주택 양도세 중과 재시행', '2025-10-29|대출': '1주택자 전세대출 이자 DSR 반영',
   '2025-10-20|토허': '서울 전역·경기 12곳 토허제', '2025-10-16|규제지역': '서울 전역·경기 12곳 규제지역', '2025-10-16|대출': '10·15 주담대 한도 축소·LTV 40%',
   '2025-09-08|대출': '9·7 규제지역 LTV 40%·전세대출 2억', '2025-07-01|대출': '스트레스 DSR 3단계', '2025-06-28|대출': '6·27 수도권 주담대 6억 한도', '2025-03-24|토허': '강남3구·용산 토허제', '2025-02-13|토허': '잠실·삼성·대치·청담 토허 해제' };
+/* 시장 탭 A안(2026-11-21 사용자): 매일 볼 3개(요약·오늘 볼 것·핵심 신호) 아래는 '시장 자세히' 탭 하나만 펼침. 고른 탭은 이 기기에 기억 */
+(function marketTabs() {
+  const pick = (v) => { $$('#mSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === v)); $$('#mBox .mpane').forEach(p => { p.hidden = p.dataset.p !== v; }); };
+  pick(store.get('v2-mtab', 'p'));
+  $('#mSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; store.set('v2-mtab', b.dataset.v); pick(b.dataset.v); });
+})();
+/* 매수심리(2026-11-21 사용자): R-ONE 주간 매매수급지수 서울·수도권·동남권. 100 = 사려는 사람과 팔려는 사람이 비슷. 작가 기준 없음 → 숫자·흐름만 */
+(function supply() {
+  const SUP = D.v2_supply || {}, COL = { '서울': 'var(--c1)', '수도권': 'var(--c3)', '동남권': 'var(--c2)' }, ks = Object.keys(SUP).filter(k => (SUP[k] || []).length);
+  if (!ks.length) { $('#supCard').hidden = true; return; }
+  const streak = (s) => { let n = 0, dir = 0; for (let i = s.length - 1; i > 0; i--) { const d = Math.sign(s[i][1] - s[i - 1][1]); if (!d) break; if (!dir) dir = d; if (d !== dir) break; n++; } return [n, dir]; };
+  const last = SUP['서울'] ? SUP['서울'][SUP['서울'].length - 1][0] : SUP[ks[0]][SUP[ks[0]].length - 1][0];
+  $('#supDate').textContent = `매매수급지수 · ${last.slice(5).replace('-', '.')} 주`;
+  $('#supKpis').innerHTML = ks.map(k => { const s = SUP[k], v = s[s.length - 1][1], [n, dir] = streak(s);
+    return `<div class="kpi"><span class="k" style="justify-content:flex-start;gap:0"><i style="display:inline-block;width:9px;height:3px;border-radius:2px;background:${COL[k]};margin:0 5px 3px 0"></i>${k}</span><span class="v">${v.toFixed(1)}</span>
+      <span class="d">${k === '동남권' ? '강동·송파·강남·서초<br>' : ''}${v >= 100 ? '<b style="color:var(--up2)">사려는 쪽 많음</b>' : '<b style="color:var(--dn2)">팔려는 쪽 많음</b>'}${n ? ` · ${n}주째 ${dir > 0 ? '오름' : '내림'}` : ''}</span></div>`; }).join('');
+  const draw = (wk) => {
+    $$('#supSpan button').forEach(b => b.setAttribute('aria-pressed', +b.dataset.v === wk));
+    const svg = $('#supChart'); svg.innerHTML = '';
+    const S = Object.fromEntries(ks.map(k => [k, wk ? SUP[k].slice(-wk) : SUP[k]])), base = S['서울'] || S[ks[0]], n = base.length, d0 = base[0][0];
+    const vals = ks.flatMap(k => S[k].filter(r => r[0] >= d0).map(r => r[1])), lo = Math.min(60, Math.floor(Math.min(...vals) / 10) * 10), hi = Math.max(120, Math.ceil(Math.max(...vals) / 10) * 10);
+    const L = 30, R = 46, T = 8, B = 18, W = 340, H = 170, t0 = new Date(d0).getTime(), t1 = new Date(base[n - 1][0]).getTime(), x = (d) => L + (W - L - R) * (new Date(d).getTime() - t0) / ((t1 - t0) || 1), y = (v) => T + (H - T - B) * (1 - (v - lo) / (hi - lo));
+    el('rect', { x: L, y: y(hi), width: W - L - R, height: y(100) - y(hi), fill: 'var(--up2)', opacity: 0.06 }, svg);
+    el('rect', { x: L, y: y(100), width: W - L - R, height: y(lo) - y(100), fill: 'var(--dn2)', opacity: 0.06 }, svg);
+    for (let v = lo; v <= hi; v += 20) { el('line', { x1: L, x2: W - R, y1: y(v), y2: y(v), stroke: v === 100 ? 'var(--ink-2)' : 'var(--line)', ...(v === 100 ? { 'stroke-dasharray': '3 3' } : {}) }, svg); txt(svg, L - 4, y(v) + 3, v, 'end', { style: `font-size:9px;fill:var(--ink-3)${v === 100 ? ';font-weight:700' : ''}` }); }
+    if (!(lo <= 100 && 100 <= hi && (100 - lo) % 20)) {} else { el('line', { x1: L, x2: W - R, y1: y(100), y2: y(100), stroke: 'var(--ink-2)', 'stroke-dasharray': '3 3' }, svg); }
+    const y0 = +d0.slice(0, 4), y1 = +base[n - 1][0].slice(0, 4), step = y1 - y0 > 6 ? 2 : 1;
+    for (let yy = y0 + 1; yy <= y1; yy += step) txt(svg, x(`${yy}-01-01`), H - 4, `${String(yy).slice(2)}년`, 'middle', { style: 'font-size:9px;fill:var(--ink-3)' });
+    [['2025-06-28', '6·27'], ['2025-10-16', '10·15']].forEach(([d, t]) => { if (d < d0) return; el('line', { x1: x(d), x2: x(d), y1: T, y2: H - B, stroke: 'var(--ink-3)', 'stroke-dasharray': '1 3' }, svg);
+      txt(svg, x(d) + (t === '6·27' ? -2 : 2), T + 8, t, t === '6·27' ? 'end' : 'start', { style: 'font-size:8.5px;fill:var(--ink-3)' }); });
+    const used = [];
+    ['수도권', '동남권', '서울'].filter(k => S[k]).forEach(k => { const s = S[k].filter(r => r[0] >= d0);
+      el('path', { d: s.map((r, i) => (i ? 'L' : 'M') + x(r[0]).toFixed(1) + ',' + y(r[1]).toFixed(1)).join(''), fill: 'none', stroke: COL[k], 'stroke-width': k === '서울' ? 2.2 : 1.6, 'stroke-linejoin': 'round' }, svg);
+      let ly = y(s[s.length - 1][1]) + 3; while (used.some(u => Math.abs(u - ly) < 10)) ly += 10; used.push(ly); txt(svg, W - R + 3, ly, `${k} ${s[s.length - 1][1].toFixed(0)}`, 'start', { style: `font-size:9.5px;font-weight:700;fill:${COL[k]}` }); });
+    const halo = ';paint-order:stroke;stroke:var(--surface);stroke-width:3px';   // 선 위에서도 읽히게
+    txt(svg, L + 3, y(100) - 4, '사려는 쪽 많음 ↑', 'start', { style: 'font-size:9px;fill:var(--up2)' + halo }); txt(svg, L + 3, y(100) + 11, '팔려는 쪽 많음 ↓', 'start', { style: 'font-size:9px;fill:var(--dn2)' + halo });
+  };
+  let wk = 156; draw(wk);
+  $('#supSpan').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; wk = +b.dataset.v; draw(wk); });
+})();
 (function policyList() {
   const wk = (D.v2_wk || []).filter(r => r.cls_id === 50008).map(r => [new Date(r.d).getTime(), +r.v]);
   const ch = wk.slice(1).map((r, i) => [r[0], (r[1] / wk[i][1] - 1) * 100]);

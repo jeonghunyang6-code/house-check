@@ -227,6 +227,9 @@ out['e6_targets'] = select(db, "SELECT apt_seq, rank, target_seq, ratio_now, gap
 # 시안 v2 (template_v2.html): 주간 시계열·후보 단지 위치·최근 90일 거래·주변 시설 좌표·정비구역 전체
 out['v2_wk'] = select(db, """SELECT cls_id, week_date::text d, value v FROM rone_weekly WHERE stat = 'sale' AND cls_id IN (50008, 50002)
  AND week_date >= '2023-06-01' ORDER BY 1, 2""")
+# 매수심리(2026-11-21 사용자): R-ONE 주간 매매수급지수. 구 단위는 발표 안 함 → 강동은 동남권(50015). [날짜, 값]
+out['v2_supply'] = {nm: [[r['d'], round(float(r['v']), 1)] for r in select(db, f"SELECT week_date::text d, value v FROM rone_weekly WHERE stat = 'sale_supply' AND cls_id = {cid} ORDER BY 1")]
+                    for nm, cid in (('서울', 50008), ('수도권', 50002), ('동남권', 50015))}
 out['v2_info'] = {r['apt_seq']: [r['apt_name'], r['region_code'], r['umd_name'], r['lat'] and round(float(r['lat']), 5), r['lng'] and round(float(r['lng']), 5),
                    r['station_name'], r['station_m'], r['h2_cbd_min'], r['h2_ybd_min'], r['h2_gbd_min'], r['mart_name'], r['mart_m'], r['hosp_name'], r['hosp_m'],
                    r['mid_zone'], r['build_year'], r['hh'], r['park_name'], r['park_kind'], r['park_area'] and round(float(r['park_area'])), r['park_m'],
