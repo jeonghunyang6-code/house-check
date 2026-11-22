@@ -873,7 +873,7 @@ const PSHORT = { '2026-10-01|세금': '조정지역 일시적 2주택 처분 3�
    A4 급매 체결 비중 — 서울 최근 4주 중개 거래(1층 제외) 중 직전 시세보다 5% 이상 싸게. 급매가 소진되고 하단이 오르면 반등(📖 p.245~247).
       작가 숫자 기준 없음 → 색 없이 jobs/market.py 의 증가·감소·유지(그 전 4주 대비)만. 최근 거래는 신고 기한(30일) 전이라 늘어난다.
    D5 신규 전세 계약 감소 — 국토부 전월세 신고 중 신규, 1년 전 같은 석 달 대비. 신규 감소 + 전세지수 상승이면 '충족' = 매매 상승 압력(collector/market.py).
-   화면은 '충족' 대신 '집값 오를 압력'(2026-11-22 사용자: 충족이 와닿지 않음). 급매 정의 줄은 화면에서 뺌(급매 = 직전 시세보다 5% 이상 싸게) */
+   화면은 '충족' 대신 '상승 압력'(2026-11-22 사용자: 충족이 와닿지 않음). 급매 정의 줄은 화면에서 뺌(급매 = 직전 시세보다 5% 이상 싸게) */
 (function rebound() {
   const a4 = S.a4_quick_sale || {}, d5 = S.d5_new_jeonse || {};
   const n = (t, re) => { const m = String(t || '').match(re); return m ? +m[1].replace(/,/g, '') : null; };
@@ -890,7 +890,7 @@ const PSHORT = { '2026-10-01|세금': '조정지역 일시적 2주택 처분 3�
   const per = (String(d5.detail || '').match(/20(\d\d)\.(\d\d)~20\d\d\.(\d\d)/) || []).slice(1);
   if (dNow != null) {
     const on = d5.state === '충족', mx = Math.max(dNew || 0, dOld || 0) * 1.05 || 1, k = (v) => (v / 1000).toFixed(1) + '천';
-    parts.push(`<div style="display:grid;gap:8px;${parts.length ? 'padding-top:12px;border-top:1px solid var(--line)' : ''}">${head('신규 전세 계약', per.length ? `서울 ${per[0]}.${per[1]}~${per[2]}월` : '서울', sgn(dNow, 0), `<span class="pill ${on ? 'warn' : 'none'}">${on ? '집값 오를 압력' : d5.state === '미충족' ? '압력 약함' : (d5.state || '')}</span>`, on ? 'var(--warn)' : '')}
+    parts.push(`<div style="display:grid;gap:8px;${parts.length ? 'padding-top:12px;border-top:1px solid var(--line)' : ''}">${head('신규 전세 계약', per.length ? `서울 ${per[0]}.${per[1]}~${per[2]}월` : '서울', sgn(dNow, 0), `<span class="pill ${on ? 'warn' : 'none'}">${on ? '상승 압력' : d5.state === '미충족' ? '압력 약함' : (d5.state || '')}</span>`, on ? 'var(--warn)' : '')}
       ${dOld != null ? bar(dOld, mx, 'var(--c3)', '1년 전', k(dOld)) : ''}${dNew != null ? bar(dNew, mx, 'var(--c1)', '올해', k(dNew)) : ''}
       <p class="muted" style="margin:0;font-size:12.5px">${on ? `전세 구하기 어려워져(전세값 13주 ${sgn(dJ, 1)}) 사려는 사람이 늘 수 있어요` : '새 전세가 줄고 전세값까지 오르면 집값이 오를 압력이 돼요'}</p></div>`);
   }
