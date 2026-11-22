@@ -409,7 +409,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
           <div class="chips" id="fSort" aria-label="정렬"></div>
         </div></details>
         <div class="list" id="cList"></div>
-        <button type="button" class="more" id="cMore">20곳 더 보기</button>
+        <button type="button" class="more" id="cMore">10곳 더 보기</button>
         <p class="src">기준 시세가 예산의 80~100%인 단지.<br>세대수·출퇴근 시간을 모르는 단지는 조건 선택 시 제외.</p>
       </div>
     </div>
@@ -435,7 +435,9 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
         <p class="src">충족 = 전세가율 정상 · 월 거래 0.5%↑ · 22~23 하락기 버팀.<br>최저 호가는 저층·비선호 동일 수 있어요.</p>
       </div>
       <div class="card">
-        <h2>임장 기록 <span class="pill ex">이 기기에만 저장</span></h2>
+        <h2>임장 기록 <span class="pill ex" id="visitSave">이 기기에만 저장</span></h2>
+        <div class="notes" id="vList"></div>
+        <details class="more-f" id="visitBox"><summary>기록 남기기</summary><div class="body">
         <form class="form" id="visitForm" autocomplete="off">
           <label for="v_cx" style="grid-column:1/-1">단지<select id="v_cx"></select></label>
           <label for="v_date">다녀온 날<input id="v_date" type="date"></label>
@@ -451,8 +453,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
             <div class="chips" id="v_ok"></div></div>
           <label for="v_note" style="grid-column:1/-1">메모<input id="v_note" placeholder="예: 105동 남향 좋음, 호가 15.5억" style="text-align:left"></label>
           <button type="submit" class="more" style="grid-column:1/-1">기록 남기기</button>
-        </form>
-        <div class="notes" id="vList"></div>
+        </form></div></details>
       </div>
     </div>
   </section>
@@ -471,10 +472,11 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
         <h2>호가 매물 <small id="askAsof"></small></h2>
         <div class="kpis" id="askSum"></div>
         <div id="askLadder" style="margin-top:10px"></div>
+        <details class="more-f" id="askTrendWrap" hidden><summary>주마다 호가 흐름 (8주·6개월)</summary>
         <div id="askTrendBox" hidden>
           <div class="row" style="justify-content:space-between;align-items:center;margin:8px 0 2px;gap:8px"><p id="askTrendTitle" style="font-size:13.5px;margin:0"></p>
             <div class="seg" id="askSpan" style="flex:none"><button type="button" data-v="8w" aria-pressed="true">8주</button><button type="button" data-v="6m" aria-pressed="false">6개월</button></div></div>
-          <svg class="chart" id="askTrend" viewBox="0 0 340 168" role="img" aria-label="주마다 매매 호가"></svg><div id="askLegend" style="font-size:var(--fs-note);color:var(--ink-3);text-align:right;margin-top:2px"></div></div>
+          <svg class="chart" id="askTrend" viewBox="0 0 340 168" role="img" aria-label="주마다 매매 호가"></svg><div id="askLegend" style="font-size:var(--fs-note);color:var(--ink-3);text-align:right;margin-top:2px"></div></div></details>
         <div id="askList"></div>
         <details class="more-f" id="askPasteBox"><summary>네이버 부동산에서 붙여넣기</summary><div class="body">
           <textarea id="askPaste" rows="3" placeholder="'호가 저장' 버튼으로 복사한 내용을 붙여넣기" style="font:inherit;font-size:14px;width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:10px;padding:8px;background:var(--surface);color:var(--ink)"></textarea>
@@ -974,7 +976,7 @@ const PSHORT = { '2026-10-01|세금': '조정지역 일시적 2주택 처분 3�
 (function fontCheck() {
   // document.fonts 를 훑거나 check() 하면 그 자리에서 화면 배치를 다시 계산해 첫 화면이 약 0.3초 늦었다(2026-10-26) → 웹에서는 기록 저장 상태만, 첫 그림 뒤에
   const ok = () => !!(document.fonts && document.fonts.check && document.fonts.check('16px "IBM Plex Sans KR"', '가'));
-  const show = () => { $('#fontChk').textContent = (window.HC_WEB ? (HC_WEB.ok ? '기록: 서버 저장(모든 기기)' : HC_WEB.bad ? '기록: 비밀 문구가 달라 이 기기에만' : '기록: 이 기기에만') : (ok() ? '글꼴: IBM Plex Sans KR' : '글꼴: 기기 기본 글꼴')); };
+  const show = () => { $('#visitSave').textContent = window.HC_WEB && HC_WEB.ok ? '모든 기기에 저장' : '이 기기에만 저장'; $('#fontChk').textContent = (window.HC_WEB ? (HC_WEB.ok ? '기록: 서버 저장(모든 기기)' : HC_WEB.bad ? '기록: 비밀 문구가 달라 이 기기에만' : '기록: 이 기기에만') : (ok() ? '글꼴: IBM Plex Sans KR' : '글꼴: 기기 기본 글꼴')); };
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(show); setTimeout(show, 2500); requestAnimationFrame(() => setTimeout(show, 0));
 })();
 
@@ -1128,7 +1130,7 @@ const budget = { price: 0 };
   window.runBudget = calc;
 })();
 
-const cst = { region: '전체', area: '84형', phase: '지역 국면 전체', hh: '세대수 전체', age: '연식 전체', work: '직장 무관', min: '45분 이내', st: '역 거리 무관', sort: '급지순', shown: 20 };
+const cst = { region: '전체', area: '84형', phase: '지역 국면 전체', hh: '세대수 전체', age: '연식 전체', work: '직장 무관', min: '45분 이내', st: '역 거리 무관', sort: '급지순', shown: 10 };
 // 동남권: 서울 강남·서초·송파·강동 / 경기 성남(분당·수정·중원)·수원 영통(광교)·용인 수지·기흥·화성 동탄·하남
 const SE_SEOUL = ['11680', '11650', '11710', '11740'], SE_GG = ['41131', '41133', '41135', '41117', '41465', '41463', '41597', '41450'];
 const REGF = { '전체': () => true, '서울': (rc) => rc.startsWith('11'), '경기': (rc) => rc.startsWith('41'), '인천': (rc) => rc.startsWith('28'),
@@ -1169,16 +1171,16 @@ $('#cList').addEventListener('click', (e) => {
   const h = e.target.closest('.heart'); if (h) { toggleWatch(h.dataset.s); return; }
   const o = e.target.closest('.open'); if (o) openCx(candList[+o.dataset.i].seq);
 });
-const reset = (k) => (v) => { cst[k] = v; cst.shown = 20; drawCand(); };
+const reset = (k) => (v) => { cst[k] = v; cst.shown = 10; drawCand(); };
 chips('#fRegion', Object.keys(REGF), cst.region, reset('region')); chips('#fArea', Object.keys(AREAF), cst.area, reset('area'));
 chips('#fPhase', ['지역 국면 전체', '상승장', '보합장', '하락장'], cst.phase, reset('phase'));
 chips('#fHh', Object.keys(HHF), cst.hh, reset('hh')); chips('#fAge', Object.keys(AGEF), cst.age, reset('age'));
 cst.rec = store.get('v2-frec', true);
 const recBtn = () => { $('#fRec').innerHTML = `<button type="button" class="chip" aria-pressed="${cst.rec}">회복 지연·반등 없음 빼기</button><span class="muted" style="font-size:12px;align-self:center">작가: 사면 안 되는 단지</span>`; };
-recBtn(); $('#fRec').addEventListener('click', (e) => { if (!e.target.closest('button')) return; cst.rec = !cst.rec; store.set('v2-frec', cst.rec); recBtn(); cst.shown = 20; drawCand(); });
+recBtn(); $('#fRec').addEventListener('click', (e) => { if (!e.target.closest('button')) return; cst.rec = !cst.rec; store.set('v2-frec', cst.rec); recBtn(); cst.shown = 10; drawCand(); });
 chips('#fWork', Object.keys(WORK), cst.work, reset('work')); chips('#fMin', Object.keys(MINF), cst.min, reset('min'));
 chips('#fSt', Object.keys(STF), cst.st, reset('st')); chips('#fSort', Object.keys(SORTF), cst.sort, reset('sort'));
-$('#cMore').addEventListener('click', () => { cst.shown += 20; drawCand(); });
+$('#cMore').addEventListener('click', () => { cst.shown += 10; drawCand(); });
 /* 단지 검색: 이름·동 (띄어쓰기 무시, 2글자 이상) */
 let SEARCH_ = null;   // 검색 목록은 처음 찾을 때 만든다(첫 화면 약 0.1초, 2026-10-26)
 const searchList = () => SEARCH_ || (SEARCH_ = Object.entries(INFO).filter(([seq]) => !PM[seq]).map(([seq, i]) => [seq, (i[0] + ' ' + (i[2] || '') + ' ' + rn(i[1])).replace(/\s+/g, '')]).concat(Object.entries(SR).filter(([seq]) => !INFO[seq] && !PM[seq]).map(([seq, x]) => [seq, (x.n + ' ' + (x.kn || '') + ' ' + (x.umd || '') + ' ' + rn(x.rc)).replace(/\s+/g, '')])));
@@ -1381,7 +1383,7 @@ function factsHtml(seq) {
     const pj = all.filter(x => x.best && x.best[1] <= 1500).sort((a, b) => a.best[1] - b.best[1]), far = all.filter(x => !x.best && x.inReg);
     // 개통 목표(2026-11-11 사용자 요청): 전망 글에 '개통 목표 2028'·'2028-08'·'2028 하반기' 꼴이 있을 때만(언론사 2곳 이상 확인한 값, collector/projects.py)
     const tgt = (p) => { const m = (p.outlook || '').match(/개통 목표 (\d{4}(?:-\d{2})?(?: [상하]반기)?(?:~\d{4})?)/); return m ? ` <span class="muted nw" style="font-size:var(--fs-note)">· 개통 목표 ${m[1]}</span>` : ''; };
-    out.push(row('철도 호재', (pj.length ? pj.slice(0, 2).map(({ p, best: b }) => `<span class="pill ${PST[p.status] || 'none'}">${p.status}</span> ${p.name.split('(')[0]} ${b[0]}역${b[2] ? '(가칭)' : ''} <b>${Math.round(b[1]).toLocaleString()}m</b>${tgt(p)}`).join('<br>') : '<span class="muted">1.5km 안 없음</span>')
+    if (0) out.push(row('철도 호재', (pj.length ? pj.slice(0, 2).map(({ p, best: b }) => `<span class="pill ${PST[p.status] || 'none'}">${p.status}</span> ${p.name.split('(')[0]} ${b[0]}역${b[2] ? '(가칭)' : ''} <b>${Math.round(b[1]).toLocaleString()}m</b>${tgt(p)}`).join('<br>') : '<span class="muted">1.5km 안 없음</span>')
       + far.map(({ p }) => `<br><span class="pill ${PST[p.status] || 'none'}">${p.status}</span> ${p.name.split('(')[0]}${tgt(p)}`).join('')));   // 같은 시군구, 새 역 위치 미확인. 착공 뒤 들어가도 늦지 않다, 진짜 악재는 취소 📖 p.279~280. 새 역(가칭)은 기사에 나온 지명으로 잡은 대략 위치
   }
   const e = (POI.elem || [])[(D.v2_elemz || {})[seq]];
@@ -1609,7 +1611,7 @@ function drawDrops() {
       <span style="display:flex;align-items:center;gap:6px"><svg viewBox="0 0 200 22" style="width:200px;display:block;margin-top:4px" aria-hidden="true"><rect x="6" y="9" width="188" height="4" rx="2" fill="var(--line)"/><rect x="${6 + 188 * (Math.max(-20, g) + 20) / 20}" y="9" width="${188 * Math.min(20, -g) / 20}" height="4" fill="var(--accent)" opacity=".55"/><line x1="194" x2="194" y1="4" y2="18" stroke="var(--ink-2)" stroke-width="1.5"/><line x1="${6 + 188 * 15 / 20}" x2="${6 + 188 * 15 / 20}" y1="7" y2="15" stroke="var(--ink-3)" stroke-dasharray="2 2"/><circle cx="${6 + 188 * (Math.max(-20, g) + 20) / 20}" cy="11" r="4" fill="var(--accent)"/></svg><span class="muted" style="font-size:11px">최고가 ${eok(h)}</span></span>
       <span class="tags"><span class="pill" style="background:var(--accent-bg);color:var(--accent)">−${eok(h - p)} (${g.toFixed(0)}%)</span>${rg ? '<span class="pill good">등기</span>' : '<span class="pill none">등기 전</span>'}${watch.has(seq) ? '<span class="pill acc">관심</span>' : ''}</span></button>
       <span class="side"><span class="pr">${eok(p)}</span></span></div>`; };
-  $('#dropList').innerHTML = rows.length ? rows.slice(0, 10).map(row).join('') + (rows.length > 10 ? `<details class="more-f"><summary>나머지 ${rows.length - 10}건 보기</summary>${rows.slice(10).map(row).join('')}</details>` : '')
+  $('#dropList').innerHTML = rows.length ? rows.slice(0, 5).map(row).join('') + (rows.length > 5 ? `<details class="more-f"><summary>나머지 ${rows.length - 5}건 보기</summary>${rows.slice(5).map(row).join('')}</details>` : '')
     : '<p class="muted">최근 30일에 최고가보다 5% 이상 싸게 팔린 거래가 없어요.</p>';
 }
 $('#dropList').addEventListener('click', (e) => { const o = e.target.closest('.open'); if (o) openCx(o.dataset.s); });
@@ -1711,7 +1713,7 @@ $('#cmpSort').addEventListener('click', (e) => { const b = e.target.closest('but
         ${good.length ? `<span>좋음: ${good.join(', ')}</span>` : ''}${bad.length ? `<span style="color:var(--bad)">아쉬움: ${bad.join(', ')}</span>` : ''}
         ${v.pro ? `<span>＋ ${v.pro}</span>` : ''}${v.con ? `<span>－ ${v.con}</span>` : ''}${v.ok != null ? `<span class="pill ${['good', 'warn', 'bad'][v.ok]}">${OK[v.ok]}</span>` : ''}
         ${v.n ? `<span class="muted">${v.n}</span>` : ''}</div>`; }).join('')
-      : '<p class="muted">장점과 감내할 단점을 함께 적어 두세요.</p>';
+      : '<p class="muted">아직 기록이 없어요. 다녀오면 장점과 감내할 단점을 함께 적어 두세요.</p>';
   };
   $('#visitForm').addEventListener('submit', (e) => { e.preventDefault();
     const env = {}; $('#v_env').querySelectorAll('button[aria-pressed="true"]').forEach(b => env[b.dataset.i] = +b.dataset.v);
@@ -1719,7 +1721,7 @@ $('#cmpSort').addEventListener('click', (e) => { const b = e.target.closest('but
     const L = store.get('v2-visits', []);
     L.push({ s: $('#v_cx').value, d: $('#v_date').value, sc: +$('#v_score').value, walk: isFinite(w) ? w : null, route: [...document.querySelectorAll('input[name="vr"]:checked')].map(x => +x.value),
       env, pro: $('#v_pro').value.trim(), con: $('#v_con').value.trim(), ok: ok ? +ok.value : null, n: $('#v_note').value.trim() });
-    store.set('v2-visits', L); $('#visitForm').reset(); $('#v_date').value = D.asof; $('#v_env').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', 'false')); hint(); draw(); });
+    store.set('v2-visits', L); $('#visitForm').reset(); $('#v_date').value = D.asof; $('#v_env').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', 'false')); hint(); draw(); $('#visitBox').open = false; });
   hint(); draw();
 })();
 
@@ -1960,7 +1962,7 @@ function drawAsks() {
   // 실거래 ◆(2026-10-28 사용자 요청): 같은 면적 중개 거래를 그 칸(주·달)에. 6개월치(DY)가 있으면 그것, 없으면 90일(DEALS)
   const d2k = (d) => `20${d.slice(0, 2)}-${d.slice(2, 4)}-${d.slice(4)}`;
   const dls = (DY[dSeq] || DEALS[dSeq] || []).filter(x => Math.abs(x[2] - ag) <= 1 && !x[5]).map(x => [weeks.indexOf((MO ? month(d2k(x[1])) : monday(d2k(x[1]))).getTime()), x]).filter(([i]) => i >= 0);
-  const has = cols.filter(Boolean), tsvg = $('#askTrend'); tsvg.innerHTML = ''; $('#askTrendBox').hidden = !Object.keys(byW).length;
+  const has = cols.filter(Boolean), tsvg = $('#askTrend'); tsvg.innerHTML = ''; $('#askTrendBox').hidden = !Object.keys(byW).length; $('#askTrendWrap').hidden = $('#askTrendBox').hidden;
   if (has.length) {
     const W = 340, H = 168, L = 37, R = 4, T = 10, B = 30, cw = (W - L - R) / NW, xs = (i) => L + cw * (i + 0.5);
     const refs = weeks.map((_, i) => refAt(i)), ps = has.flatMap(c => c.v).concat(refs.filter(Boolean), dls.map(([, x]) => x[4])), AX = niceAx(Math.min(...ps) * 0.995, Math.max(...ps) * 1.005), lo = AX.lo, hi = AX.hi;
@@ -2015,9 +2017,9 @@ function drawAsks() {
   }
   const pn = prevD ? snap(prevD).filter(x => x.t === '매매').length : null, gm = gap(med(sale));
   $('#askSum').innerHTML = !now.length ? '' : `
-    <div class="kpi"><span class="k">매매 매물</span><span class="v">${sale.length}개</span><span class="d">${pn == null ? '지난 기록 없음' : `${dt(prevD)} 대비 ${sale.length - pn >= 0 ? '+' : ''}${sale.length - pn}개`}</span></div>
+    <div class="kpi"><span class="k">매매 매물</span><span class="v">${sale.length}개</span><span class="d">${pn == null ? '지난 기록 없음' : `${dt(prevD)} 대비 ${sale.length - pn >= 0 ? '+' : ''}${sale.length - pn}개`}${jeon.length ? `<br>전세 ${jeon.length}개` : ''}</span></div>
     <div class="kpi"><span class="k">중간 호가 <span class="pill ${cl(gm)}">${gm == null ? '–' : sgn(gm, 1)}</span></span><span class="v">${sale.length ? eok(med(sale)) : '–'}</span><span class="d">최저 ${sale.length ? eok(sale[0].p) : '–'} · 기준 ${eok(ref)}</span></div>
-    <div class="kpi"><span class="k">전세 매물</span><span class="v">${jeon.length}개</span><span class="d">중간 ${jeon.length ? eok(med(jeon)) : '–'}</span></div>`;
+`;   // 2026-11-22: 전세 매물 칸은 매매 칸 아래 줄로(세 칸이면 휴대폰에서 한 칸만 남음)
   /* 지난 저장 대비 매물 변화(2026-11-11 사용자 요청 시안): 같은 동·전체 층·층 구간(저·중·고)·전용(정수 ㎡) = 같은 매물로 본다.
      향은 중개사마다 달리 적고(남향↔남동향), 층은 숫자·저중고가 섞여서 뺌/묶음(그라시움 11/06→11/09 실제 기록으로 확인: 향·층 그대로면 새 15·빠짐 12, 묶으면 새 5·빠짐 2).
      한 칸에 여러 매물이면 싼 것끼리 차례로 짝짓는다(그래서 가끔 짝이 틀릴 수 있음). 빠진 매물 = 팔렸거나 내렸거나 네이버에서 묶임 */
