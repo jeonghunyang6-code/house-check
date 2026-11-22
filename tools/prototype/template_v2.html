@@ -307,9 +307,12 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
       </div>
         </div>
         <div class="mpane" data-p="s" hidden>
+      <div class="msub" id="sigRb" hidden>
+        <h2>반등·상승 신호 <small id="sigRbDate"></small></h2>
+        <div id="sigRbBody" style="display:grid;gap:12px"></div>
+      </div>
       <div class="msub" id="supCard">
         <h2>매수심리 <small id="supDate"></small></h2>
-        <p class="muted" style="margin:0;font-size:13.5px">100보다 크면 사려는 사람이 더 많고, 작으면 팔려는 사람이 더 많아요.</p>
         <div class="kpis" id="supKpis" style="grid-template-columns:repeat(3,1fr)"></div>
         <div class="seg" id="supSpan"><button type="button" data-v="52" aria-pressed="false">1년</button><button type="button" data-v="156" aria-pressed="true">3년</button><button type="button" data-v="0" aria-pressed="false">2012~</button></div>
         <svg class="chart" id="supChart" viewBox="0 0 340 170" role="img" aria-label="매매수급지수 추이"></svg>
@@ -865,6 +868,34 @@ const PSHORT = { '2026-10-01|세금': '조정지역 일시적 2주택 처분 3�
   const pick = (v) => { $$('#mSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === v)); $$('#mBox .mpane').forEach(p => { p.hidden = p.dataset.p !== v; }); };
   pick(store.get('v2-mtab', 'p'));
   $('#mSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; store.set('v2-mtab', b.dataset.v); pick(b.dataset.v); });
+})();
+/* 반등·상승 신호(2026-11-22 사용자): 매주 계산만 하던 A4·D5 를 심리·거래 탭 맨 위에.
+   A4 급매 체결 비중 — 서울 최근 4주 중개 거래(1층 제외) 중 직전 시세보다 5% 이상 싸게. 급매가 소진되고 하단이 오르면 반등(📖 p.245~247).
+      작가 숫자 기준 없음 → 색 없이 jobs/market.py 의 증가·감소·유지(그 전 4주 대비)만. 최근 거래는 신고 기한(30일) 전이라 늘어난다.
+   D5 신규 전세 계약 감소 — 국토부 전월세 신고 중 신규, 1년 전 같은 석 달 대비. 신규 감소 + 전세지수 상승이면 '충족' = 매매 상승 압력(collector/market.py).
+   화면은 '충족' 대신 '상승 압력'(2026-11-22 사용자: 충족이 와닿지 않음). 급매 정의 줄은 화면에서 뺌(급매 = 직전 시세보다 5% 이상 싸게) */
+(function rebound() {
+  const a4 = S.a4_quick_sale || {}, d5 = S.d5_new_jeonse || {};
+  const n = (t, re) => { const m = String(t || '').match(re); return m ? +m[1].replace(/,/g, '') : null; };
+  const bar = (v, max, c, lab, val) => `<div style="display:grid;grid-template-columns:64px 1fr 52px;gap:8px;align-items:center;font-size:12.5px"><span class="muted">${lab}</span><span style="height:10px;border-radius:5px;background:var(--sunk);overflow:hidden"><i style="display:block;height:100%;width:${Math.min(100, v / max * 100)}%;background:${c};border-radius:5px"></i></span><b style="text-align:right;font-variant-numeric:tabular-nums">${val}</b></div>`;
+  const head = (t, sub, big, pill, col) => `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><b style="font-size:14.5px">${t} <span class="muted" style="font-weight:400;font-size:12px">${sub}</span></b><span style="white-space:nowrap"><b style="font-size:20px${col ? ';color:' + col : ''}">${big}</b> ${pill}</span></div>`;
+  const parts = [];
+  const aNow = a4.value != null ? +a4.value : null, aPrev = n(a4.detail, /그 전 4주 ([\d.]+)%/);
+  if (aNow != null) {
+    const mx = Math.max(aNow, aPrev || 0) * 1.6 || 1;
+    parts.push(`<div style="display:grid;gap:8px">${head('급매 비중', '서울 최근 4주', aNow.toFixed(1) + '%', `<span class="pill none">${a4.state || ''}</span>`)}
+      ${aPrev != null ? bar(aPrev, mx, 'var(--c3)', '그 전 4주', aPrev.toFixed(1) + '%') : ''}${bar(aNow, mx, 'var(--c1)', '최근 4주', aNow.toFixed(1) + '%')}</div>`);
+  }
+  const dNow = d5.value != null ? +d5.value : null, dNew = n(d5.detail, /\d{2} ([\d,]+)건, 1년 전/), dOld = n(d5.detail, /1년 전 ([\d,]+)건/), dJ = n(d5.detail, /전세지수 13주 ([+\-\d.]+)%/);
+  const per = (String(d5.detail || '').match(/20(\d\d)\.(\d\d)~20\d\d\.(\d\d)/) || []).slice(1);
+  if (dNow != null) {
+    const on = d5.state === '충족', mx = Math.max(dNew || 0, dOld || 0) * 1.05 || 1, k = (v) => (v / 1000).toFixed(1) + '천';
+    parts.push(`<div style="display:grid;gap:8px;${parts.length ? 'padding-top:12px;border-top:1px solid var(--line)' : ''}">${head('신규 전세 계약', per.length ? `서울 ${per[0]}.${per[1]}~${per[2]}월` : '서울', sgn(dNow, 0), `<span class="pill ${on ? 'warn' : 'none'}">${on ? '상승 압력' : d5.state === '미충족' ? '압력 약함' : (d5.state || '')}</span>`, on ? 'var(--warn)' : '')}
+      ${dOld != null ? bar(dOld, mx, 'var(--c3)', '1년 전', k(dOld)) : ''}${dNew != null ? bar(dNew, mx, 'var(--c1)', '올해', k(dNew)) : ''}
+      <p class="muted" style="margin:0;font-size:12.5px">${on ? `전세 구하기 어려워져(전세값 13주 ${sgn(dJ, 1)}) 사려는 사람이 늘 수 있어요` : '새 전세가 줄고 전세값까지 오르면 집값이 오를 압력이 돼요'}</p></div>`);
+  }
+  if (!parts.length) return;
+  $('#sigRbBody').innerHTML = parts.join(''); $('#sigRbDate').textContent = dt(a4.asof || d5.asof); $('#sigRb').hidden = false;
 })();
 /* 매수심리(2026-11-21 사용자): R-ONE 주간 매매수급지수 서울·수도권·동남권. 100 = 사려는 사람과 팔려는 사람이 비슷. 작가 기준 없음 → 숫자·흐름만 */
 (function supply() {
