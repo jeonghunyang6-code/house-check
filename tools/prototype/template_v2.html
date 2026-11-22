@@ -460,8 +460,6 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
       <div class="card" id="askPick" hidden style="display:grid;gap:8px;border:1.5px solid var(--accent)"></div>
       <label class="muted" for="dSel" style="display:grid;gap:4px">단지<select id="dSel" class="icon-btn" style="width:100%;text-align:left;font-size:15px"></select></label>
       <div class="card" id="dHead"></div>
-      <div class="card" id="dAuthCard" hidden><h2>작가 기준 점검 <small id="dAuthSub"></small></h2><div id="dAuth"></div>
-        <p class="src">판정이 아니라 작가가 본 기준과의 거리. 회복 패턴·반등은 전고점(21.01~22.06 최고)·저점(22.07~23.06 최저)·지금 기준 시세로 매일 계산.</p></div>
       <div class="card" id="dPriceCard" hidden><h2>가격 판단 <small id="dPriceSub"></small></h2><div id="dPrice"></div></div>
       <div class="card"><h2>최근 실거래 <small id="dSpanNote">최근 90일</small></h2><div class="row" style="justify-content:space-between;align-items:center;margin:8px 0 2px;gap:8px"><p id="dChartTitle" style="font-size:13.5px;margin:0"></p>
         <div class="seg" id="dSpan" style="flex:none" hidden><button type="button" data-v="90" aria-pressed="true">90일</button><button type="button" data-v="6m" aria-pressed="false">6개월</button></div></div><svg class="chart" id="dChart" viewBox="0 0 340 130" role="img" aria-label="최근 90일 실거래"></svg><div id="dDeals"></div></div>
@@ -493,6 +491,8 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
         <div class="legend" id="dMapZ" hidden style="margin-top:6px"><label class="chk"><input type="checkbox" data-z="after"> 정비 조합설립 뒤</label><label class="chk"><input type="checkbox" data-z="before"> 정비 그 전</label><label class="chk"><input type="checkbox" data-z="proj"> 개통 예정 역</label></div></div>
       <div class="card"><h2>개발 호재 · 주변 정비사업</h2><div id="dDev"></div></div>
       <div class="card" id="dRmCard" hidden><h2>정비 진행 현황 <small>재건축·리모델링</small></h2><div id="dRemodel"></div></div>
+      <div class="card" id="dAuthCard" hidden><h2>작가 기준 점검 <small id="dAuthSub"></small></h2><div id="dAuth"></div>
+        <p class="src">판정이 아니라 작가가 본 기준과의 거리. 회복 패턴·반등은 전고점(21.01~22.06 최고)·저점(22.07~23.06 최저)·지금 기준 시세로 매일 계산.</p></div>
     </div>
   </section>
 
@@ -1815,7 +1815,7 @@ function drawDaily() {
     || `<p class="muted">최근 ${SPN} 거래가 없습니다.</p>`;
   if (RGM) $('#dDeals').insertAdjacentHTML('beforeend', '<p class="src" style="margin-top:6px">등기 = 소유권 이전 등기 끝남(국토부 등기일). 계약 60일이 넘었는데 등기 전이면 잔금 전이거나 해제될 수 있어요(노랑).</p>');
   drawAsks(); drawMap(seq); $('#dDev').innerHTML = devHtml(seq); $('#dFacts').innerHTML = factsHtml(seq); { const h = remodelHtml(seq); $('#dRemodel').innerHTML = h; $('#dRmCard').hidden = !h; }
-  { const h = authHtml(seq, () => { if (dSeq === seq) drawDaily(); }); $('#dAuth').innerHTML = h; $('#dAuthCard').hidden = !h; $('#dAuthSub').textContent = areaRow(seq) ? `${areaRow(seq).ag}㎡` : ''; $('#dPriceCard').after($('#dAuthCard')); }
+  { const h = authHtml(seq, () => { if (dSeq === seq) drawDaily(); }); $('#dAuth').innerHTML = h; $('#dAuthCard').hidden = !h; $('#dAuthSub').textContent = areaRow(seq) ? `${areaRow(seq).ag}㎡` : ''; }   // 2026-11-21 사용자: 상세 탭 맨 아래
   { const h = priceHtml(seq), r = areaRow(seq); $('#dPrice').innerHTML = h; $('#dPriceCard').hidden = !h; $('#dPriceSub').textContent = r ? `${r.ag}㎡ · 작가 기준` : ''; }
 }
 /* 호가: 네이버 부동산 '호가 저장' 버튼(tools/pc/naver_ask_bookmarklet.js) 붙여넣기 + 직접 기록. 단지 → 날짜 → 매물 목록 */
