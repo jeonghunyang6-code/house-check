@@ -395,6 +395,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
         <div class="chips" id="fArea" aria-label="면적"></div>
         <div class="chips" id="fHh" aria-label="세대수"></div>
         <div class="chips" id="fAge" aria-label="연식"></div>
+        <div class="chips" id="fRec" aria-label="작가 기준"></div>
         <details class="more-f" id="moreF"><summary>조건 더 보기 · 출퇴근·역세권·국면·정렬</summary><div class="body" style="gap:10px">
           <div class="chips" id="fWork" aria-label="직장"></div>
           <p class="muted" id="workNote" style="font-size:12px"></p>
@@ -459,6 +460,8 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
       <div class="card" id="askPick" hidden style="display:grid;gap:8px;border:1.5px solid var(--accent)"></div>
       <label class="muted" for="dSel" style="display:grid;gap:4px">단지<select id="dSel" class="icon-btn" style="width:100%;text-align:left;font-size:15px"></select></label>
       <div class="card" id="dHead"></div>
+      <div class="card" id="dAuthCard" hidden><h2>작가 기준 점검 <small id="dAuthSub"></small></h2><div id="dAuth"></div>
+        <p class="src">판정이 아니라 작가가 본 기준과의 거리. 회복 패턴·반등은 전고점(21.01~22.06 최고)·저점(22.07~23.06 최저)·지금 기준 시세로 매일 계산.</p></div>
       <div class="card" id="dPriceCard" hidden><h2>가격 판단 <small id="dPriceSub"></small></h2><div id="dPrice"></div></div>
       <div class="card"><h2>최근 실거래 <small id="dSpanNote">최근 90일</small></h2><div class="row" style="justify-content:space-between;align-items:center;margin:8px 0 2px;gap:8px"><p id="dChartTitle" style="font-size:13.5px;margin:0"></p>
         <div class="seg" id="dSpan" style="flex:none" hidden><button type="button" data-v="90" aria-pressed="true">90일</button><button type="button" data-v="6m" aria-pressed="false">6개월</button></div></div><svg class="chart" id="dChart" viewBox="0 0 340 130" role="img" aria-label="최근 90일 실거래"></svg><div id="dDeals"></div></div>
@@ -947,7 +950,7 @@ const PSHORT = { '2026-10-01|세금': '조정지역 일시적 2주택 처분 3�
 const INFO = D.v2_info || {};   // 단지 → [이름, 시군구, 동, 위도, 경도, 역, 역m, 사대문분, 여의도분, 강남분, 마트, 마트m, 병원, 병원m, 중학교군, 준공, 세대수]
 /* ───── 공통: 단지 모델 ───── */
 const CAND = (D.cand || []).map(r => ({ name: r[0] ?? (INFO[r[23]] || [])[0], rc: r[1], umd: r[2] ?? (INFO[r[23]] || [])[2], ag: r[3], ref: r[4], conf: r[5], phase: r[6], grade: r[7], newbig: r[10], hh: r[11], by: r[12], tv: r[13], dr: r[14], est: r[15], vl: r[17], stage: r[19], sno: r[20], seq: r[23],
-  js: r[24], jn: r[25], rr: r[26], j24: r[27], uz: r[28] }));
+  js: r[24], jn: r[25], rr: r[26], j24: r[27], uz: r[28], ab: r[29] || 0 }));
 /* 용적률 옆 용도지역: 400%가 넘는 곳은 대부분 상업지역 주상복합·준주거·준공업이라 오류가 아님(2026-10-25 점검 414곳 중 405곳) */
 const zoneTag = (z, vl) => !z ? (vl > 400 ? ' · 용도지역 미확인' : '') : /상업/.test(z) ? ' · 상업지역(주상복합)' : ' · ' + z.replace('일반주거지역', '일반').replace('지역', '');
 const CANDBY = {}; CAND.forEach(r => (CANDBY[r.seq] = CANDBY[r.seq] || []).push(r));
@@ -1118,13 +1121,14 @@ function drawCand() {
   $('#workNote').textContent = WORK[cst.work] == null ? '' : car ? (Object.keys(DRIVE).length ? '자차: 네이버 길찾기(평일 아침 실시간 빠른길). 아직 계산 안 된 단지는 직선거리로 추정' : '자차 추정: 직선거리 × 1.35 ÷ 시속 60km (네이버 길찾기 계산 전)') : '대중교통: 가까운 역 → 업무지구 역 시간(걷는 시간 제외)';
   candList = CAND.filter(r => r.ref <= b && r.ref >= b * 0.8 && REGF[cst.region](r.rc) && AREAF[cst.area](r.ag) && (cst.phase === '지역 국면 전체' || r.phase === cst.phase)
     && (cst.hh === '세대수 전체' || (r.hh && HHF[cst.hh](r.hh))) && (cst.age === '연식 전체' || (r.by && AGEF[cst.age](YEAR - r.by)))
-    && (WORK[cst.work] == null || (workMin(r.seq) != null && workMin(r.seq) <= wmin)) && STF[cst.st]((INFO[r.seq] || [])[6])).sort(SORTF[cst.sort]);
+    && (WORK[cst.work] == null || (workMin(r.seq) != null && workMin(r.seq) <= wmin)) && STF[cst.st]((INFO[r.seq] || [])[6])
+    && (!cst.rec || ((r.ab & 3) !== 3 && !(r.ab & 4)))).sort(SORTF[cst.sort]);   // 작가: 회복 지연·2023년 초 대비 반등 없음 = 사면 안 되는 단지
   $('#cCount').textContent = `${candList.length.toLocaleString()}곳`;
   $('#cList').innerHTML = candList.slice(0, cst.shown).map((r, i) => {
     const inf = INFO[r.seq] || [], wm = workMin(r.seq);
     return `<div class="irow"><button type="button" class="open" data-i="${i}"><span class="nm">${r.name}</span>
       <span class="sub">${rn(r.rc)} ${r.umd} · ${r.ag}㎡ · ${r.by ? YEAR - r.by + '년차' : ''}${r.hh ? ' · ' + r.hh.toLocaleString() + '세대' : ''}${inf[6] != null ? ` · ${inf[5]}역 ${inf[6]}m` : ''}${wm != null ? ` · ${cst.work} ${car ? '차 ' : ''}${wm}분` : ''}</span>
-      <span class="tags">${r.grade ? `<span class="pill none">${r.grade}급지</span>` : ''}${phPill(r.phase)}${r.newbig ? '<span class="pill acc">신축 대단지</span>' : ''}${r.stage ? `<span class="pill ${r.sno >= 3 ? 'acc' : 'warn'}">정비 ${r.stage}</span>` : ''}</span></button>
+      <span class="tags">${r.grade ? `<span class="pill none">${r.grade}급지</span>` : ''}${phPill(r.phase)}${r.newbig ? '<span class="pill acc">신축 대단지</span>' : ''}${abPill(r.ab)}${r.stage ? `<span class="pill ${r.sno >= 3 ? 'acc' : 'warn'}">정비 ${r.stage}</span>` : ''}</span></button>
       <span class="side"><span class="pr">${eok(r.ref)}${r.est ? '<span class="muted">*</span>' : ''}</span><button type="button" class="heart" data-s="${r.seq}" aria-pressed="${watch.has(r.seq)}" aria-label="관심 단지">${watch.has(r.seq) ? '♥' : '♡'}</button></span></div>`;
   }).join('') || '<p class="muted" style="padding:12px 0">조건에 맞는 단지가 없습니다. 조건을 넓혀 보세요.</p>';
   $('#cMore').hidden = candList.length <= cst.shown;
@@ -1137,6 +1141,9 @@ const reset = (k) => (v) => { cst[k] = v; cst.shown = 20; drawCand(); };
 chips('#fRegion', Object.keys(REGF), cst.region, reset('region')); chips('#fArea', Object.keys(AREAF), cst.area, reset('area'));
 chips('#fPhase', ['지역 국면 전체', '상승장', '보합장', '하락장'], cst.phase, reset('phase'));
 chips('#fHh', Object.keys(HHF), cst.hh, reset('hh')); chips('#fAge', Object.keys(AGEF), cst.age, reset('age'));
+cst.rec = store.get('v2-frec', true);
+const recBtn = () => { $('#fRec').innerHTML = `<button type="button" class="chip" aria-pressed="${cst.rec}">회복 지연·반등 없음 빼기</button><span class="muted" style="font-size:12px;align-self:center">작가: 사면 안 되는 단지</span>`; };
+recBtn(); $('#fRec').addEventListener('click', (e) => { if (!e.target.closest('button')) return; cst.rec = !cst.rec; store.set('v2-frec', cst.rec); recBtn(); cst.shown = 20; drawCand(); });
 chips('#fWork', Object.keys(WORK), cst.work, reset('work')); chips('#fMin', Object.keys(MINF), cst.min, reset('min'));
 chips('#fSt', Object.keys(STF), cst.st, reset('st')); chips('#fSort', Object.keys(SORTF), cst.sort, reset('sort'));
 $('#cMore').addEventListener('click', () => { cst.shown += 20; drawCand(); });
@@ -1191,6 +1198,29 @@ function remodelHtml(seq) {
       : `<p class="src">단계 날짜는 구청·서울시 발표나 언론사 2곳 이상으로 확인. '자동' = 같은 소식을 언론사 3곳 이상이 제목으로 보도해 자동으로 올린 단계(틀리면 텔레그램 답장 '빼줘').</p>`);
 }
 /* ① 가격 판단(2026-11-17 사용자): 흩어진 숫자를 한 카드에 — 작가 기준만(P1 실거래 기준, P2 호가 3% 설명 가능·5% 넘으면 설명 필요, P4 급매 −5%). 새 판정 없음 */
+/* 작가 기준 점검(2026-11-21 사용자): DB 에서 계산만 하고 화면에 없던 작가 지표. B2 전고점 회복 3패턴(📖 p.280~282)·C7 2023년 초 대비 반등(📖 p.115~116·282)
+   ·B6 상대강도(📖 p.420~421, 백테스트 지속성 약함 → 참고)·E2 주변 시세 위치(📖 p.216~217)·E3 바로 위 급지(📖 p.358~359)·C6 거래 적은 이유(📖 p.137).
+   패턴·반등은 후보 데이터(ab), 나머지는 /api/metrics(비밀 문구, 관심 단지가 공개 파일에 안 드러나게) */
+const abPill = (ab) => { const p = ab & 3; return (p === 1 ? '<span class="pill good">신고가 돌파</span>' : p === 2 ? '<span class="pill warn">순조로운 회복</span>' : p === 3 ? '<span class="pill bad">회복 지연</span>' : '') + (ab & 4 ? '<span class="pill bad">23년 초 대비 반등 없음</span>' : ''); };
+const AUM = {}, AUP = {};
+function authHtml(seq, then) {
+  const r = areaRow(seq); if (!r) return '';
+  const ab = r.ab || 0, row = (k, v, pill, note) => `<div style="display:grid;grid-template-columns:96px 1fr;gap:8px;padding:9px 0;border-bottom:1px solid var(--line)"><span class="muted" style="font-size:13px">${k}</span><span><span style="font-size:14px">${v}</span> ${pill || ''}${note ? `<br><span class="muted" style="font-size:12px">${note}</span>` : ''}</span></div>`;
+  const pl = (c, t) => `<span class="pill ${c}" style="font-size:11px;padding:0 7px">${t}</span>`, PN = { 1: ['good', '신고가 돌파', '전고점을 넘어선 단지 — 작가: 상급지 신호'], 2: ['warn', '순조로운 회복', '전고점까지 60% 넘게 회복 — 상승 여력'], 3: ['bad', '회복 지연', '회복이 더딤 — 작가: 사면 안 되는 단지'] }[ab & 3];
+  const ok = window.HC_WEB && HC_WEB.ok;
+  if (ok && !AUM[seq] && !AUP[seq]) AUP[seq] = fetch('/api/metrics?s=' + encodeURIComponent(seq), { headers: { 'x-hc-key': HC_WEB.key } }).then(x => x.ok ? x.json() : null).then(j => { AUM[seq] = (j && j.d) || []; then && then(); }).catch(() => {});
+  const m = (AUM[seq] || []).find(z => z.area_group === r.ag), ref = cxRef(seq), ym = (v) => v ? `${String(v).slice(2, 4)}.${String(v).slice(4)}` : '';
+  let h = '';
+  h += row('전고점 회복', m && m.peak_10k && m.trough_10k ? `<b>${eok(m.peak_10k)}</b>(${ym(m.peak_month)}) → 저점 ${eok(m.trough_10k)}(${ym(m.trough_month)}) → 지금 <b>${eok(ref)}</b>` : (PN ? '' : '<span class="muted">전고점·저점 자료 없음</span>'), PN ? pl(PN[0], PN[1]) : '', PN ? PN[2] : '');
+  h += row('23년 초 대비', ab & 4 ? '<b style="color:var(--bad)">반등 없음</b>' : m && m.trough_10k ? `저점보다 <b>${sgn((ref / m.trough_10k - 1) * 100, 0)}</b>` : PN ? '' : '–', ab & 4 ? pl('bad', '주의') : PN ? pl('good', '반등함') : '', ab & 4 ? '작가: 2023년 초 대비 반등하지 않은 아파트는 주의' : '');
+  if (m) {
+    if (m.rel_strength != null) { const rs = +m.rel_strength; h += row('같은 생활권 대비', `1년 ${sgn(+m.chg_12m, 1)} vs 생활권 ${sgn(+m.region_chg_12m, 1)} → <b>${rs >= 0 ? '+' : ''}${rs.toFixed(1)}%p</b>`, rs >= 0 ? pl('good', '강한 파도') : pl('warn', '약한 파도'), '작가: 상승의 차이 — 같은 생활권보다 덜 오르면 약한 파도(백테스트상 지속성 약해 참고만)'); }
+    if (m.e2_ratio != null) { const e2 = +m.e2_ratio; h += row('주변 시세 위치', `${m.e2_basis || '주변'} ${m.e2_n}곳 평당가의 <b>${e2.toFixed(2)}배</b>`, e2 >= 1 ? pl('none', '주변보다 비쌈') : pl('acc', '주변보다 쌈'), '1보다 작을수록 주변이 더 비싸다 = 따라 오를 여지(작가 예시 숫자뿐, 기준선 없음)'); }
+    if (m.e3_target_10k) h += row('바로 위 급지', `${m.e3_name || '비교 단지'} <b>${eok(m.e3_target_10k)}</b>`, pl('acc', `지금보다 ${sgn((m.e3_target_10k / ref - 1) * 100, 0)}`), '작가: 미래 시세 = 바로 위 급지의 현재 시세(과도한 비교는 금지)');
+    if (m.turnover_pct != null) h += row('거래', `월 회전율 <b>${(+m.turnover_pct).toFixed(2)}%</b>${m.c6_band_turn != null ? ` (같은 구간 단지 ${(+m.c6_band_turn).toFixed(2)}%)` : ''}`, m.c6_reason ? pl('warn', m.c6_reason) : '', '작가 기준 월 0.5%는 요즘 거의 다 걸려 같은 구 단지와 견줌');
+  } else if (!ok) h += '<p class="muted" style="margin:8px 0 0;font-size:12.5px">생활권 대비·주변 시세·바로 위 급지·거래는 비밀 문구로 연 화면에서 보여요.</p>';
+  return h;
+}
 function priceHtml(seq) {
   const ref = cxRef(seq), r = areaRow(seq), ag = r ? r.ag : +AREA;
   if (!ref) return '';
@@ -1785,6 +1815,7 @@ function drawDaily() {
     || `<p class="muted">최근 ${SPN} 거래가 없습니다.</p>`;
   if (RGM) $('#dDeals').insertAdjacentHTML('beforeend', '<p class="src" style="margin-top:6px">등기 = 소유권 이전 등기 끝남(국토부 등기일). 계약 60일이 넘었는데 등기 전이면 잔금 전이거나 해제될 수 있어요(노랑).</p>');
   drawAsks(); drawMap(seq); $('#dDev').innerHTML = devHtml(seq); $('#dFacts').innerHTML = factsHtml(seq); { const h = remodelHtml(seq); $('#dRemodel').innerHTML = h; $('#dRmCard').hidden = !h; }
+  { const h = authHtml(seq, () => { if (dSeq === seq) drawDaily(); }); $('#dAuth').innerHTML = h; $('#dAuthCard').hidden = !h; $('#dAuthSub').textContent = areaRow(seq) ? `${areaRow(seq).ag}㎡` : ''; $('#dPriceCard').after($('#dAuthCard')); }
   { const h = priceHtml(seq), r = areaRow(seq); $('#dPrice').innerHTML = h; $('#dPriceCard').hidden = !h; $('#dPriceSub').textContent = r ? `${r.ag}㎡ · 작가 기준` : ''; }
 }
 /* 호가: 네이버 부동산 '호가 저장' 버튼(tools/pc/naver_ask_bookmarklet.js) 붙여넣기 + 직접 기록. 단지 → 날짜 → 매물 목록 */

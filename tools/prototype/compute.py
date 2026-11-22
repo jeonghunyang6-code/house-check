@@ -341,7 +341,9 @@ json.dump({'monthly': monthly, 'cx': cx, 'today': today,
                      r.get('down_rank') and float(r['down_rank']), bool(r.get('est')), r['apt_seq'] in CANDP,
                      r.get('vl_rat') and float(r['vl_rat']), r.get('land_per_hh') and float(r['land_per_hh']), r.get('stage'), r.get('stage_no'),
                      r.get('gen_pct') and float(r['gen_pct']), r.get('zsrc'), r['apt_seq'],
-                     r.get('jeonse_10k'), r.get('jeonse_n'), r.get('reverse_risk'), r.get('jeonse_24m_10k'), r.get('use_zone')] for r in d.get('cand', [])],
+                     r.get('jeonse_10k'), r.get('jeonse_n'), r.get('reverse_risk'), r.get('jeonse_24m_10k'), r.get('use_zone'),
+                     # B2 회복 패턴 1 신고가 돌파·2 순조로운 회복·3 회복 지연, +4 = C7 2023년 초 대비 반등 없음(2026-11-21 찾기 필터·상세 점검)
+                     {'신고가 돌파': 1, '순조로운 회복': 2, '회복 지연': 3}.get(r.get('pattern'), 0) + (4 if r.get('no_rebound') else 0)] for r in d.get('cand', [])],
            **{k: v for k, v in d.items() if k.startswith('v2_')},   # 시안 v2 전용(extract.py 'v2_' 키를 그대로)
            'price_bands': d.get('price_bands', []),
            'b2_validation': d.get('b2_validation', []),
