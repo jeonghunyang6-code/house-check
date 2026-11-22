@@ -397,10 +397,10 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
         <h2>예산 안 후보 <small id="cCount"></small></h2>
         <div class="chips" id="fRegion" aria-label="지역"></div>
         <div class="chips" id="fArea" aria-label="면적"></div>
-        <div class="chips" id="fHh" aria-label="세대수"></div>
-        <div class="chips" id="fAge" aria-label="연식"></div>
         <div class="chips" id="fRec" aria-label="작가 기준"></div>
-        <details class="more-f" id="moreF"><summary>조건 더 보기 · 출퇴근·역세권·국면·정렬</summary><div class="body" style="gap:10px">
+        <details class="more-f" id="moreF"><summary>조건 더 보기 · 세대수·연식·출퇴근 외 <span id="moreN"></span></summary><div class="body" style="gap:10px">
+          <div class="chips" id="fHh" aria-label="세대수"></div>
+          <div class="chips" id="fAge" aria-label="연식"></div>
           <div class="chips" id="fWork" aria-label="직장"></div>
           <p class="muted" id="workNote" style="font-size:12px"></p>
           <div class="chips" id="fMin" aria-label="출퇴근 시간"></div>
@@ -1151,6 +1151,8 @@ const SORTF = { '급지순': (a, c) => (a.grade || 9) - (c.grade || 9) || (c.new
 const phPill = (p) => p ? `<span class="pill ${p === '상승장' ? 'warn' : p === '하락장' ? 'bad' : 'none'}">지역 ${p}</span>` : '';
 let candList = [];
 function drawCand() {
+  { const n = [['hh', '세대수 전체'], ['age', '연식 전체'], ['work', '직장 무관'], ['st', '역 거리 무관'], ['phase', '지역 국면 전체']].filter(([k, d]) => cst[k] !== d).length;
+    $('#moreN').innerHTML = n ? `<span class="pill acc" style="font-size:11px;padding:0 7px">${n}개 적용</span>` : ''; }   // 접힌 안에 고른 조건이 있으면 보이게
   const b = budget.price, wmin = MINF[cst.min], car = Array.isArray(WORK[cst.work]);
   $('#workNote').textContent = WORK[cst.work] == null ? '' : car ? (Object.keys(DRIVE).length ? '자차: 네이버 길찾기(평일 아침 실시간 빠른길). 아직 계산 안 된 단지는 직선거리로 추정' : '자차 추정: 직선거리 × 1.35 ÷ 시속 60km (네이버 길찾기 계산 전)') : '대중교통: 가까운 역 → 업무지구 역 시간(걷는 시간 제외)';
   candList = CAND.filter(r => r.ref <= b && r.ref >= b * 0.8 && REGF[cst.region](r.rc) && AREAF[cst.area](r.ag) && (cst.phase === '지역 국면 전체' || r.phase === cst.phase)
@@ -2297,6 +2299,14 @@ watchChanged.push(drawMove);
 /* 처음 열 때 */
 /* 기간별 변동(2026-11-12 사용자 요청 시안): R-ONE 주간 지수 1개월(4주)·3개월(13주)·6개월(26주)·1년(52주) 전 발표 주 대비. 서울·수도권 + 관심 단지 지역 + 관심권 전체(펼치기) */
 const perSt = { kind: 't' };
+/* 핵심 신호 '시장국면' 칸(2026-11-22 사용자 3번): 옆 칸보다 짧아 빈 공간 → 관심 단지가 많은 지역 2곳의 주간지수 1년 매매 변화(판정 없음) */
+function drawSigMine() {
+  const box = $('#sigs .s'), W = D.weekly; if (!box || !W || !W.v) return;
+  let el = $('#sigMine'); if (!el) { box.insertAdjacentHTML('beforeend', '<div id="sigMine" style="display:contents"></div>'); el = $('#sigMine'); }
+  const cnt = {}; [...watch].forEach(s => { const rc = infoOf(s)[1] || (main(s) || {}).rc; if (rc && W.v[rc] && W.v[rc].yt != null) cnt[rc] = (cnt[rc] || 0) + 1; });
+  const top = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a]).slice(0, 2);
+  el.innerHTML = top.map(rc => { const y = W.v[rc].yt; return `<div class="mr"><span class="lb"><i class="ref"></i>${rn(rc)}</span><span>${y > 0 ? '+' : ''}${y.toFixed(2)}%</span></div>`; }).join('');
+}
 function drawPeriods() {
   const W = D.weekly; if (!W || !W.agg) { $('#perTab').innerHTML = ''; return; }
   const k = perSt.kind, f = (v) => v == null ? '<span class="muted">–</span>' : `<span class="${v > 0.02 ? 'up' : v < -0.02 ? 'dn' : 'muted'}">${sgn(v, 1)}</span>`;
@@ -2307,7 +2317,7 @@ function drawPeriods() {
   const all = [...(window.HC_MINE || [])].filter(rc => W.v[rc]).sort((a, b) => yv(b) - yv(a));
   $('#perTab').innerHTML = `<table class="per">${head}${tr('수도권', W.agg.sudo, 'tot')}${tr('서울', W.agg.seoul, 'tot' + (mine.length ? ' gap' : ''))}${mine.map(rc => tr(rn(rc), W.v[rc])).join('')}</table>`
     + `<details class="more-f" style="margin-top:4px"><summary>관심권 전체 ${all.length}곳 (1년 높은 순)</summary><table class="per">${head}${all.map(rc => tr(rn(rc), W.v[rc])).join('')}</table></details>`;
-  $('#perDate').textContent = `${dt(W.date)} 주 기준`;
+  $('#perDate').textContent = `${dt(W.date)} 주 기준`; drawSigMine();
   $('#perSrc').textContent = `한국부동산원 R-ONE 주간 아파트 ${k === 't' ? '매매' : '전세'} 가격지수, 각 기간 전 발표 주 대비`;
 }
 document.getElementById('perKind').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; perSt.kind = b.dataset.v;
