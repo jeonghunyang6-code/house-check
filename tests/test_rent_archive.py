@@ -243,3 +243,18 @@ def test_summary_sql_rewrites_only_changed():
     run([r for r in rows if r["apt_seq"] != gone[0]])                 # 한 단지가 빠짐
     b = xmin()
     assert all(k[0] != gone[0] for k in b) and b and all(b[k] == a[k] for k in b)
+
+
+def test_summary_sql_many_complexes():
+    """2026-11-22: 없어진 단지 지우기를 (apt_seq, area_group) NOT IN (수천 개)로 쓰니 'stack depth limit exceeded'로 매일 작업이 실패.
+    한 달·여러 시군구 요약이 단지 수천 개여도 돌아야 한다."""
+    if not URL:
+        return
+    db = _db()
+    from jobs.rent_archive import summary_sql
+    base = summarize(_rows("11680", "202609"))[0]
+    many = [{**base, "apt_seq": f"11680-{9000 + i}"} for i in range(20000)]
+    db.query("\n".join(["BEGIN;", *summary_sql("202609", ["11680"], many), "COMMIT;"]))
+    assert select(db, "SELECT count(*) AS n FROM rent_monthly WHERE contract_month = '202609'")[0]["n"] == 20000
+    db.query("\n".join(["BEGIN;", *summary_sql("202609", ["11680"], many[:15000]), "COMMIT;"]))   # 5천 개가 빠짐
+    assert select(db, "SELECT count(*) AS n FROM rent_monthly WHERE contract_month = '202609'")[0]["n"] == 15000

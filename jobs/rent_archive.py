@@ -83,9 +83,11 @@ def summary_sql(month: str, regions: list[str], sums: list[dict], keep: bool = T
     if not keep:
         return stmts
     # 2026-11-21: 매일 그 달을 통째로 지우고 다시 넣어 빈 자리(죽은 행)가 쌓였다(이틀에 4만여 개) → 없어진 단지·면적군만 지우고, 값이 바뀐 행만 고쳐 쓴다
+    # 2026-11-22: (apt_seq, area_group) NOT IN (수천 개)는 OR 사슬로 펼쳐져 'stack depth limit exceeded' → VALUES 목록과 NOT EXISTS
     keys = ", ".join(f"({lit(s['apt_seq'])}, {lit(s['area_group'])})" for s in sums)
-    stmts.append(f"DELETE FROM rent_monthly WHERE contract_month = {lit(month)} AND region_code IN ({rl})"
-                 + (f" AND (apt_seq, area_group) NOT IN ({keys});" if sums else ";"))
+    stmts.append(f"DELETE FROM rent_monthly m WHERE m.contract_month = {lit(month)} AND m.region_code IN ({rl})"
+                 + (f" AND NOT EXISTS (SELECT 1 FROM (VALUES {keys}) AS k(apt_seq, area_group)"
+                    " WHERE k.apt_seq = m.apt_seq AND k.area_group = m.area_group);" if sums else ";"))
     cols = [c for c in SUMMARY_COLUMNS if c not in ("apt_seq", "area_group", "contract_month")]
     upd = ", ".join(f"{c} = EXCLUDED.{c}" for c in cols)
     diff = "(" + ", ".join(f"rent_monthly.{c}" for c in cols) + ") IS DISTINCT FROM (" + ", ".join(f"EXCLUDED.{c}" for c in cols) + ")"
