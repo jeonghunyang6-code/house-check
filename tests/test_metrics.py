@@ -304,7 +304,8 @@ def test_metrics_d4_a5():
     r = {(x["area_group"]): x for x in select(db, "SELECT area_group, ref_10k, a5_est_10k, a5_from_ag, a5_n, d4_jeonse_chg, d4_n, d4_cause "
                                                   "FROM complex_metrics WHERE apt_seq = 'P'")}
     assert r[84]["ref_10k"] == 150000 and r[84]["a5_est_10k"] is None
-    m59, m84 = 100000 / 59.9, 150000 / 84.9                        # 2년 ㎡당 중앙가: 59㎡ 3건(10·10·10.5억), 84㎡ 5건(14·14·15·15·15억)
+    # 2026-11-25: 같은 분기끼리 비율. 겹치는 분기 = 2025 1·2분기(최근 4개 분기엔 없음) → 2년 같은 분기 비율 (10억/59.9) ÷ (14억/84.9)
+    m59, m84 = 100000 / 59.9, 140000 / 84.9
     assert r[59]["a5_from_ag"] == 84 and r[59]["a5_n"] >= 2
     assert abs(r[59]["a5_est_10k"] - round(150000 / 84 * (m59 / m84) * 59)) <= 1
     assert float(r[84]["d4_jeonse_chg"]) == round((50000 / 60000 - 1) * 100, 2) and r[84]["d4_n"] == "4 / 4"
@@ -335,3 +336,23 @@ def test_metrics_prev_high_not_rewritten():
     db.query(render(TODAY, 90))
     b = xmin()
     assert [k for k in a if a[k] != b[k]] == [k for k in a if select(db, f"SELECT contract_date::text d FROM deals WHERE deal_key = {lit(k)}")[0]["d"] == "2026-10-01"]
+
+
+def test_metrics_a5_same_quarter():
+    """2026-11-25 송파더센트레: 84㎡ 2년 거래가 쌀 때 몰려 있으면 2년 중앙가 비율이 59㎡ 를 부풀린다 → 최근 4개 분기 같은 분기끼리 비율."""
+    if not URL:
+        return
+    db = _db()
+    for d in ("2025-01-10", "2025-01-20", "2025-02-10", "2025-02-20", "2025-03-10"):   # 84㎡ 옛 거래 5건(㎡당 싸게), 이때 59㎡ 거래 없음
+        _deal(db, "Q", d, 100000)
+    for d, p84, p59 in (("2026-02-10", 140000, 98700), ("2026-05-10", 145000, 102200)):   # 같은 분기: ㎡당 거의 같음
+        _deal(db, "Q", d, p84)
+        _deal(db, "Q", d, p59, area=59.9)
+    for d in ("2026-09-01", "2026-09-10", "2026-10-01"):   # 84㎡ 기준 시세 15억
+        _deal(db, "Q", d, 150000)
+    db.query(render(TODAY, 120))
+    r = select(db, "SELECT a5_est_10k FROM complex_metrics WHERE apt_seq = 'Q' AND area_group = 59")[0]["a5_est_10k"]
+    qs = sorted([(98700 / 59.9) / (140000 / 84.9), (102200 / 59.9) / (145000 / 84.9)])
+    assert abs(r - round(150000 / 84 * (sum(qs) / 2) * 59)) <= 1          # 같은 분기 비율 중앙값(2개 평균)
+    old = (100450 / 59.9) / (120000 / 84.9)                                 # 2년 중앙가 비율이었다면(59㎡ 10.045억, 84㎡ 10건 중앙 12억) 약 1.19배
+    assert r < round(150000 / 84 * old * 59) * 0.9
