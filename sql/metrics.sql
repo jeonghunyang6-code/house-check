@@ -426,13 +426,18 @@ UPDATE complex_metrics m SET d4_jeonse_chg = v.chg, d4_n = v.n,
 FROM v WHERE m.apt_seq = v.apt_seq AND m.area_group = v.area_group;
 
 -- 10) A5 거래 없는 평형 추정 (📖 거래 없는 평형은 같은 단지 대체 평형으로 p.472~473, ▶ P3 "도대체 얼마야?" 0:54).
---     기준 시세가 없는 면적군 = 같은 단지에서 기준 시세가 있는 가장 가까운 면적군의 ㎡당 기준 시세 × (최근 2년 두 면적군 ㎡당 중앙가 비율) × 면적.
+--     기준 시세가 없는 면적군 = 같은 단지에서 기준 시세가 있는 가장 가까운 면적군의 ㎡당 기준 시세 × (두 면적군 ㎡당 가격 비율) × 면적.
 --     두 면적군 모두 최근 2년 🔧 2건 이상(1층 제외 중개). 대체 평형이 없으면 비워 둔다(화면에 '대체 평형 없음')
-WITH pp AS (
-  SELECT apt_seq, area_group, percentile_cont(0.5) WITHIN GROUP (ORDER BY price_10k::numeric / area_m2) AS ppm, count(*) AS n
+--     비율(2026-11-25 백테스트, 기준 시세가 있는 6,507개를 없다고 치고 환산): 2년 중앙가끼리 나누면 두 평형의 거래 시기가 다를 때
+--     틀어진다(송파더센트레 59㎡ 20.2억 ↔ 실거래 17.5~18.0억). → 같은 분기끼리 ㎡당 중앙가 비율의 중앙값.
+--     🔧 최근 4개 분기에 둘 다 거래된 분기 2개+ → 없으면 최근 2년 같은 분기 2개+ → 없으면 2년 중앙가 비율.
+--     10% 넘게 틀림 13.8% → 6.4%, 보통 오차 3.7% → 2.6%
+WITH base AS (
+  SELECT apt_seq, area_group, contract_date, price_10k::numeric / area_m2 AS ppm
   FROM deals WHERE NOT is_cancelled AND deal_type = '중개' AND floor IS DISTINCT FROM 1 AND contract_date > {TODAY}::date - 730
-  GROUP BY 1, 2 HAVING count(*) >= 2
 ),
+pp AS (SELECT apt_seq, area_group, percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm) AS ppm, count(*) AS n FROM base GROUP BY 1, 2 HAVING count(*) >= 2),
+pq AS (SELECT apt_seq, area_group, date_trunc('quarter', contract_date) AS q, percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm) AS ppm FROM base GROUP BY 1, 2, 3),
 c AS (
   SELECT DISTINCT ON (t.apt_seq, t.area_group) t.apt_seq, t.area_group, o.area_group AS o_ag, o.ref_10k AS o_ref,
     pa.ppm / pb.ppm AS ratio, least(pa.n, pb.n) AS n
@@ -442,9 +447,18 @@ c AS (
   JOIN pp pb ON pb.apt_seq = o.apt_seq AND pb.area_group = o.area_group
   WHERE t.ref_10k IS NULL
   ORDER BY t.apt_seq, t.area_group, abs(o.area_group - t.area_group), o.area_group
-)
-UPDATE complex_metrics m SET a5_est_10k = round(c.o_ref::numeric / c.o_ag * c.ratio * c.area_group), a5_from_ag = c.o_ag, a5_n = c.n
-FROM c WHERE m.apt_seq = c.apt_seq AND m.area_group = c.area_group;
+),
+qr AS (
+  SELECT c.apt_seq, c.area_group, a.q, a.ppm / b.ppm AS r FROM c
+  JOIN pq a ON a.apt_seq = c.apt_seq AND a.area_group = c.area_group
+  JOIN pq b ON b.apt_seq = c.apt_seq AND b.area_group = c.o_ag AND b.q = a.q
+),
+r2 AS (SELECT apt_seq, area_group, percentile_cont(0.5) WITHIN GROUP (ORDER BY r) AS r FROM qr GROUP BY 1, 2 HAVING count(*) >= 2),
+r1 AS (SELECT apt_seq, area_group, percentile_cont(0.5) WITHIN GROUP (ORDER BY r) AS r FROM qr
+       WHERE q >= date_trunc('quarter', {TODAY}::date) - interval '9 months' GROUP BY 1, 2 HAVING count(*) >= 2)
+UPDATE complex_metrics m SET a5_est_10k = round(c.o_ref::numeric / c.o_ag * coalesce(r1.r, r2.r, c.ratio)::numeric * c.area_group), a5_from_ag = c.o_ag, a5_n = c.n
+FROM c LEFT JOIN r1 USING (apt_seq, area_group) LEFT JOIN r2 USING (apt_seq, area_group)
+WHERE m.apt_seq = c.apt_seq AND m.area_group = c.area_group;
 
 -- 11) C6 거래 적은 이유 (관점 V3, ▶ "도대체 얼마야?" 3:51, 📖 p.472~473): 수요 부족 vs 공급(세대수) 부족.
 --     면적군 → K-apt 전용면적 구간(60 미만·85 미만·135 미만·그 위, 면적군은 전용 내림이라 60.x 는 60~85 구간), 구간 월 회전율 = C2 와 같은 12개월.
