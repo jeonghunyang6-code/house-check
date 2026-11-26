@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from collector.db import Db, DbError, connect, lit
@@ -46,6 +46,15 @@ def run(db: Db) -> int:
             if pts:
                 upsert(db, name, pts, today)
             print(f"  {name}: {len(pts)}개 기간" + (f", 최신 {pts[-1][0]} = {pts[-1][1]}" if pts else ""))
+            if name == "base_rate":   # 이번 달 칸 = 가장 최근 일별 값(달이 끝나 월별 값이 나오면 위에서 덮어씀)
+                try:
+                    d = ecos.latest_daily_base_rate(today.strftime("%Y%m%d"), (today - timedelta(days=40)).strftime("%Y%m%d"))
+                except (ApiError, QuotaExceeded) as e:
+                    print(f"  base_rate 일별: 실패 {e}", file=sys.stderr)
+                    d = None
+                if d and d[0][:6] >= (pts[-1][0] if pts else ""):
+                    upsert(db, "base_rate", [(d[0][:6], d[1])], today)
+                    print(f"  base_rate 일별: {d[0]} = {d[1]} → {d[0][:6]} 칸")
     rc_u = run_unsold(db, today)
     rc_i = run_income(db, today)
     return rc_u or rc_i or rc
