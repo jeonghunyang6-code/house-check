@@ -76,6 +76,13 @@ def parse(j: dict) -> list[tuple[str, float]]:
     return sorted((r["TIME"], float(r["DATA_VALUE"])) for r in j["StatisticSearch"]["row"] if r.get("DATA_VALUE") not in (None, ""))
 
 
+def latest_daily_base_rate(today_ymd: str, days_back_ymd: str) -> tuple[str, float] | None:
+    """기준금리 일별(722Y001 D) 가장 최근 값 (YYYYMMDD, 값). 월별 값은 그 달이 끝나야 생겨서, 금통위가 바꾼 날 바로 쓰려고(2026-11-26 3.25% 인상).
+    2026-11-26 실제 응답 확인: D 주기는 날마다 행이 있고 바뀐 날 값이 바뀐다."""
+    rows = parse(_call(f"1/1000/722Y001/D/{days_back_ymd}/{today_ymd}/0101000"))
+    return rows[-1] if rows else None
+
+
 def fetch(name: str, start: str, end: str) -> list[tuple[str, float]]:
     """start·end 는 YYYYMM. 연간 지표는 앞 4자리만 쓰고 (YYYY, 값)을 돌려준다."""
     s = SERIES[name]

@@ -58,3 +58,13 @@ def test_rate_price_relation():
     assert rel["202507"] == "금리 동결"    # 3.0 → 3.0
     down = [(m, 3.0 - (0.5 if i >= 12 else 0)) for i, m in enumerate(ms)]
     assert dict(rate_price_relation(down, price))["202503"] == "역행"   # 금리 인하기에 집값 상승
+
+
+def test_latest_daily_base_rate(monkeypatch):
+    """2026-11-26: 금통위 인상 당일 월별 값이 없어 화면이 3.00% 그대로 → 일별(D) 마지막 값을 이번 달 칸에."""
+    from collector.sources import ecos
+    seen = {}
+    rows = [{"TIME": "20261125", "DATA_VALUE": "3"}, {"TIME": "20261126", "DATA_VALUE": "3.25"}]
+    monkeypatch.setattr(ecos, "_call", lambda path: seen.setdefault("p", path) and {"StatisticSearch": {"row": rows}})
+    assert ecos.latest_daily_base_rate("20261126", "20261017") == ("20261126", 3.25)
+    assert "/722Y001/D/20261017/20261126/0101000" in seen["p"]
