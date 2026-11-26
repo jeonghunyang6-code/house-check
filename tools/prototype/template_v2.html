@@ -1379,6 +1379,25 @@ function redevNote(z) {
   return out.join(' · ');
 }
 /* 입지 사실표: 📖 p.356(M3) 실거래가가 입지를 다 반영한 최종 점수 → 점수·순위를 만들지 않고 "왜 이 가격인가" 설명용 숫자만. 기준은 송희구가 숫자로 말한 것만 표시 */
+/* 회사 셔틀(2026-11-26 사용자): 통상 출근 승차 정류장·퇴근 하차 정류장. 회사 내부 자료 → 공개 파일에 없고 비밀 문구 화면에서 /api/shuttle 로만.
+   o = [이름, 위도, 경도, 노선, 탑승, 도착], h = [이름, 위도, 경도, 노선, [출발 시]]. 퇴근 하차 시각은 원본이 순서용(2분 간격)이라 안 씀. 거리는 직선 */
+const SHT = { d: null, p: null, cb: [] };
+function shuttleData(then) {
+  if (SHT.d) return SHT.d; if (!(window.HC_WEB && HC_WEB.ok)) return null;
+  if (then) SHT.cb.push(then);
+  if (!SHT.p) SHT.p = fetch('/api/shuttle', { headers: { 'x-hc-key': HC_WEB.key } }).then(r => r.ok ? r.json() : null).then(j => { SHT.d = j && j.o ? j : { o: [], h: [] }; SHT.cb.splice(0).forEach(f => f()); }).catch(() => { SHT.d = { o: [], h: [] }; });
+  return null;
+}
+function shuttleNear(seq, then) {
+  const d = shuttleData(then), inf = infoOf(seq); if (!d || inf[3] == null) return null;
+  // 같은 정류장(이름의 공백·(출) 빼고 같음)은 노선이 여러 개여도 한 줄로 묶음: [거리, 이름, 노선들, 출근 탑승(가장 이른)·도착 | 퇴근 출발 시 합집합]
+  const key = (n) => n.replace(/\s|\((출|퇴)\)/g, '');
+  const near = (list, out) => { const g = new Map(); list.forEach(x => { const m = distM(inf[3], inf[4], x[1], x[2]), k = key(x[0]); const v = g.get(k);
+      if (!v) g.set(k, { m, nm: x[0], rt: new Set([x[3]]), t: out ? [x[4], x[5]] : new Set(x[4]) });
+      else { v.m = Math.min(v.m, m); v.rt.add(x[3]); if (out) { if (x[4] < v.t[0]) v.t = [x[4], x[5]]; } else x[4].forEach(h => v.t.add(h)); } });
+    return [...g.values()].sort((a, b) => a.m - b.m).slice(0, 2).map(v => ({ ...v, rt: [...v.rt], t: out ? v.t : [...v.t].sort() })); };
+  return { o: near(d.o, true), h: near(d.h, false) };
+}
 function factsHtml(seq) {
   const inf = infoOf(seq), la = inf[3], lo = inf[4], rc = inf[1] || (main(seq) || {}).rc, row = (k, v, o) => `<div class="fact"><span class="k">${k}</span><span class="v">${v}</span>${o ? `<span class="o">${o}</span>` : ''}</div>`;
   const out = [];
@@ -1389,7 +1408,12 @@ function factsHtml(seq) {
   if (inf[5] && inf[6] != null) out.push(row('가까운 역', `<b>${inf[5]}역 ${inf[6].toLocaleString()}m</b> <span class="pill ${inf[6] <= 700 ? 'good' : 'none'}">${inf[6] <= 700 ? '역세권' : '700m 밖'}</span>`, '직선거리 · 역세권 = 평지 700m'));   // 📖 p.220~228 (2026-11-10 사용자: 화면에서 쪽수는 빼되 원칙은 그대로)
   const wk = [['강남', inf[9]], ['여의도', inf[8]], ['사대문', inf[7]]].filter(x => x[1] != null);
   if (wk.length) { const mn = Math.min(...wk.map(x => x[1]));
-    out.push(row('업무지구까지', wk.map(([n, m]) => m === mn ? `<b>${n} ${m}분</b>` : `${n} ${m}분`).join(' · '))); }   // 대중교통, 가까운 역 → 업무지구 역(걷는 시간 제외). 입지 = 업무지구와의 절대거리 📖 p.85~103
+    out.push(row('업무지구까지', wk.map(([n, m]) => m === mn ? `<b>${n} ${m}분</b>` : `${n} ${m}분`).join(' · '))); }
+  { const sh = shuttleNear(seq, () => { if (dSeq === seq) drawDaily(); });   // 회사 셔틀(비밀 문구 화면만)
+    if (sh && (sh.o.length || sh.h.length)) { const m = (x) => `${Math.round(x / 10) * 10}m`, pl = (x) => `<span class="pill ${x <= 500 ? 'good' : x <= 1000 ? 'warn' : 'none'}">${m(x)}</span>`;
+      const nw = (t) => `<span class="nw">${t}</span>`;
+      out.push(row('셔틀 출근', sh.o.length ? sh.o.map((v, i) => i ? `<span class="muted">${nw(v.nm + ' ' + m(v.m))} · ${nw(v.t[0] + ' 탑승')}</span>` : `<b>${v.nm}</b> ${pl(v.m)} ${nw(`<b>${v.t[0]}</b> 탑승 → ${v.t[1]} 도착`)}`).join('<br>') : '–', sh.o.length ? `${sh.o[0].rt.join(' · ')} · 통상 근무 · 직선거리` : ''));
+      out.push(row('셔틀 퇴근', sh.h.length ? sh.h.map((v, i) => i ? `<span class="muted">${nw(v.nm + ' ' + m(v.m))} · ${nw(v.t.join('·') + '시')}</span>` : `<b>${v.nm}</b> ${pl(v.m)} 하차 · ${nw(`<b>${v.t.join('·')}시</b> 출발`)}`).join('<br>') : '–', sh.h.length ? sh.h[0].rt.join(' · ') : '')); } }   // 대중교통, 가까운 역 → 업무지구 역(걷는 시간 제외). 입지 = 업무지구와의 절대거리 📖 p.85~103
   // 한강(2026-11-15 사용자: 직선거리 말고 '한강뷰 단지'인지) = B 손 관리(collector/hanview.py) 우선, 없으면 A 지도 추정(collector/hanbank.py:
   // OSM 한강 물가까지 직선 + 단지와 물가 사이에 다른 아파트 단지가 없는지). 단지 중심 한 점이라 동·층·향 차이는 못 봄 → '추정'. 2km 넘으면 줄 없음
   const HV = (D.v2_hanview || {})[seq], hb = inf[21], hf = inf[22], hk = inf[23], km = (m) => m >= 1000 ? (m / 1000).toFixed(1) + 'km' : Math.round(m / 10) * 10 + 'm';
@@ -1696,7 +1720,7 @@ function drawWatch() {
   $$('#cmpSort button').forEach(x => x.setAttribute('aria-pressed', x.dataset.v === cmpSort));
   $('#cmpT').innerHTML = `<thead><tr><th>단지</th><th>전세가율</th><th>거래</th><th>하락기</th><th>충족</th></tr></thead><tbody>` +
     rows.map(({ seq, k, ok, g, a, inf }) => { const n = cxName(seq), ref = cxRef(seq), rm = rmTag(seq), hh = inf[16], by = inf[15];
-      const meta = [inf[5] && inf[6] != null ? `${inf[5]} ${Math.round(inf[6])}m` : '', by ? `${YEAR - by}년차` : '', hh ? Number(hh).toLocaleString() + '세대' : ''].filter(Boolean).join(' · ');
+      const shn = shuttleNear(seq, () => drawWatch()), meta = [inf[5] && inf[6] != null ? `${inf[5]} ${Math.round(inf[6])}m` : '', shn && shn.o[0] ? `셔틀 ${Math.round(shn.o[0].m / 10) * 10}m` : '', by ? `${YEAR - by}년차` : '', hh ? Number(hh).toLocaleString() + '세대' : ''].filter(Boolean).map(t => `<span class="nw">${t}</span>`).join(' · ');
       return `<tr><td style="min-width:150px"><b>${n.length > 12 ? n.slice(0, 12) + '…' : n}</b>
         <div style="font-size:12px;margin-top:2px">기준 <b>${eok(ref)}</b>${a && a.min ? ` · 최저 호가 ${eok(a.min)} <span class="${g > 3 ? 'up' : g < -3 ? 'dn' : 'muted'}">${g >= 0 ? '+' : ''}${g.toFixed(0)}%</span>` : ' · <span class="muted">호가 없음</span>'}</div>
         ${a && a.min && ref ? (() => { const r2 = main(seq), aa = asksOf(seq, r2.ag), lo = ref * 0.88, hi = ref * 1.14;
