@@ -509,9 +509,11 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
       <div class="card" id="pWhen">
         <h2>언제 살 수 있나 <small>내 예산 기준</small></h2>
         <div class="kpis"><div class="kpi"><span class="k">지금 가진 돈</span><span class="v" id="pSeed">–</span><span class="d" id="pSeedNote"></span></div>
+          <div class="kpi"><span class="k">대출 계획</span><span class="v" id="pLoan">–</span><span class="d" id="pLoanNote"></span></div>
+          <div class="kpi"><span class="k">지금 살 수 있는 집값</span><span class="v" id="pMax" style="color:var(--good)">–</span><span class="d">가진 돈 + 대출 − 부대비용</span></div>
           <div class="kpi"><span class="k">한 달 저축 (만원)</span><input id="pSave" inputmode="numeric" value="250" style="font:inherit;font-size:20px;font-weight:700;width:100%;min-width:0;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;padding:4px 8px;background:var(--surface);color:var(--ink)"><span class="d">모든 기기에 저장</span></div></div>
         <div id="pWhenTab"></div>
-        <p class="src">필요 현금 = 기준 시세 − 주담대 + 부대비용(DSR 제외). '오르면' = 지난 1년 흐름이 이어진다는 가정.</p>
+        <p class="src">대출·금리·소득은 찾기 탭 '내 예산' 값. 월 상환은 원리금 균등 첫 달, 소득 40% 넘으면 은행 DSR 심사에서 막힐 수 있어요. '오르면' = 지난 1년 흐름이 이어진다는 가정.</p>
       </div>
       <div class="card">
         <h2>기다림 비용 <small>지난 1년 흐름 그대로라면</small></h2>
@@ -1277,17 +1279,31 @@ function priceHtml(seq) {
 /* 계획 탭(2026-11-21 사용자 '진행'): ① 언제 살 수 있나 — 찾기 탭 예산(가진 돈·대출 종류·지역)과 한 달 저축(v2-plan, 서버 저장)으로
    관심 단지마다 필요 현금(기준 시세 − 주담대 + 부대비용)에 닿는 달. 저축만 / 지난 1년 변화율이 이어진다면(기다림 비용과 같은 가정, 예측 아님) */
 function drawWhen() {
-  const seed = +String($('#b_seed').value).replace(/,/g, '') || 0, first = $('#b_type').value === 'first', reg = $('#b_reg').value === '1';
-  const ltv = first ? RULE.ltvFirst : RULE.ltv(reg), loan = (p) => Math.min(RULE.cap(p), p * ltv), need = (p) => p - loan(p) + Calc.costs(p);
-  const save = Math.max(0, +String($('#pSave').value).replace(/,/g, '') || 0);
-  $('#pSeed').textContent = eok(seed); $('#pSeedNote').textContent = `찾기 탭 예산 · ${first ? '생애최초' : reg ? '규제지역' : '비규제'}`;
+  const num = (id) => +String($('#' + id).value).replace(/,/g, '') || 0;
+  const seed = num('b_seed'), inc = num('b_income'), first = $('#b_type').value === 'first', reg = $('#b_reg').value === '1';
+  const want = String($('#b_mort').value).trim() === '' ? Infinity : num('b_mort'), rate = num('b_rate'), yrs = Math.max(1, num('b_years'));
+  const other = num('b_other'), oPay = Calc.other(other, num('b_orate'), num('b_oyears'), $('#b_orep').value)[0];
+  const ltv = first ? RULE.ltvFirst : RULE.ltv(reg), loan = (p) => Math.min(want, RULE.cap(p), p * ltv), need = (p) => p - loan(p) - other + Calc.costs(p);
+  const pay = (p) => Calc.payment(loan(p) * 10000, rate, yrs) / 10000 + oPay;
+  const save = Math.max(0, num('pSave'));
+  $('#pSeed').textContent = eok(seed); $('#pSeedNote').textContent = `찾기 탭 예산${other ? ` · 그 밖 대출 ${man(other)} 포함` : ''}`;
+  $('#pLoan').textContent = want === Infinity ? '최대' : man(want);
+  $('#pLoanNote').textContent = `${first ? '생애최초' : reg ? '규제지역' : '비규제'} · ${rate}% ${yrs}년`;
+  $('#pMax').textContent = budget.price ? eok(budget.price) : '–';
   const rows = [...watch].map(s => { const ref = cxRef(s); if (!ref) return null; const c = useFull(s) ? CXS[s] : null, ch = c && c.phase ? +c.phase.chg_12m : q1y(s);
     const when = (g) => { for (let m = 0; m <= 72; m++) { const p = ref * Math.pow(1 + g / 100, m / 12); if (seed + save * m >= need(p)) return m; } return null; };
-    return { nm: cxName(s).replace(/아파트$/, ''), ref, need: need(ref), loan: loan(ref), m0: when(0), m1: ch != null && isFinite(ch) ? when(ch) : undefined, ch }; }).filter(Boolean).sort((a, b) => a.need - b.need);
+    const sh = inc ? pay(ref) / inc * 100 : null;
+    return { nm: cxName(s).replace(/아파트$/, ''), ref, need: need(ref), loan: loan(ref), mp: pay(ref), sh, m0: when(0), m1: ch != null && isFinite(ch) ? when(ch) : undefined, ch }; }).filter(Boolean).sort((a, b) => a.need - b.need);
   const fm = (m) => m === undefined ? '<span class="muted">–</span>' : m == null ? '<span class="up">6년 넘게</span>' : m === 0 ? '<b style="color:var(--good)">지금</b>'
     : (() => { const d = new Date(D.asof); d.setMonth(d.getMonth() + m); return `${m}개월 <span class="muted">(${String(d.getFullYear()).slice(2)}.${String(d.getMonth() + 1).padStart(2, '0')})</span>`; })();
-  $('#pWhenTab').innerHTML = rows.length ? `<table class="per" style="margin-top:6px"><tr><th>관심 단지</th><th class="nw">필요 현금</th><th>저축만</th><th>오르면</th></tr>${rows.map(r =>
-    `<tr><td>${r.nm.length > 8 ? r.nm.slice(0, 8) + '…' : r.nm}<br><span class="muted" style="font-size:11.5px">${eok(r.ref)} · 대출 ${eok(r.loan)}</span></td><td><b>${eok(r.need)}</b></td><td>${fm(r.m0)}</td><td>${fm(r.m1)}${r.ch != null && isFinite(r.ch) ? `<br><span class="muted" style="font-size:11px">1년 ${sgn(r.ch, 0)}</span>` : ''}</td></tr>`).join('')}</table>`
+  const shc = (v) => v == null ? '' : v > 40 ? 'bad' : v > 30 ? 'warn' : 'good';
+  let line = false;
+  $('#pWhenTab').innerHTML = rows.length ? `<table class="per" style="margin-top:6px"><tr><th>관심 단지</th><th>대출 · 월 상환</th><th class="nw">필요 현금</th><th>언제</th></tr>${rows.map(r => {
+    const ok = r.m0 === 0, sep = !ok && !line && rows.some(x => x.m0 === 0) ? (line = true, `<tr><td colspan="4" style="text-align:center;font-size:11.5px;color:var(--good);border-bottom:2px solid var(--good);padding:3px 0">▲ 지금 가진 돈으로 살 수 있어요</td></tr>`) : '';
+    return sep + `<tr${ok ? ' style="background:color-mix(in srgb, var(--good) 7%, transparent)"' : ''}><td>${r.nm.length > 8 ? r.nm.slice(0, 8) + '…' : r.nm}<br><span class="muted" style="font-size:11.5px">${eok(r.ref)}</span></td>`
+      + `<td>${eok(r.loan)}<br><span style="font-size:11.5px;color:var(--${shc(r.sh) || 'ink-3'})">월 ${man(r.mp)}${r.sh != null ? ` · ${Math.round(r.sh)}%` : ''}</span></td>`
+      + `<td><b>${eok(r.need)}</b>${ok ? '' : `<br><span class="up" style="font-size:11.5px">${eok(r.need - seed)} 부족</span>`}</td>`
+      + `<td>${fm(r.m0)}${r.m1 !== undefined && r.m1 !== r.m0 ? `<br><span class="muted" style="font-size:11px">오르면 ${r.m1 == null ? '6년+' : r.m1 === 0 ? '지금' : r.m1 + '개월'}</span>` : ''}</td></tr>`; }).join('')}</table>`
     : '<p class="muted">관심 단지(♡)에 기준 시세가 있어야 계산해요.</p>';
 }
 $('#pSave').value = (store.get('v2-plan', {}) || {}).save ?? 250;
