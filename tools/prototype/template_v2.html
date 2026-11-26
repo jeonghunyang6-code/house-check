@@ -314,6 +314,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
       <div class="msub" id="sigRb" hidden>
         <h2>반등·상승 신호 <small id="sigRbDate"></small></h2>
         <div id="sigRbBody" style="display:grid;gap:12px"></div>
+        <div id="rentP"></div>
       </div>
       <div class="msub" id="supCard">
         <h2>매수심리 <small id="supDate"></small></h2>
@@ -2320,6 +2321,20 @@ watchChanged.push(drawMove);
 /* 기간별 변동(2026-11-12 사용자 요청 시안): R-ONE 주간 지수 1개월(4주)·3개월(13주)·6개월(26주)·1년(52주) 전 발표 주 대비. 서울·수도권 + 관심 단지 지역 + 관심권 전체(펼치기) */
 const perSt = { kind: 't' };
 /* 핵심 신호 '시장국면' 칸(2026-11-22 사용자 3번): 옆 칸보다 짧아 빈 공간 → 관심 단지가 많은 지역 2곳의 주간지수 1년 매매 변화(판정 없음) */
+/* 지역별 전세 압력(2026-11-26 사용자): 서울 D5 와 같은 규칙(신규 전세 1년 전보다 감소 + 전세지수 13주 상승 = 상승 압력)을
+   관심 단지가 있는 시군구에. 새 기준선 없음(같은 규칙을 지역에). 갱신·월세 비중은 판정 없이 참고 */
+function drawRentP() {
+  const P = D.v2_rentp, W = D.weekly; if (!P || !P.v || !W) return;
+  const rcs = [...new Set([...watch].map(s => infoOf(s)[1] || (main(s) || {}).rc).filter(rc => rc && P.v[rc]))];
+  if (!rcs.length) { $('#rentP').innerHTML = ''; return; }
+  const row = (rc) => { const [nn, n0, nr, nw, nj, w0, j0] = P.v[rc], y = (nn / n0 - 1) * 100, q = (W.v[rc] || {}).qj, on = y < 0 && q > 0;
+    return { rc, y, on, html: `<tr><td>${rn(rc)}</td><td class="${y < 0 ? 'dn' : 'up'}"><b>${sgn(y, 0)}</b></td><td>${Math.round(nr / (nn + nr) * 100)}%</td>`
+      + `<td>${Math.round(nw / (nw + nj) * 100)}%<span class="muted" style="font-size:11px"> ←${Math.round(w0 / (w0 + j0) * 100)}</span></td>`
+      + `<td class="${q > 0 ? 'up' : 'dn'}">${q == null ? '–' : sgn(q, 1)}</td><td>${on ? '<span class="pill warn" style="font-size:11px;padding:0 6px">상승 압력</span>' : '<span class="muted" style="font-size:11.5px">약함</span>'}</td></tr>` }; };
+  const rs = rcs.map(row).sort((a, b) => a.y - b.y), [m0, m1] = P.m;
+  $('#rentP').innerHTML = `<div style="padding-top:12px;border-top:1px solid var(--line)"><b style="font-size:14.5px">관심 지역 전세</b> <span class="muted" style="font-size:12px">${m0.slice(2, 4)}.${m0.slice(4)}~${m1.slice(4)}월, 1년 전 대비</span>
+    <table class="per"><tr><th>지역</th><th>새 전세</th><th>갱신</th><th>월세 비중</th><th>전세 3개월</th><th></th></tr>${rs.map(r => r.html).join('')}</table><p class="muted" style="margin:4px 0 0;font-size:12px">새 전세가 줄고 전세값이 오르면 상승 압력 · ←는 1년 전</p></div>`;
+}
 function drawSigMine() {
   const box = $('#sigs .s'), W = D.weekly; if (!box || !W || !W.v) return;
   let el = $('#sigMine'); if (!el) { box.insertAdjacentHTML('beforeend', '<div id="sigMine" style="display:contents"></div>'); el = $('#sigMine'); }
@@ -2337,7 +2352,7 @@ function drawPeriods() {
   const all = [...(window.HC_MINE || [])].filter(rc => W.v[rc]).sort((a, b) => yv(b) - yv(a));
   $('#perTab').innerHTML = `<table class="per">${head}${tr('수도권', W.agg.sudo, 'tot')}${tr('서울', W.agg.seoul, 'tot' + (mine.length ? ' gap' : ''))}${mine.map(rc => tr(rn(rc), W.v[rc])).join('')}</table>`
     + `<details class="more-f" style="margin-top:4px"><summary>관심권 전체 ${all.length}곳 (1년 높은 순)</summary><table class="per">${head}${all.map(rc => tr(rn(rc), W.v[rc])).join('')}</table></details>`;
-  $('#perDate').textContent = `${dt(W.date)} 주 기준`; drawSigMine();
+  $('#perDate').textContent = `${dt(W.date)} 주 기준`; drawSigMine(); drawRentP();
   $('#perSrc').textContent = `한국부동산원 R-ONE 주간 아파트 ${k === 't' ? '매매' : '전세'} 가격지수, 각 기간 전 발표 주 대비`;
 }
 document.getElementById('perKind').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; perSt.kind = b.dataset.v;
