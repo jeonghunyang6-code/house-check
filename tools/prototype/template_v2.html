@@ -401,7 +401,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
         <div class="chips" id="fRegion" aria-label="지역"></div>
         <div class="chips" id="fArea" aria-label="면적"></div>
         <div class="chips" id="fRec" aria-label="작가 기준"></div>
-        <details class="more-f" id="moreF"><summary>조건 더 보기 · 세대수·연식·출퇴근 외 <span id="moreN"></span></summary><div class="body" style="gap:10px">
+        <details class="more-f" id="moreF"><summary>조건 더 보기 <span id="moreSub">· 세대수·연식·출퇴근 외</span><span id="moreN"></span></summary><div class="body" style="gap:10px">
           <div class="chips" id="fHh" aria-label="세대수"></div>
           <div class="chips" id="fAge" aria-label="연식"></div>
           <div class="chips" id="fWork" aria-label="직장"></div>
@@ -1157,7 +1157,7 @@ const phPill = (p) => p ? `<span class="pill ${p === '상승장' ? 'warn' : p ==
 let candList = [];
 function drawCand() {
   { const n = [['hh', '세대수 전체'], ['age', '연식 전체'], ['work', '직장 무관'], ['st', '역 거리 무관'], ['phase', '지역 국면 전체']].filter(([k, d]) => cst[k] !== d).length;
-    $('#moreN').innerHTML = n ? `<span class="pill acc" style="font-size:11px;padding:0 7px">${n}개 적용</span>` : ''; }   // 접힌 안에 고른 조건이 있으면 보이게
+    $('#moreN').innerHTML = n ? `<span class="pill acc" style="font-size:11px;padding:0 7px">${n}개 적용</span>` : ''; $('#moreSub').hidden = !!n; }   // 2026-11-26: 좁은 화면에서 제목이 두 줄로 넘어가 아래 칩이 밀림 → 적용 중이면 설명 대신 개수만   // 접힌 안에 고른 조건이 있으면 보이게
   const b = budget.price, wmin = MINF[cst.min], car = Array.isArray(WORK[cst.work]);
   $('#workNote').textContent = WORK[cst.work] == null ? '' : car ? (Object.keys(DRIVE).length ? '자차: 네이버 길찾기(평일 아침 실시간 빠른길). 아직 계산 안 된 단지는 직선거리로 추정' : '자차 추정: 직선거리 × 1.35 ÷ 시속 60km (네이버 길찾기 계산 전)') : '대중교통: 가까운 역 → 업무지구 역 시간(걷는 시간 제외)';
   candList = CAND.filter(r => r.ref <= b && r.ref >= b * 0.8 && REGF[cst.region](r.rc) && AREAF[cst.area](r.ag) && (cst.phase === '지역 국면 전체' || r.phase === cst.phase)
