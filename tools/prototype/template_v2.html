@@ -1286,9 +1286,9 @@ function drawWhen() {
   const ltv = first ? RULE.ltvFirst : RULE.ltv(reg), loan = (p) => Math.min(want, RULE.cap(p), p * ltv), need = (p) => p - loan(p) - other + Calc.costs(p);
   const pay = (p) => Calc.payment(loan(p) * 10000, rate, yrs) / 10000 + oPay;
   const save = Math.max(0, num('pSave'));
-  $('#pSeed').textContent = eok(seed); $('#pSeedNote').textContent = `찾기 탭 예산${other ? ` · 그 밖 대출 ${man(other)} 포함` : ''}`;
-  $('#pLoan').textContent = want === Infinity ? '최대' : man(want);
-  $('#pLoanNote').textContent = `${first ? '생애최초' : reg ? '규제지역' : '비규제'} · ${rate}% ${yrs}년`;
+  $('#pSeed').textContent = eok(seed); $('#pSeedNote').textContent = '찾기 탭 예산';
+  $('#pLoan').textContent = (want === Infinity ? '최대' : man(want)) + (other ? ` + ${man(other)}` : '');
+  $('#pLoanNote').textContent = `주담대 ${first ? '생애최초' : reg ? '규제지역' : '비규제'} ${rate}% ${yrs}년${other ? ` · 그 밖 대출 ${num('b_orate')}% ${Math.max(1, num('b_oyears'))}년` : ''}`;
   $('#pMax').textContent = budget.price ? eok(budget.price) : '–';
   const rows = [...watch].map(s => { const ref = cxRef(s); if (!ref) return null; const c = useFull(s) ? CXS[s] : null, ch = c && c.phase ? +c.phase.chg_12m : q1y(s);
     const when = (g) => { for (let m = 0; m <= 72; m++) { const p = ref * Math.pow(1 + g / 100, m / 12); if (seed + save * m >= need(p)) return m; } return null; };
