@@ -2344,7 +2344,7 @@ function drawRentP() {
     <table class="per"><tr><th>지역</th><th>새 전세</th><th>월세 비중</th><th>전세 3개월</th><th></th></tr>`
     + line('<span class="muted">서울 전체</span>', sum('11'), W.agg.seoul.qj, null, '') + line('<span class="muted">수도권</span>', sum(''), W.agg.sudo.qj, null, 'gap')
     + rs.map(([rc]) => line(rn(rc), P.v[rc], (W.v[rc] || {}).qj, [rk(yr, rc), rk(qr, rc)])).join('')
-    + `</table><p class="muted" style="margin:4px 0 0;font-size:12px">압력 = 새 전세↓·전세값↑(상승 압력) · 순위 = 수도권 ${yr.length}곳 중 · ←는 1년 전</p></div>`;
+    + `</table><p class="muted" style="margin:4px 0 0;font-size:12px">압력 = 새 전세↓·전세값↑ · 순위: 수도권 ${yr.length}곳 중 · ←1년 전</p></div>`;
 }
 function drawSigMine() {
   const box = $('#sigs .s'), W = D.weekly; if (!box || !W || !W.v) return;
