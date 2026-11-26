@@ -2327,13 +2327,23 @@ function drawRentP() {
   const P = D.v2_rentp, W = D.weekly; if (!P || !P.v || !W) return;
   const rcs = [...new Set([...watch].map(s => infoOf(s)[1] || (main(s) || {}).rc).filter(rc => rc && P.v[rc]))];
   if (!rcs.length) { $('#rentP').innerHTML = ''; return; }
-  const row = (rc) => { const [nn, n0, nr, nw, nj, w0, j0] = P.v[rc], y = (nn / n0 - 1) * 100, q = (W.v[rc] || {}).qj, on = y < 0 && q > 0;
-    return { rc, y, on, html: `<tr><td>${rn(rc)}</td><td class="${y < 0 ? 'dn' : 'up'}"><b>${sgn(y, 0)}</b></td><td>${Math.round(nr / (nn + nr) * 100)}%</td>`
-      + `<td>${Math.round(nw / (nw + nj) * 100)}%<span class="muted" style="font-size:11px"> ←${Math.round(w0 / (w0 + j0) * 100)}</span></td>`
-      + `<td class="${q > 0 ? 'up' : 'dn'}">${q == null ? '–' : sgn(q, 1)}</td><td>${on ? '<span class="pill warn" style="font-size:11px;padding:0 6px">상승 압력</span>' : '<span class="muted" style="font-size:11.5px">약함</span>'}</td></tr>` }; };
-  const rs = rcs.map(row).sort((a, b) => a.y - b.y), [m0, m1] = P.m;
+  // 2026-11-26 사용자: 수도권 대부분이 '상승 압력'이라 평균·순위와 비교. 순위는 판정이 아니라 위치(새 기준선 없음)
+  const yo = (x) => (x[0] / x[1] - 1) * 100;
+  const yr = Object.entries(P.v).filter(([, x]) => x[1] >= 100).map(([rc, x]) => [rc, yo(x)]).sort((a, b) => a[1] - b[1]);   // 감소 큰 순(1년 전 100건+)
+  const qr = Object.entries(W.v).filter(([, x]) => x.qj != null).map(([rc, x]) => [rc, x.qj]).sort((a, b) => b[1] - a[1]);    // 전세 3개월 상승 큰 순
+  const rk = (arr, rc) => { const i = arr.findIndex(z => z[0] === rc); return i < 0 ? '' : `<br><span class="muted" style="font-size:11px">${i + 1}위</span>`; };
+  const sum = (pf) => { const a = Object.entries(P.v).filter(([rc]) => rc.startsWith(pf)).map(([, x]) => x); return [0, 1, 2, 3, 4, 5, 6].map(i => a.reduce((t, x) => t + x[i], 0)); };
+  const pc = (v) => `${Math.round(v)}%`;
+  const line = (nm, x, q, extra, cls) => { const y = yo(x), on = y < 0 && q > 0;
+    return `<tr${cls ? ` class="${cls}"` : ''}><td>${nm}</td><td class="${y < 0 ? 'dn' : 'up'}"><b>${sgn(y, 0)}</b>${extra ? extra[0] : ''}</td><td>${pc(x[2] / (x[0] + x[2]) * 100)}</td>`
+      + `<td>${pc(x[3] / (x[3] + x[4]) * 100)}<span class="muted" style="font-size:11px"> ←${Math.round(x[5] / (x[5] + x[6]) * 100)}</span></td>`
+      + `<td class="${q > 0 ? 'up' : 'dn'}">${q == null ? '–' : sgn(q, 1)}${extra ? extra[1] : ''}</td><td>${on ? '<span class="pill warn" style="font-size:11px;padding:0 6px">상승 압력</span>' : '<span class="muted" style="font-size:11.5px">약함</span>'}</td></tr>`; };
+  const rs = rcs.map(rc => [rc, yo(P.v[rc])]).sort((a, b) => a[1] - b[1]), [m0, m1] = P.m;
   $('#rentP').innerHTML = `<div style="padding-top:12px;border-top:1px solid var(--line)"><b style="font-size:14.5px">관심 지역 전세</b> <span class="muted" style="font-size:12px">${m0.slice(2, 4)}.${m0.slice(4)}~${m1.slice(4)}월, 1년 전 대비</span>
-    <table class="per"><tr><th>지역</th><th>새 전세</th><th>갱신</th><th>월세 비중</th><th>전세 3개월</th><th></th></tr>${rs.map(r => r.html).join('')}</table><p class="muted" style="margin:4px 0 0;font-size:12px">새 전세가 줄고 전세값이 오르면 상승 압력 · ←는 1년 전</p></div>`;
+    <table class="per"><tr><th>지역</th><th>새 전세</th><th>갱신</th><th>월세 비중</th><th>전세 3개월</th><th></th></tr>`
+    + line('<span class="muted">서울 평균</span>', sum('11'), W.agg.seoul.qj, null, '') + line('<span class="muted">수도권 평균</span>', sum(''), W.agg.sudo.qj, null, 'gap')
+    + rs.map(([rc]) => line(rn(rc), P.v[rc], (W.v[rc] || {}).qj, [rk(yr, rc), rk(qr, rc)])).join('')
+    + `</table><p class="muted" style="margin:4px 0 0;font-size:12px">새 전세↓·전세값↑ = 상승 압력 · 순위 = 수도권 ${yr.length}곳 중 · ←는 1년 전</p></div>`;
 }
 function drawSigMine() {
   const box = $('#sigs .s'), W = D.weekly; if (!box || !W || !W.v) return;
