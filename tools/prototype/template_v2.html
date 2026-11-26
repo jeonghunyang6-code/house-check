@@ -410,6 +410,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
           <p class="muted" id="workNote" style="font-size:12px"></p>
           <div class="chips" id="fMin" aria-label="출퇴근 시간"></div>
           <div class="chips" id="fSt" aria-label="역세권"></div>
+          <div class="chips" id="fShut" aria-label="회사 셔틀" hidden></div>
           <div class="chips" id="fPhase" aria-label="지역 국면"></div>
           <div class="chips" id="fSort" aria-label="정렬"></div>
         </div></details>
@@ -1153,24 +1154,29 @@ const MINF = { '30분 이내': 30, '45분 이내': 45, '60분 이내': 60, '90�
 // 🔧 자차 시간 추정 = 직선거리 × 1.35(도로 굴곡) ÷ 시속 60km(고속도로 섞인 출근길 평균, 분당→이천 약 47분 기준으로 맞춤). 실제 경로 시간이 아님 → 실제 서비스는 길찾기 API 로 미리 계산
 const carMin = (seq, to) => { const api = (DRIVE[seq] || {})[to[2]]; if (api != null) return Math.round(api); const i = INFO[seq]; return i && i[3] ? Math.round(distM(i[3], i[4], to[0], to[1]) * 1.35 / 60000 * 60) : null; };
 const workMin = (seq) => { const w = WORK[cst.work]; return w == null ? null : Array.isArray(w) ? carMin(seq, w) : (INFO[seq] || [])[w] ?? null; };
+/* 회사 셔틀(2026-11-26): 가장 가까운 통상 출근 승차 정류장까지 직선거리. 자료는 /api/shuttle(비밀 문구), 단지마다 한 번만 계산 */
+const SHT = { d: null, p: null, cb: [] }, SHF = { '셔틀 무관': null, '셔틀 300m': 300, '셔틀 500m': 500, '셔틀 1km': 1000 }, SHD = {};
+const shutDist = (seq) => { if (seq in SHD) return SHD[seq]; const d = SHT.d, inf = INFO[seq] || []; if (!d) return undefined; if (inf[3] == null) return (SHD[seq] = null);
+  let m = Infinity; for (const x of d.o) { const v = distM(inf[3], inf[4], x[1], x[2]); if (v < m) m = v; } return (SHD[seq] = m === Infinity ? null : m); };
 const STF = { '역 거리 무관': () => true, '역 700m 이내': (m) => m != null && m <= 700, '역 1km 이내': (m) => m != null && m <= 1000 };
 const SORTF = { '급지순': (a, c) => (a.grade || 9) - (c.grade || 9) || (c.newbig - a.newbig) || c.ref - a.ref, '싼 순': (a, c) => a.ref - c.ref, '새 아파트순': (a, c) => (c.by || 0) - (a.by || 0), '역 가까운 순': (a, c) => ((INFO[a.seq] || [])[6] ?? 9e9) - ((INFO[c.seq] || [])[6] ?? 9e9) };
 const phPill = (p) => p ? `<span class="pill ${p === '상승장' ? 'warn' : p === '하락장' ? 'bad' : 'none'}">지역 ${p}</span>` : '';
 let candList = [];
 function drawCand() {
-  { const n = [['hh', '세대수 전체'], ['age', '연식 전체'], ['work', '직장 무관'], ['st', '역 거리 무관'], ['phase', '지역 국면 전체']].filter(([k, d]) => cst[k] !== d).length;
+  { const n = [['hh', '세대수 전체'], ['age', '연식 전체'], ['work', '직장 무관'], ['st', '역 거리 무관'], ['phase', '지역 국면 전체'], ['shut', '셔틀 무관']].filter(([k, d]) => cst[k] !== d).length;
     $('#moreN').innerHTML = n ? `<span class="pill acc" style="font-size:11px;padding:0 7px">${n}개 적용</span>` : ''; $('#moreSub').hidden = !!n; }   // 2026-11-26: 좁은 화면에서 제목이 두 줄로 넘어가 아래 칩이 밀림 → 적용 중이면 설명 대신 개수만   // 접힌 안에 고른 조건이 있으면 보이게
   const b = budget.price, wmin = MINF[cst.min], car = Array.isArray(WORK[cst.work]);
   $('#workNote').textContent = WORK[cst.work] == null ? '' : car ? (Object.keys(DRIVE).length ? '자차: 네이버 길찾기(평일 아침 실시간 빠른길). 아직 계산 안 된 단지는 직선거리로 추정' : '자차 추정: 직선거리 × 1.35 ÷ 시속 60km (네이버 길찾기 계산 전)') : '대중교통: 가까운 역 → 업무지구 역 시간(걷는 시간 제외)';
   candList = CAND.filter(r => r.ref <= b && r.ref >= b * 0.8 && REGF[cst.region](r.rc) && AREAF[cst.area](r.ag) && (cst.phase === '지역 국면 전체' || r.phase === cst.phase)
     && (cst.hh === '세대수 전체' || (r.hh && HHF[cst.hh](r.hh))) && (cst.age === '연식 전체' || (r.by && AGEF[cst.age](YEAR - r.by)))
     && (WORK[cst.work] == null || (workMin(r.seq) != null && workMin(r.seq) <= wmin)) && STF[cst.st]((INFO[r.seq] || [])[6])
+    && (SHF[cst.shut] == null || (shutDist(r.seq) != null && shutDist(r.seq) <= SHF[cst.shut]))
     && (!cst.rec || ((r.ab & 3) !== 3 && !(r.ab & 4)))).sort(SORTF[cst.sort]);   // 작가: 회복 지연·2023년 초 대비 반등 없음 = 사면 안 되는 단지
   $('#cCount').textContent = `${candList.length.toLocaleString()}곳`;
   $('#cList').innerHTML = candList.slice(0, cst.shown).map((r, i) => {
     const inf = INFO[r.seq] || [], wm = workMin(r.seq);
     return `<div class="irow"><button type="button" class="open" data-i="${i}"><span class="nm">${r.name}</span>
-      <span class="sub"><span class="nw">${rn(r.rc)} ${r.umd}</span>${r.by ? ` · <span class="nw">${YEAR - r.by}년차</span>` : ''}${r.hh ? ` · <span class="nw">${r.hh.toLocaleString()}세대</span>` : ''}${inf[6] != null ? ` · <span class="nw">${inf[5]}역 ${inf[6]}m</span>` : ''}${wm != null ? ` · <span class="nw">${cst.work} ${car ? '차 ' : ''}${wm}분</span>` : ''}</span>
+      <span class="sub"><span class="nw">${rn(r.rc)} ${r.umd}</span>${r.by ? ` · <span class="nw">${YEAR - r.by}년차</span>` : ''}${r.hh ? ` · <span class="nw">${r.hh.toLocaleString()}세대</span>` : ''}${inf[6] != null ? ` · <span class="nw">${inf[5]}역 ${inf[6]}m</span>` : ''}${SHT.d && shutDist(r.seq) != null ? ` · <span class="nw">셔틀 ${Math.round(shutDist(r.seq) / 10) * 10}m</span>` : ''}${wm != null ? ` · <span class="nw">${cst.work} ${car ? '차 ' : ''}${wm}분</span>` : ''}</span>
       <span class="tags">${r.grade ? `<span class="pill none">${r.grade}급지</span>` : ''}${phPill(r.phase)}${r.newbig ? '<span class="pill acc">신축 대단지</span>' : ''}${abPill(r.ab)}${r.stage ? `<span class="pill ${r.sno >= 3 ? 'acc' : 'warn'}">정비 ${r.stage}</span>` : ''}</span></button>
       <span class="side"><span class="pr">${eok(r.ref)}${r.est ? '<span class="muted">*</span>' : ''}</span><button type="button" class="heart" data-s="${r.seq}" aria-pressed="${watch.has(r.seq)}" aria-label="관심 단지">${watch.has(r.seq) ? '♥' : '♡'}</button></span></div>`;
   }).join('') || '<p class="muted" style="padding:12px 0">조건에 맞는 단지가 없습니다. 조건을 넓혀 보세요.</p>';
@@ -1188,7 +1194,9 @@ cst.rec = store.get('v2-frec', true);
 const recBtn = () => { $('#fRec').innerHTML = `<button type="button" class="chip" aria-pressed="${cst.rec}">회복 지연·반등 없음 빼기</button><span class="muted" style="font-size:12px;align-self:center">작가: 사면 안 되는 단지</span>`; };
 recBtn(); $('#fRec').addEventListener('click', (e) => { if (!e.target.closest('button')) return; cst.rec = !cst.rec; store.set('v2-frec', cst.rec); recBtn(); cst.shown = 10; drawCand(); });
 chips('#fWork', Object.keys(WORK), cst.work, reset('work')); chips('#fMin', Object.keys(MINF), cst.min, reset('min'));
-chips('#fSt', Object.keys(STF), cst.st, reset('st')); chips('#fSort', Object.keys(SORTF), cst.sort, reset('sort'));
+chips('#fSt', Object.keys(STF), cst.st, reset('st'));
+cst.shut = '셔틀 무관'; chips('#fShut', Object.keys(SHF), cst.shut, (v) => { cst.shut = v; cst.shown = 10; if (SHF[v] != null && !SHT.d) { $('#cCount').textContent = '셔틀 정류장 불러오는 중…'; shuttleData(() => drawCand()); return; } drawCand(); });
+{ const showShut = () => { $('#fShut').hidden = !(window.HC_WEB && HC_WEB.ok); }; showShut(); setTimeout(showShut, 2500); }   // 비밀 문구로 연 화면에서만 chips('#fSort', Object.keys(SORTF), cst.sort, reset('sort'));
 $('#cMore').addEventListener('click', () => { cst.shown += 10; drawCand(); });
 /* 단지 검색: 이름·동 (띄어쓰기 무시, 2글자 이상) */
 let SEARCH_ = null;   // 검색 목록은 처음 찾을 때 만든다(첫 화면 약 0.1초, 2026-10-26)
@@ -1381,7 +1389,6 @@ function redevNote(z) {
 /* 입지 사실표: 📖 p.356(M3) 실거래가가 입지를 다 반영한 최종 점수 → 점수·순위를 만들지 않고 "왜 이 가격인가" 설명용 숫자만. 기준은 송희구가 숫자로 말한 것만 표시 */
 /* 회사 셔틀(2026-11-26 사용자): 통상 출근 승차 정류장·퇴근 하차 정류장. 회사 내부 자료 → 공개 파일에 없고 비밀 문구 화면에서 /api/shuttle 로만.
    o = [이름, 위도, 경도, 노선, 탑승, 도착], h = [이름, 위도, 경도, 노선, [출발 시]]. 퇴근 하차 시각은 원본이 순서용(2분 간격)이라 안 씀. 거리는 직선 */
-const SHT = { d: null, p: null, cb: [] };
 function shuttleData(then) {
   if (SHT.d) return SHT.d; if (!(window.HC_WEB && HC_WEB.ok)) return null;
   if (then) SHT.cb.push(then);
