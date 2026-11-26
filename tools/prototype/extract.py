@@ -228,6 +228,18 @@ out['e6_targets'] = select(db, "SELECT apt_seq, rank, target_seq, ratio_now, gap
 out['v2_wk'] = select(db, """SELECT cls_id, week_date::text d, value v FROM rone_weekly WHERE stat = 'sale' AND cls_id IN (50008, 50002)
  AND week_date >= '2023-06-01' ORDER BY 1, 2""")
 # 매수심리(2026-11-21 사용자): R-ONE 주간 매매수급지수. 구 단위는 발표 안 함 → 강동은 동남권(50015). [날짜, 값]
+# 지역별 D5(2026-11-26): jobs/market.py D5 와 같은 기간(신고 기한 지난 마지막 3개월 vs 1년 전 같은 3개월), 시군구별
+def _rentp():
+    from datetime import date as _d, timedelta as _td
+    from collector.market import _shift
+    lc = ((_d.today().replace(day=1) - _td(days=1)).replace(day=1) - _td(days=1)).strftime("%Y%m")
+    ms = [_shift(lc, -k) for k in (2, 1, 0)]; pv = [_shift(m, -12) for m in ms]
+    q = lambda mm: {r['rc']: r for r in select(db, "SELECT region_code rc, sum(n_jeonse_new) nn, sum(n_jeonse_renew) nr, sum(n_wolse) nw, sum(n_jeonse) nj "
+                                                    f"FROM rent_region_month WHERE contract_month IN ({', '.join(repr(m) for m in mm)}) GROUP BY 1")}
+    a, b = q(ms), q(pv)
+    return {'m': [ms[0], ms[-1]], 'v': {rc: [int(r['nn']), int(b[rc]['nn']), int(r['nr']), int(r['nw']), int(r['nj']), int(b[rc]['nw']), int(b[rc]['nj'])]
+                                        for rc, r in a.items() if rc in b and b[rc]['nn']}}
+out['v2_rentp'] = _rentp()   # rc → [신규, 1년 전 신규, 갱신, 월세, 전세, 1년 전 월세, 1년 전 전세]
 out['v2_supply'] = {nm: [[r['d'], round(float(r['v']), 1)] for r in select(db, f"SELECT week_date::text d, value v FROM rone_weekly WHERE stat = 'sale_supply' AND cls_id = {cid} ORDER BY 1")]
                     for nm, cid in (('서울', 50008), ('수도권', 50002), ('동남권', 50015))}
 out['v2_info'] = {r['apt_seq']: [r['apt_name'], r['region_code'], r['umd_name'], r['lat'] and round(float(r['lat']), 5), r['lng'] and round(float(r['lng']), 5),
