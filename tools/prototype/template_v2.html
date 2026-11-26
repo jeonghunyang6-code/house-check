@@ -70,6 +70,9 @@ p { margin: 0; }
 .sig .mr span:last-child { font-size: 15px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .seg { display: inline-flex; background: var(--sunk); border-radius: 10px; padding: 3px; gap: 2px; }
 .seg button { font: inherit; font-size: 13px; border: 0; background: transparent; color: var(--ink-2); padding: 5px 12px; border-radius: 8px; cursor: pointer; }
+/* 2026-11-26 사용자: 90일↔6개월 누를 때 버튼이 아래 줄로 내려가며 자리가 바뀜 → 한 줄 고정, 글이 길면 글 쪽이 줄바꿈 */
+.spanrow { flex-wrap: nowrap; align-items: flex-start !important; } .spanrow > p { flex: 1; min-width: 0; }
+.seg.sm button { font-size: 12px; padding: 3px 9px; }
 .seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chips button { font: inherit; font-size: 13px; white-space: nowrap; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); padding: 5px 11px; border-radius: 999px; cursor: pointer; }
@@ -398,7 +401,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
         <div class="chips" id="fRegion" aria-label="지역"></div>
         <div class="chips" id="fArea" aria-label="면적"></div>
         <div class="chips" id="fRec" aria-label="작가 기준"></div>
-        <details class="more-f" id="moreF"><summary>조건 더 보기 · 세대수·연식·출퇴근 외 <span id="moreN"></span></summary><div class="body" style="gap:10px">
+        <details class="more-f" id="moreF"><summary>조건 더 보기 <span id="moreSub">· 세대수·연식·출퇴근 외</span><span id="moreN"></span></summary><div class="body" style="gap:10px">
           <div class="chips" id="fHh" aria-label="세대수"></div>
           <div class="chips" id="fAge" aria-label="연식"></div>
           <div class="chips" id="fWork" aria-label="직장"></div>
@@ -466,16 +469,16 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
       <label class="muted" for="dSel" style="display:grid;gap:4px">단지<select id="dSel" class="icon-btn" style="width:100%;text-align:left;font-size:15px"></select></label>
       <div class="card" id="dHead"></div>
       <div class="card" id="dPriceCard" hidden><h2>가격 판단 <small id="dPriceSub"></small></h2><div id="dPrice"></div></div>
-      <div class="card"><h2>최근 실거래 <small id="dSpanNote">최근 90일</small></h2><div class="row" style="justify-content:space-between;align-items:center;margin:8px 0 2px;gap:8px"><p id="dChartTitle" style="font-size:13.5px;margin:0"></p>
-        <div class="seg" id="dSpan" style="flex:none" hidden><button type="button" data-v="90" aria-pressed="true">90일</button><button type="button" data-v="6m" aria-pressed="false">6개월</button></div></div><svg class="chart" id="dChart" viewBox="0 0 340 130" role="img" aria-label="최근 90일 실거래"></svg><div id="dDeals"></div></div>
+      <div class="card"><h2>최근 실거래 <small id="dSpanNote">최근 90일</small></h2><div class="row spanrow" style="justify-content:space-between;align-items:center;margin:8px 0 2px;gap:8px"><p id="dChartTitle" style="font-size:13.5px;margin:0"></p>
+        <div class="seg sm" id="dSpan" style="flex:none" hidden><button type="button" data-v="90" aria-pressed="true">90일</button><button type="button" data-v="6m" aria-pressed="false">6개월</button></div></div><svg class="chart" id="dChart" viewBox="0 0 340 130" role="img" aria-label="최근 90일 실거래"></svg><div id="dDeals"></div></div>
       <div class="card">
         <h2>호가 매물 <small id="askAsof"></small></h2>
         <div class="kpis" id="askSum"></div>
         <div id="askLadder" style="margin-top:10px"></div>
         <details class="more-f" id="askTrendWrap" hidden><summary>주마다 호가 흐름 (8주·6개월)</summary>
         <div id="askTrendBox" hidden>
-          <div class="row" style="justify-content:space-between;align-items:center;margin:8px 0 2px;gap:8px"><p id="askTrendTitle" style="font-size:13.5px;margin:0"></p>
-            <div class="seg" id="askSpan" style="flex:none"><button type="button" data-v="8w" aria-pressed="true">8주</button><button type="button" data-v="6m" aria-pressed="false">6개월</button></div></div>
+          <div class="row spanrow" style="justify-content:space-between;align-items:center;margin:8px 0 2px;gap:8px"><p id="askTrendTitle" style="font-size:13.5px;margin:0"></p>
+            <div class="seg sm" id="askSpan" style="flex:none"><button type="button" data-v="8w" aria-pressed="true">8주</button><button type="button" data-v="6m" aria-pressed="false">6개월</button></div></div>
           <svg class="chart" id="askTrend" viewBox="0 0 340 168" role="img" aria-label="주마다 매매 호가"></svg><div id="askLegend" style="font-size:var(--fs-note);color:var(--ink-3);text-align:right;margin-top:2px"></div></div></details>
         <div id="askList"></div>
         <details class="more-f" id="askPasteBox"><summary>네이버 부동산에서 붙여넣기</summary><div class="body">
@@ -1154,7 +1157,7 @@ const phPill = (p) => p ? `<span class="pill ${p === '상승장' ? 'warn' : p ==
 let candList = [];
 function drawCand() {
   { const n = [['hh', '세대수 전체'], ['age', '연식 전체'], ['work', '직장 무관'], ['st', '역 거리 무관'], ['phase', '지역 국면 전체']].filter(([k, d]) => cst[k] !== d).length;
-    $('#moreN').innerHTML = n ? `<span class="pill acc" style="font-size:11px;padding:0 7px">${n}개 적용</span>` : ''; }   // 접힌 안에 고른 조건이 있으면 보이게
+    $('#moreN').innerHTML = n ? `<span class="pill acc" style="font-size:11px;padding:0 7px">${n}개 적용</span>` : ''; $('#moreSub').hidden = !!n; }   // 2026-11-26: 좁은 화면에서 제목이 두 줄로 넘어가 아래 칩이 밀림 → 적용 중이면 설명 대신 개수만   // 접힌 안에 고른 조건이 있으면 보이게
   const b = budget.price, wmin = MINF[cst.min], car = Array.isArray(WORK[cst.work]);
   $('#workNote').textContent = WORK[cst.work] == null ? '' : car ? (Object.keys(DRIVE).length ? '자차: 네이버 길찾기(평일 아침 실시간 빠른길). 아직 계산 안 된 단지는 직선거리로 추정' : '자차 추정: 직선거리 × 1.35 ÷ 시속 60km (네이버 길찾기 계산 전)') : '대중교통: 가까운 역 → 업무지구 역 시간(걷는 시간 제외)';
   candList = CAND.filter(r => r.ref <= b && r.ref >= b * 0.8 && REGF[cst.region](r.rc) && AREAF[cst.area](r.ag) && (cst.phase === '지역 국면 전체' || r.phase === cst.phase)
