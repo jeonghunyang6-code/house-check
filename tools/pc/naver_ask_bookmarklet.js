@@ -44,7 +44,8 @@
   /* 2026-11-03: 네이버 개수 탭('매매36'·'전세4')과 읽은 건수를 맞춰 보고, 다르면 저장은 하되 못 읽은 후보 줄(매매·전세·월세 + 숫자) 주변을 복사 */
   const want = {}; L.forEach(x => { const m = x.match(/^(매매|전세|월세)\s*(\d{1,4})$/); if (m && want[m[1]] == null) want[m[1]] = +m[2]; });
   const got = {}; items.forEach(x => { got[x.type] = (got[x.type] || 0) + 1; });
-  const short = Object.keys(want).filter(t => (got[t] || 0) !== want[t]).map(t => `${t} ${got[t] || 0}/${want[t]}`);
+  /* 2026-11-27 고덕그라시움: 매매 목록만 불러와 저장하면 전세 50·월세 54 를 0건으로 비교해 확인용이 떴다 → 읽은 거래 종류만 비교 */
+  const short = Object.keys(want).filter(t => (got[t] || 0) > 0 && got[t] !== want[t]).map(t => `${t} ${got[t]}/${want[t]}`);
   const lost = () => L.map((x, i) => [x, i]).filter(([x, i]) => !used.has(i) && /(매매|전세|월세)/.test(x) && /\d/.test(x) && !/^(매매|전세|월세)\s*\d{1,4}$/.test(x))
     .slice(0, 30).map(([x, i]) => `#${i} ` + L.slice(Math.max(0, i - 2), i + 4).join(' | ')).join('\n');
   let s, msg;
