@@ -534,6 +534,16 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
         <div id="waitTab"></div>
         <p class="src" id="waitSrc"></p>
       </div>
+      <div class="card" id="pResp">
+        <h2>내 대응 원칙 <small>사기 전에 적어 두기</small></h2>
+        <form class="form" id="respForm" autocomplete="off" style="grid-template-columns:1fr">
+          <label for="r_why">이 집을 사는 이유<input id="r_why" placeholder="예: 셔틀 300m, 59㎡ 실거주 10년"></label>
+          <label for="r_hold">얼마까지 떨어져도 버틸까<input id="r_hold" placeholder="예: −20%까지, 대출 이자 감당되면 안 판다"></label>
+          <label for="r_wait">하락을 기다린다면 — 언제 사고, 안 떨어지면?<input id="r_wait" placeholder="예: 고점 −15%면 산다, 28년 말엔 산다"></label>
+          <label for="r_move">어떤 조건이면 갈아탈까<input id="r_move" placeholder="예: 상급지와 격차가 5억 아래로 줄면"></label>
+        </form>
+        <p class="src" id="respSrc">송희구: 기준 없이 예측만 하며 시간을 보내는 게 가장 위험. 적어 두고 나중에 처음 판단과 비교.</p>
+      </div>
       <div class="card" id="pSteps">
         <h2>살 때 순서 <small>서울·토지거래허가구역 실거주</small></h2>
         <div class="list" id="pStepList" style="gap:0"></div>
@@ -1296,7 +1306,16 @@ function authHtml(seq, then) {
   h += row('전고점 회복', m && m.peak_10k && m.trough_10k ? `<b>${eok(m.peak_10k)}</b>(${ym(m.peak_month)}) → 저점 ${eok(m.trough_10k)}(${ym(m.trough_month)}) → 지금 <b>${eok(ref)}</b>` : (PN ? '' : '<span class="muted">전고점·저점 자료 없음</span>'), PN ? pl(PN[0], PN[1]) : '', PN ? PN[2] : '');
   h += row('23년 초 대비', ab & 4 ? '<b style="color:var(--bad)">반등 없음</b>' : m && m.trough_10k ? `저점보다 <b>${sgn((ref / m.trough_10k - 1) * 100, 0)}</b>` : PN ? '' : '–', ab & 4 ? pl('bad', '주의') : PN ? pl('good', '반등함') : '', ab & 4 ? '23년 초보다 안 오른 단지는 주의' : '');
   if (m) {
-    if (m.rel_strength != null) { const rs = +m.rel_strength; h += row('같은 생활권 대비', `<span class="nw">1년 ${sgn(+m.chg_12m, 1)}</span> vs <span class="nw">생활권 ${sgn(+m.region_chg_12m, 1)}</span>`, rs >= 0 ? pl('good', '강한 파도') : pl('warn', '약한 파도'), '덜 오르면 약한 파도(참고만)'); }   // 차이 %p 는 두 숫자로 보임, 백테스트상 지속성 약해 참고
+    if (m.chg_36m != null && m.region_chg_36m != null) {   // C12: 최소 3년으로 비교(작가 숫자), 1년은 아래 줄. 판정은 부호만(같이·더 / 덜)
+      const d3 = +m.chg_36m - +m.region_chg_36m, nb = m.nb3 || [], pre = (() => { const ns = nb.map(x => x[0]); let k = 0; while (ns.length > 1 && ns.every(n => n[k] && n[k] === ns[0][k])) k++; return k >= 2 && ns.every(n => n.length > k + 1) ? ns[0].slice(0, k) : ''; })();   // 단지 이름 앞 공통 부분(미사강변 등)은 머리글로
+      const yy = (a, b) => `<span class="nw" style="display:inline-block;min-width:96px">${a}</span><span class="nw muted">생활권 ${b}</span>`;
+      h += row('같은 생활권 대비', `<b>${yy('3년 ' + sgn(+m.chg_36m, 0), sgn(+m.region_chg_36m, 0))}</b><br><span style="font-size:13px">${yy('1년 ' + sgn(+m.chg_12m, 0), sgn(+m.region_chg_12m, 0))}</span>`,
+        '', `3년 차이 ${d3 >= 0 ? '+' : '−'}${Math.abs(d3).toFixed(0)}%p`);   // 작가 숫자는 기간(3년)뿐 → 판정 없음
+      if (nb.length) h += `<details class="more-f" style="margin-top:6px"><summary>이웃 단지 ${nb.length - 1}곳과 3년 비교</summary><div class="body">`
+        + `<div style="display:grid;grid-template-columns:1fr 56px 56px 44px;gap:2px 8px;font-size:12.5px;align-items:baseline"><span class="muted">${pre ? escA(pre.trim()) + ' ' : ''}${r.ag}㎡</span><span class="muted" style="text-align:right">3년 전</span><span class="muted" style="text-align:right">지금</span><span class="muted" style="text-align:right">오름</span>`
+        + nb.map(([n, a, b, me]) => `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap${me ? ';font-weight:700;color:var(--accent)' : ''}">${escA(n.slice(pre.length).trim() || n)}</span><span class="num" style="text-align:right">${(a / 1e4).toFixed(2)}</span><span class="num" style="text-align:right${me ? ';font-weight:700' : ''}">${(b / 1e4).toFixed(2)}</span><span class="num" style="text-align:right">${sgn((b / a - 1) * 100, 0)}</span>`).join('')
+        + `</div><p class="src" style="margin:6px 0 0">억 원 · 3년 전 = 23년 하반기, 지금 = 최근 6개월 중앙값. 3년 전 가격 차이가 지금도 비슷하면 같이 움직인 것(송희구).</p></div></details>`;
+    } else if (m.rel_strength != null) { const rs = +m.rel_strength; h += row('같은 생활권 대비', `<span class="nw">1년 ${sgn(+m.chg_12m, 1)}</span> vs <span class="nw">생활권 ${sgn(+m.region_chg_12m, 1)}</span>`, rs >= 0 ? pl('good', '강한 파도') : pl('warn', '약한 파도'), '덜 오르면 약한 파도(참고만)'); }   // 차이 %p 는 두 숫자로 보임, 백테스트상 지속성 약해 참고
     if (m.e2_ratio != null) { const e2 = +m.e2_ratio; h += row('주변 시세 위치', `${m.e2_basis || '주변'} ${m.e2_n}곳 평당가의 <b>${e2.toFixed(2)}배</b>`, e2 >= 1 ? pl('none', '주변보다 비쌈') : pl('acc', '주변보다 쌈'), '1보다 작으면 따라 오를 여지'); }   // 작가 예시 숫자뿐, 기준선 없음
     if (m.e3_target_10k) h += row('바로 위 급지', `${m.e3_name || '비교 단지'} <b>${eok(m.e3_target_10k)}</b>`, pl('acc', `지금보다 ${sgn((m.e3_target_10k / ref - 1) * 100, 0)}`), '미래 시세 = 바로 위 급지의 지금 시세');   // 과도한 비교는 금지
     if (m.turnover_pct != null) h += row('거래', `월 회전율 <b>${(+m.turnover_pct).toFixed(2)}%</b>${m.c6_band_turn != null ? ` <span class="muted nw">비슷한 단지 ${(+m.c6_band_turn).toFixed(2)}%</span>` : ''}`, m.c6_reason ? pl('warn', m.c6_reason) : '', '');   // 작가 기준 월 0.5%는 요즘 거의 다 걸려 같은 구·가격 구간 단지와 견줌
@@ -1351,6 +1370,12 @@ function drawWhen() {
     : '<p class="muted">관심 단지(♡)에 기준 시세가 있어야 계산해요.</p>';
 }
 $('#pSave').value = (store.get('v2-plan', {}) || {}).save ?? 250;
+{ const R = ['why', 'hold', 'wait', 'move'], cur = (store.get('v2-plan', {}) || {}).resp || {};   // F9 대응 원칙(v2-plan.resp, 서버 저장)
+  const show = (c) => { $('#respSrc').textContent = c.at ? `${c.at} 적음 · 송희구: 기준 없이 예측만 하며 시간을 보내는 게 가장 위험.` : '송희구: 기준 없이 예측만 하며 시간을 보내는 게 가장 위험. 적어 두고 나중에 처음 판단과 비교.'; };
+  R.forEach(k => { $('#r_' + k).value = cur[k] || ''; $('#r_' + k).addEventListener('change', () => {
+    const p = store.get('v2-plan', {}) || {}, r = { ...(p.resp || {}), [k]: $('#r_' + k).value.trim(), at: new Date().toISOString().slice(0, 10) };
+    store.set('v2-plan', { ...p, resp: r }); show(r); }); });
+  show(cur); }
 $('#pSave').addEventListener('input', () => { store.set('v2-plan', { ...(store.get('v2-plan', {}) || {}), save: $('#pSave').value }); drawWhen(); });
 watchChanged.push(drawWhen);
 /* ③ 살 때 순서(2026-11-21). 손 관리 사실, 출처 2곳 이상:
