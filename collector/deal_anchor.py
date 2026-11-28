@@ -95,3 +95,13 @@ def region_months(rows: list[dict]) -> list[dict]:
     return [dict(region_code=k[0], contract_month=k[1], n_all=v["n_all"], n_broker=v["n_broker"], n_direct=v["n_direct"],
                  n_cancelled=v["n_cancelled"], p84_median_10k=round(median(v["p84"])) if v["p84"] else None)
             for k, v in sorted(g.items())]
+
+
+def y3_rows(rows: list[dict]) -> list[dict]:
+    """C12 3년 전 같은 6개월: 단지 × 면적군 매매 중앙값(sql/metrics.sql base 와 같게 중개·비해제·1층 제외)."""
+    g: dict[tuple[str, int], list[int]] = defaultdict(list)
+    for r in rows:
+        if r["is_cancelled"] in ("1", "True", "true", "t") or r["deal_type"] != "중개" or r.get("floor") == "1":
+            continue
+        g[(r["apt_seq"], math.floor(float(r["area_m2"])))].append(int(r["price_10k"]))
+    return [{"apt_seq": a, "area_group": ag, "n": len(v), "median_10k": int(round(median(v)))} for (a, ag), v in sorted(g.items())]

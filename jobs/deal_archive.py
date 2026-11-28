@@ -7,6 +7,7 @@
     python -m jobs.deal_archive prune --before 202410                        # DB 에서 보관한 달을 지운다 (사용자 확인 뒤)
     python -m jobs.deal_archive roll --archive gh                            # 매일: 2년 지난 달을 보관 → 고정값 갱신 → DB 에서 뺀다
     python -m jobs.deal_archive hist --months 202001-202409 --archive gh     # 월별 파일 → 시군구별 과거 파일(deals_hist_<시군구>.csv.gz)
+    python -m jobs.deal_archive y3 --archive gh                              # 매일: C12 3년 전 같은 6개월 중앙값(deal_y3), 창이 바뀐 날만 계산
 
 시군구별 과거 파일은 단지 차트용이다: 최근 2년은 DB, 그 이전은 그 단지가 있는 시군구 파일 하나(수백 KB)만 받으면 된다.
 
@@ -23,7 +24,7 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from collector.archive import asset_name, decode, encode, open_store
-from collector.deal_anchor import ANCHOR_COLUMNS, REGION_MONTH_COLUMNS, anchors, region_months
+from collector.deal_anchor import ANCHOR_COLUMNS, REGION_MONTH_COLUMNS, anchors, region_months, y3_rows
 from collector.db import Db, DbError, connect, lit, select
 from collector.regions import select_regions
 from jobs.daily import parse_months
@@ -240,9 +241,50 @@ def run_roll(db: Db, store, regions: list[str], today: date) -> int:
     return 0
 
 
+def _shift(today: date, k: int) -> str:
+    y, m = today.year, today.month - k
+    while m < 1:
+        y, m = y - 1, m + 12
+    return f"{y}{m:02d}"
+
+
+def y3_months(today: date) -> list[str]:
+    """C12: 최근 6개월(이번 달 −6 ~ −1, sql/metrics.sql 12) 와 같은 달)의 3년 전 = 이번 달 −42 ~ −37."""
+    return [_shift(today, k) for k in range(42, 36, -1)]
+
+
+def y3_sql(months: list[str], rows: list[dict]) -> str:
+    vals = [f"({lit(r['apt_seq'])}, {r['area_group']}, {lit(months[0])}, {lit(months[-1])}, {r['n']}, {r['median_10k']})" for r in rows]
+    ins = ["INSERT INTO deal_y3 (apt_seq, area_group, from_month, to_month, n, median_10k) VALUES\n" + ",\n".join(vals[i:i + 1000]) + ";"
+           for i in range(0, len(vals), 1000)]
+    return "\n".join([BEGIN_RW, "DELETE FROM deal_y3;", *ins, "COMMIT;"])
+
+
+def run_y3(db: Db, store, today: date, force: bool = False) -> int:
+    months = y3_months(today)
+    if not force:
+        cur = select(db, "SELECT min(from_month) AS f FROM deal_y3")[0]["f"]
+        if cur == months[0]:
+            print(f"  3년 전 6개월 {months[0]}~{months[-1]}: 이미 계산됨")
+            return 0
+    rows: list[dict] = []
+    for m in months:
+        data = store.get(asset_name("deal", m))
+        if data is None:
+            print(f"  3년 전 6개월: {asset_name('deal', m)} 없음, 건너뜀", file=sys.stderr)
+            return 1
+        rows += decode(data)
+    out = y3_rows(rows)
+    db.query(y3_sql(months, out))
+    print(f"  3년 전 6개월 {months[0]}~{months[-1]}: 원본 {len(rows):,}행 → {len(out):,}개 단지·면적군")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("step", choices=["export", "anchor", "load", "prune", "roll", "hist"])
+    ap.add_argument("step", choices=["export", "anchor", "load", "prune", "roll", "hist", "y3"])
+    ap.add_argument("--force", action="store_true", help="y3: 이미 계산된 창이어도 다시")
+    ap.add_argument("--today", help="y3 테스트용 기준일 YYYY-MM-DD")
     ap.add_argument("--months")
     ap.add_argument("--before", help="prune: 이 계약월 이전을 지운다 (YYYYMM)")
     ap.add_argument("--regions", default="sudogwon")
@@ -257,6 +299,8 @@ def main(argv: list[str] | None = None) -> int:
             return run_load(connect(a.db), open_store(a.archive))
         if a.step == "hist":
             return run_hist(open_store(a.archive), parse_months(a.months))
+        if a.step == "y3":
+            return run_y3(connect(a.db), open_store(a.archive), date.fromisoformat(a.today) if a.today else datetime.now(KST).date(), a.force)
         if a.step == "roll":
             return run_roll(connect(a.db), open_store(a.archive), select_regions(a.regions), datetime.now(KST).date())
         if a.step == "prune":

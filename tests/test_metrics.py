@@ -15,13 +15,13 @@ def _db():
     db = PsqlDb(URL)
     db.query("DROP TABLE IF EXISTS deal_events, deals, rent_events, rents, snapshot_runs, rent_monthly, archive_cells, complex_metrics, "
              "macro_monthly, deal_anchor, deal_region_month, region_phase, market_signals, rone_weekly, rone_regions, complexes, kapt_complexes, "
-             "adm_dong, adm_adjacent, lifezone, presale, ipju_plan, rent_j24 CASCADE;")
+             "adm_dong, adm_adjacent, lifezone, presale, ipju_plan, rent_j24, deal_y3 CASCADE;")
     for m in ("0001_deals.sql", "0005_snapshot_runs.sql", "0006_rents.sql", "0007_rent_archive.sql", "0010_metrics.sql",
               "0009_rone_weekly.sql", "0011_market.sql", "0012_macro.sql", "0013_macro_annual.sql", "0014_complex_phase.sql", "0015_quadrant_strength.sql",
               "0016_reverse_real.sql", "0008_complexes.sql", "0019_deal_anchor.sql", "0020_turnover_e3.sql",
               "0022_complex_geo.sql", "0023_adm_dong.sql", "0030_lifezone.sql", "0031_e2.sql", "0032_e4_e5_e7.sql", "0034_presale.sql", "0035_presale_total.sql", "0037_ipju_plan.sql",
               "0039_rent_j24.sql", "0040_ref_spread.sql", "0047_d4_a5.sql", "0051_c6_band.sql", "0064_complex_region_phase.sql",
-              "0081_deal_bulk_days.sql"):
+              "0081_deal_bulk_days.sql", "0090_deal_y3.sql"):
         db.query((ROOT / "db" / "migrations" / m).read_text(encoding="utf-8"))
     return db
 
@@ -356,3 +356,28 @@ def test_metrics_a5_same_quarter():
     assert abs(r - round(150000 / 84 * (sum(qs) / 2) * 59)) <= 1          # 같은 분기 비율 중앙값(2개 평균)
     old = (100450 / 59.9) / (120000 / 84.9)                                 # 2년 중앙가 비율이었다면(59㎡ 10.045억, 84㎡ 10건 중앙 12억) 약 1.19배
     assert r < round(150000 / 84 * old * 59) * 0.9
+
+
+def test_metrics_c12_3y():
+    """C12 3년 비교: 최근 6개월(TODAY 2026-10 → 2026-04~09) 중앙값 ÷ deal_y3(2023-04~09) − 1, 두 기간 3건 이상.
+    생활권 = 같은 생활권·같은 면적군 5곳 이상이면 그 중앙값."""
+    if not URL:
+        return
+    db = _db()
+    seqs = ["A", "B", "C", "D", "E", "F"]
+    db.query("INSERT INTO complexes (apt_seq, apt_name, region_code, umd_name, updated_at, lifezone_id) VALUES " + ", ".join(
+        f"({lit(s)}, 'x', '11680', '역삼동', '2026-10-01', 'Z1')" for s in seqs) + ";")
+    for i, s in enumerate(seqs):
+        for d in ("2026-05-10", "2026-06-10", "2026-07-10"):
+            _deal(db, s, d, 120000 + i * 6000)        # 지금 12억, 12.6억, …
+        _deal(db, s, "2026-10-05", 999999)            # 이번 달(10월)은 창 밖
+        _deal(db, s, "2026-06-11", 1, floor=1)        # 1층은 뺀다
+    db.query("INSERT INTO deal_y3 (apt_seq, area_group, from_month, to_month, n, median_10k) VALUES "
+             + ", ".join(f"({lit(s)}, 84, '202304', '202309', {2 if s == 'F' else 4}, 80000)" for s in seqs)
+             + ", ('A', 59, '202212', '202305', 5, 1);")   # 창이 다른 행은 안 쓴다
+    db.query(render(TODAY, 120))
+    m = {r["apt_seq"]: r for r in select(db, "SELECT * FROM complex_metrics WHERE area_group = 84")}
+    assert (m["A"]["m6_10k"], m["A"]["m6_n"], m["A"]["y3_10k"]) == (120000, 3, 80000)
+    assert float(m["A"]["chg_36m"]) == 50.0 and float(m["E"]["chg_36m"]) == 80.0
+    assert m["F"]["chg_36m"] is None                   # 3년 전 2건 → 없음
+    assert float(m["A"]["region_chg_36m"]) == 65.0     # A~E 50·57.5·65·72.5·80 의 중앙값

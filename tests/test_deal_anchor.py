@@ -28,3 +28,20 @@ def test_region_months():
     sido, m = region_months(rows)
     assert sido["region_code"] == "11" and sido["n_all"] == 5
     assert (m["n_all"], m["n_broker"], m["n_direct"], m["n_cancelled"], m["p84_median_10k"]) == (5, 3, 1, 1, 200)
+
+
+def test_y3_rows_and_months():
+    """C12: 3년 전 같은 6개월 중앙값 — 직거래·해제·1층 빼고, 면적군 = 전용 내림. 창 = 이번 달 −42 ~ −37 (최근 6개월 −6 ~ −1 의 3년 전)."""
+    from datetime import date
+
+    from collector.deal_anchor import y3_rows
+    from jobs.deal_archive import y3_months, y3_sql
+    rows = [_r("2023-05-02", 70000), _r("2023-06-02", 80000), _r("2023-07-02", 75000), _r("2023-08-02", 90000),
+            _r("2023-06-03", 999, t="직거래"), _r("2023-06-04", 999, c="1"), _r("2023-06-05", 999, fl="1"),
+            _r("2023-06-06", 50000, area="59.9")]
+    y = {r["area_group"]: r for r in y3_rows(rows)}
+    assert (y[84]["n"], y[84]["median_10k"]) == (4, 77500) and (y[59]["n"], y[59]["median_10k"]) == (1, 50000)
+    assert y3_months(date(2026, 11, 28)) == ["202305", "202306", "202307", "202308", "202309", "202310"]
+    assert y3_months(date(2027, 1, 5))[0] == "202307" and y3_months(date(2027, 1, 5))[-1] == "202312"
+    q = y3_sql(["202305", "202310"], y3_rows(rows))
+    assert "DELETE FROM deal_y3;" in q and "'202305', '202310', 4, 77500" in q
