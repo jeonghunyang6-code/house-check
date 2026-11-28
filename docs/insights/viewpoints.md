@@ -4,7 +4,7 @@
 
 | 출처 | 범위 | 표기 |
 |---|---|---|
-| 유튜브 `작가 송희구` (@thewriter-song) | 영상·라이브 672개 중 자막 626개 (2022-02 ~ 2026-10), 키워드 상위 영상 위주로 정독. 2026-11-28 추가 수집: 10/11 이후 새 영상 16개 중 자막 1개(11/27, 나머지는 유튜브 로봇 확인으로 못 받음) | `▶ 제목 m:ss` (해당 시점 링크) |
+| 유튜브 `작가 송희구` (@thewriter-song) | 영상·라이브 672개 중 자막 626개 (2022-02 ~ 2026-10), 키워드 상위 영상 위주로 정독. 2026-11-28 추가: 10/11 이후 새 영상 24개 중 자막 있는 12개 정독(11/01~11/27, 사용자 PC 수집 — 클라우드는 유튜브 로봇 확인으로 막힘). 짧은 영상 8개는 자막 없음, 10월 영상 4개는 아직 못 받음 | `▶ 제목 m:ss` (해당 시점 링크) |
 | 『나의 첫 번째 부동산 교과서』 (서삼독, 2026-06) | 전권 (p.4~477) | `📖 p.쪽` |
 | 부읽남TV 출연 "경기 외곽까지 번질 겁니다" [송희구 작가 풀버전] (2026-11-06 촬영, B등급) | 자막 전체(사용자 제공 2026-11-15) | `▶ … m:ss (부읽남TV 출연, B등급, 26-11-06 촬영)` · 시황 발언은 맨 아래 **시점 발언**에 따로 |
 
@@ -33,11 +33,11 @@
 |---|---|---|---|---|
 | P1 | 호가가 아니라 **최근 1~2개월 실거래가**가 기준. 1층 제외, 중층 이상으로 | [▶ 요즘 호가 진짜 너무 합니다 1:33](https://www.youtube.com/watch?v=7VTlXM2j1bI&t=93), [▶ 반등의 속도가 너무 빠르다 1:42](https://www.youtube.com/watch?v=3T1QEM3mQ2A&t=102) | 📖 p.120, p.133~136 | A1 기준 시세 |
 | P2 | 최근 실거래 대비 호가 **3%까지 설명 가능, 5% 넘으면 설명 필요** | [▶ 요즘 호가 진짜 너무 합니다 1:56](https://www.youtube.com/watch?v=7VTlXM2j1bI&t=116), [2:36](https://www.youtube.com/watch?v=7VTlXM2j1bI&t=156) | 📖 p.335 배짱 매물 | 호가 소스 확보 시 |
-| P3 | 거래 없는 평형은 **같은 단지 인접 평형으로 보간**, 그다음 비슷한 급지 5개 단지 비교 | [▶ 도대체 얼마야? 0:54](https://www.youtube.com/watch?v=QEg2JGLCADo&t=54) | 📖 p.472~473 (대체 평형 존재 여부) | A5 보간 |
+| P3 | 거래 없는 평형은 **같은 단지 인접 평형으로 보간**, 그다음 비슷한 급지 5개 단지 비교 | [▶ 도대체 얼마야? 0:54](https://www.youtube.com/watch?v=QEg2JGLCADo&t=54). 요즘은 같이 움직이는 단지 5개 정도는 봐야(매물이 적다) — 동·층·내부·전망·호가 종합 비교 [▶ 나중에 시세차익 큰 곳 1:21](https://www.youtube.com/watch?v=9f7SKimLzQA&t=81), [1:42](https://www.youtube.com/watch?v=9f7SKimLzQA&t=102) | 📖 p.472~473 (대체 평형 존재 여부) | A5 보간 |
 | P4 | **급매 = 실거래 대비 5% 이상 저렴.** 호가 대비 급매는 가짜. 급매가 소진되고 하단이 오르면 반등 | [▶ 부동산 자산가들은 지금 3:28](https://www.youtube.com/watch?v=GUL2aBsyvBE&t=208) | 📖 **p.245~247** | A4 급매 체결 비중 |
 | P5 | 실거래는 **거래량과 함께**. 거래가 극히 적으면 급매 한 건이 시세처럼 보인다. 급매·가족 간 거래 제외 | [▶ 왜 점점 차이나는 걸까? 1:05](https://www.youtube.com/watch?v=l3ONoblEkFo&t=65) | 📖 **p.121, p.135~137**, p.401~404 | A2 신뢰도, 전처리 |
-| P6 | **층·동 차이**: 저층(1~4층)은 중고층 대비 약 10%, 로얄동 vs 기피동 5~10%, 단지 내 차이 한계 10~15%. 역 1분당 평지 0.5%·언덕 1% | – | 📖 **p.192~195**, p.337, p.464 | 전처리 층 보정, H1 |
-| P7 | 실물자산은 최소 **물가만큼은** 오른다 (인구·경제기반 약화 지역은 예외) | – | 📖 p.108~110, p.360 | A6 실질가격 |
+| P6 | **층·동 차이**: 저층(1~4층)은 중고층 대비 약 10%, 로얄동 vs 기피동 5~10%, 단지 내 차이 한계 10~15%. 역 1분당 평지 0.5%·언덕 1% | 저층은 중고층 대비 10% 싸야, 탑층은 누수만 없으면 괜찮다(층간소음 없음) [▶ 나중에 시세차익 큰 곳 1:00](https://www.youtube.com/watch?v=9f7SKimLzQA&t=60), [1:21](https://www.youtube.com/watch?v=9f7SKimLzQA&t=81) | 📖 **p.192~195**, p.337, p.464 | 전처리 층 보정, H1 |
+| P7 | 실물자산은 최소 **물가만큼은** 오른다 (인구·경제기반 약화 지역은 예외) | 장기 우상향의 가장 큰 이유는 물가(건축비). 수요가 떠나는 곳은 못 따라간다 — 결국 땅의 가치 [▶ 언젠가는 옵니다 4:05](https://www.youtube.com/watch?v=WvB8peXZ3fs&t=245), [4:25](https://www.youtube.com/watch?v=WvB8peXZ3fs&t=265) | 📖 p.108~110, p.360 | A6 실질가격 |
 
 ## 2. 국면·추세·과열
 
@@ -54,6 +54,7 @@
 | C9 | 하락장은 자주 오지 않는다. 조정장·휴식장(보합)도 매수 타이밍 | [▶ 고점 물린건가요 2:18](https://www.youtube.com/watch?v=YaC1c9jhCfY&t=138) | 📖 p.114~115, p.162~163 | B1 |
 | C10 | 큰 상승장 전에 크게 오를 자산을 **선점**. 조용할 때는 좋은 자산과 평범한 자산의 격차가 작다 | – | 📖 p.450~451 | E6 격차 축소 구간 |
 | C11 | **상승장 끝물 신호 = 경기 완전 외곽과 오피스텔까지 들썩일 때.** 그때는 작은 트리거에도 분위기가 반전된다. 위치 좋은 곳의 5~6억대가 20평대(국평 7~8억 동네)면 괜찮고, **30평대가 5~6억인 곳까지 움직이면 주의** | [▶ 경기 외곽까지 번질 겁니다 34:40](https://www.youtube.com/watch?v=GZfTpovi56k&t=2080), [35:19](https://www.youtube.com/watch?v=GZfTpovi56k&t=2119), [55:53](https://www.youtube.com/watch?v=GZfTpovi56k&t=3353), [56:08](https://www.youtube.com/watch?v=GZfTpovi56k&t=3368) (부읽남TV 출연, B등급, 26-11-06 촬영) | – | 시장 탭 과열신호 '경기 외곽 신고가'(indicators C11, 🔧 5% 주의·25% 끝물 백테스트). 오피스텔은 수집 안 함 |
+| C12 | **상승률 비교는 최소 3년.** 지역마다, 같은 지역에서도 대장 단지부터 오르는 순서가 있고 키 맞추기를 한다. 6개월~1년 상승률만 보고 잘못 샀다고 판단하지 마라. 다만 **남들이 다시 오르는데 나만 못 오르면 그 아파트의 문제**(C8과 같은 맥락) | [▶ 언젠가는 옵니다 1:01](https://www.youtube.com/watch?v=WvB8peXZ3fs&t=61), [1:21](https://www.youtube.com/watch?v=WvB8peXZ3fs&t=81), [3:44](https://www.youtube.com/watch?v=WvB8peXZ3fs&t=224) | – | B6 상대강도 기간 후보(지금 12개월, 백테스트에서 지속성 없음 → 3년 비교 검토. 실거래 보관 기간 확인 필요) |
 
 ## 3. 거래량·환금성
 
@@ -62,11 +63,12 @@
 | V1 | **전체 거래량은 방향 지표가 아니다.** 단지 거래량(환금성)이 중요 | [▶ 너가 보고 있는 그 아파트 사지마 0:23](https://www.youtube.com/watch?v=ecFJjYanPmY&t=23) | 📖 **p.147~148** | 시장 거래량은 C1 현황판으로만 |
 | V2 | **거래 감소 ≠ 가격 하락.** 매물이 잠기면 거래절벽 속 신고가 | [▶ 누구일까 2:11](https://www.youtube.com/watch?v=1O6OKFh9iD4&t=131), [▶ 결국 전국 상승장 오는건가 2:30](https://www.youtube.com/watch?v=ESeOyYlHi1Q&t=150) | 📖 p.147 | 하락 신호로 쓰지 않음 |
 | V3 | 거래 없는 이유 구분: 수요 부족 vs 공급(세대수·매물) 부족 | [▶ 도대체 얼마야? 3:51](https://www.youtube.com/watch?v=QEg2JGLCADo&t=231) | 📖 p.472~473 | C6 거래 적은 이유 (C2 회전율 + 평형 구간 세대수) |
-| V4 | **환금성은 하락장에서 증명된다.** 하락장에 거래가 많았던 단지 = 환금성 좋음 | [▶ 경기도 대단지 vs 서울 어중간한 2:11](https://www.youtube.com/watch?v=M2rwWVE9VwQ&t=131), [▶ 경기 외곽까지 번질 겁니다 1:00:42](https://www.youtube.com/watch?v=GZfTpovi56k&t=3642), [1:01:15](https://www.youtube.com/watch?v=GZfTpovi56k&t=3675) (부읽남TV 출연, B등급, 26-11-06 촬영) | 📖 **p.138~142**, p.440 | C3 하락기 회전율 |
+| V4 | **환금성은 하락장에서 증명된다.** 하락장에 거래가 많았던 단지 = 환금성 좋음 | [▶ 경기도 대단지 vs 서울 어중간한 2:11](https://www.youtube.com/watch?v=M2rwWVE9VwQ&t=131), [▶ 경기 외곽까지 번질 겁니다 1:00:42](https://www.youtube.com/watch?v=GZfTpovi56k&t=3642), [1:01:15](https://www.youtube.com/watch?v=GZfTpovi56k&t=3675) (부읽남TV 출연, B등급, 26-11-06 촬영). 환금성을 강조하는 이유 = 하락장에 갈아타기 위해 [▶ 너무 많이 올랐나 7:48](https://www.youtube.com/watch?v=_ySlz6d1kQU&t=468), [▶ 언젠가는 옵니다 5:06](https://www.youtube.com/watch?v=WvB8peXZ3fs&t=306) | 📖 **p.138~142**, p.440 | C3 하락기 회전율 |
 | V5 | **적정 거래량 = 월 세대수의 0.5~0.8%** (1천 세대면 월 5~8건) | – | 📖 **p.137**, p.165 | C2 기준선 |
 | V6 | 대단지(1천 세대+)는 시세가 투명하고 환금성이 좋다. 초고가 시장은 예외 | – | 📖 p.116~122 | 단지 세대수 표시, 초고가 분리 |
 | V7 | 거래량은 많은데 덜 오른 곳 = 움직이기 시작하는 곳 | [▶ 다들 멀리 가버렸어 4:38](https://www.youtube.com/watch?v=idrOVp7D1GY&t=278) | – | ⚠️ C8과 긴장 관계 (아래 참고) |
 | V8 | **최소 250세대.** 그보다 작으면 나홀로 아파트 느낌. 단 교통 좋은 곳에 소형 단지가 몰려 있으면(염창·양평·문래) 괜찮고, **대단지 바로 옆 소형 단지는 소외**된다 | [▶ 경기 외곽까지 번질 겁니다 42:56](https://www.youtube.com/watch?v=GZfTpovi56k&t=2576), [43:09](https://www.youtube.com/watch?v=GZfTpovi56k&t=2589), [43:37](https://www.youtube.com/watch?v=GZfTpovi56k&t=2617) (부읽남TV 출연, B등급, 26-11-06 촬영) | – | 입지 사실표 '단지' 줄 참고(미구현) |
+| V9 | **3억대는 7~8억대만큼 오르지 않고, 환금성이 더 좋아야 한다.** 내 집 마련 수요는 보통 5억부터라 3억대는 싸도 수요가 적다. 평소 거래가 잘 되는지 확인 | [▶ 나중에 시세차익 큰 곳 4:50](https://www.youtube.com/watch?v=9f7SKimLzQA&t=290), [5:10](https://www.youtube.com/watch?v=9f7SKimLzQA&t=310) | – | C2 환금성 해석 주석 |
 
 ## 4. 급지·갈아타기·상대가치
 
@@ -76,7 +78,7 @@
 | L2 | **내 아파트의 미래 시세 = 바로 위 급지 단지의 현재 시세.** 단 생활권을 실제로 공유하는 단지와 비교 (연신내 ↔ 삼성동은 과도, 녹번·홍제·무악재가 적절) | – | 📖 **p.358~359, p.362** | E3 비교 단지 |
 | L3 | **수익률이 아니라 절대 금액 격차.** 하락장엔 비싼 게 더 크게 빠져 격차가 좁혀진다 | [▶ 집은 반드시 떨어집니다 1:31](https://www.youtube.com/watch?v=aB-JqTJAm_U&t=91). 비율은 비슷하게 빠져도 절대 금액이 커 보여 반등 때 먼저 산다 [▶ 오를까 내릴까 5:41](https://www.youtube.com/watch?v=U_ZpiuyXNdY&t=341) | 📖 p.301~303, **p.418~420** | E6 |
 | L4 | **갈아타기는 최소 1.5배.** 1.2배는 거래비용으로 상쇄되는 돈 낭비. 같은 단지·동네 수평 이동 금지 | [▶ 갭투자 전면 금지 3:48](https://www.youtube.com/watch?v=1LNFc8iMQFM&t=228) | 📖 **p.436~438**, p.444, p.467 | E6 필터 |
-| L5 | **갈아타기 타이밍 = 격차가 줄어든 때.** 상승 초반엔 고가가 먼저 올라 격차가 벌어지고 후반에 다시 좁혀진다 | [▶ 듣기만 하세요 4:36](https://www.youtube.com/watch?v=OXh7Cj_HUhM&t=276) | 📖 **p.438~439**, p.265~266 | E6 격차 분위 |
+| L5 | **갈아타기 타이밍 = 격차가 줄어든 때.** 상승 초반엔 고가가 먼저 올라 격차가 벌어지고 후반에 다시 좁혀진다 | [▶ 듣기만 하세요 4:36](https://www.youtube.com/watch?v=OXh7Cj_HUhM&t=276). 하락장에 내 집 −2억·상급지 −3억이면 기회, 상승장에 격차가 7억→5억으로 줄면 검토(벌어지면 오히려 비용 증가) [▶ 너무 많이 올랐나 7:28](https://www.youtube.com/watch?v=_ySlz6d1kQU&t=448), [8:30](https://www.youtube.com/watch?v=_ySlz6d1kQU&t=510) | 📖 **p.438~439**, p.265~266 | E6 격차 분위 |
 | L6 | 초고가 시장(반포·압구정·한남)은 별개로 본다 | [▶ 반등의 속도가 너무 빠르다 0:36](https://www.youtube.com/watch?v=3T1QEM3mQ2A&t=36) | 📖 p.122 | 초고가 단지 분리 (구현 2026-10-18: 84㎡ 기준 시세 30억+ 를 '초고가'로 표시, 가격대별 흐름에서 따로) |
 | L7 | **주변 시세가 높은 곳이 상승 여력이 크다** (같은 10억이라도 주변이 12~14억인 지역) | – | 📖 **p.216~217**, p.326, p.339, p.342 | E2 주변 시세 위치 |
 | L8 | **한계 시세**: 하급지 84㎡ 천장 = 상급지 59㎡ 가격. 상급지가 오르면 천장도 오른다 | – | 📖 **p.217~219, p.228** | E4 |
@@ -108,6 +110,7 @@
 | S3 | 공급 부족이라고 반드시 오르지 않는다 (심리적 저항선) | [▶ 너무 빨리 오르고 있어요 3:02](https://www.youtube.com/watch?v=JH5-x6eBnzI&t=182) | 📖 p.53 | 단독 신호로 쓰지 않음 |
 | S4 | **미분양은 원인을 봐라**: 분양가 과다 / 입지 / 상품성 / 공급 집중 / 거시. 가격 조정으로 풀릴 문제인지 구조적인지 | – | 📖 **p.155~160** | F3 |
 | S5 | 2016년 이후 아파트는 지하주차장·커뮤니티가 표준이라 상품성이 쉽게 뒤처지지 않는다. 5~10년차에 "검증된 단지"로 재평가 | – | 📖 p.467~468 | 연식 구간 정의 |
+| S6 | **공급보다 수요 변화가 중요.** 공급이 없어도 수요가 없으면 안 움직이고, 많아도 수요가 더 많으면 오른다. 지을 땅이 없어 못 짓는 것과 수요가 없어 안 짓는 것을 구분(대저택은 희소해도 안 오른다) | [▶ 고가는 꺾였고, 저가는 오르는 중 1:02](https://www.youtube.com/watch?v=L0LKvj7tbbg&t=62), [2:24](https://www.youtube.com/watch?v=L0LKvj7tbbg&t=144), [▶ 단독주택의 시대는 저물어가는가 1:02](https://www.youtube.com/watch?v=2VVIO2aepnc&t=62) | 📖 p.53 (S3) | 공급 지표 해석 주석 |
 
 ## 7. 금리·유동성·거시
 
@@ -130,24 +133,27 @@
 | G1 | 토허제는 거래를 줄여 상승 속도를 늦추지만 가격을 떨어뜨리진 않는다 | [▶ 결국 전국 상승장 오는건가 1:05](https://www.youtube.com/watch?v=ESeOyYlHi1Q&t=65) | 📖 p.269~270 | policy_events 마커 (구현 2026-10-18 collector/policy.py: 토허 구역 기간·규제지역 기간·사건 9건, 84㎡ 차트 표시, C4 해석 주석) |
 | G2 | **풍선효과**: 규제 지역 밖의 비슷한 급지로 수요 이동 → 따라가지 마라 | [▶ 너무 높은 호가 따라가지마세요 3:19](https://www.youtube.com/watch?v=8SadWiCzQao&t=199) | 📖 **p.288~292** | 경계 인접 지역 상대 상승률 (구현 2026-10-18 jobs/balloon.py: 시군구 토허 확대일마다 새로 규제·붙은 바깥·먼 바깥의 R-ONE 주간 지수 누적 변화, 매입자 거주지 외지인·서울 비중 전후 6개월) |
 | G3 | 규제 지정 = 정부도 수요가 강하다고 본 곳. 지정 여부로 우열을 판단하지 마라 | – | 📖 p.270, p.326 | 해석 주석 |
+| G4 | **규제의 역설.** 투과지구·토허제로 재건축 조합설립 뒤 매물이 1/10로 줄고(조합원 지위 양도 제한), 세입자는 나가야 해 전월세도 줄어 **강제 매수** → 공급이 적은데 수요가 늘어 오른다. 규제는 하기 쉽고 풀기 어렵다. 정책은 바뀌어도 입지는 안 바뀐다 | [▶ 고가는 꺾였고, 저가는 오르는 중 1:43](https://www.youtube.com/watch?v=L0LKvj7tbbg&t=103), [2:04](https://www.youtube.com/watch?v=L0LKvj7tbbg&t=124), [2:46](https://www.youtube.com/watch?v=L0LKvj7tbbg&t=166), [6:12](https://www.youtube.com/watch?v=L0LKvj7tbbg&t=372) | – | J5·관심 지역 전세 표(#rentP) 해석 주석 |
 
 ## 9. 입지·호재·정비사업 (설명용)
 
 | # | 관점 | 유튜브 | 책 | 반영 |
 |---|---|---|---|---|
 | D1 | 입지 = 업무지구·학군·상급지와의 **절대거리** | [▶ 경기 외곽까지 번질 겁니다 45:05](https://www.youtube.com/watch?v=GZfTpovi56k&t=2705), [50:18](https://www.youtube.com/watch?v=GZfTpovi56k&t=3018) (부읽남TV 출연, B등급, 26-11-06 촬영) | 📖 **p.85~103** | H2, H3, E8 상급지까지 거리 |
-| D2 | **교통 호재는 중심업무지구(사대문·여의도·강남) 연결이 핵심.** GTX는 어디서 타는지가 아니라 **어디서 내리는지**. 외곽 순환·경전철은 약함 | [▶ 경기 외곽까지 번질 겁니다 44:36](https://www.youtube.com/watch?v=GZfTpovi56k&t=2676), [45:47](https://www.youtube.com/watch?v=GZfTpovi56k&t=2747), [51:02](https://www.youtube.com/watch?v=GZfTpovi56k&t=3062) (부읽남TV 출연, B등급, 26-11-06 촬영) | 📖 **p.68~70, p.86~87** | H2 |
+| D2 | **교통 호재는 중심업무지구(사대문·여의도·강남) 연결이 핵심.** GTX는 어디서 타는지가 아니라 **어디서 내리는지**. 외곽 순환·경전철은 약함 | [▶ 경기 외곽까지 번질 겁니다 44:36](https://www.youtube.com/watch?v=GZfTpovi56k&t=2676), [45:47](https://www.youtube.com/watch?v=GZfTpovi56k&t=2747), [51:02](https://www.youtube.com/watch?v=GZfTpovi56k&t=3062) (부읽남TV 출연, B등급, 26-11-06 촬영). 노선 개수보다 일자리와 얼마나 많이·빠르게 연결되나, 여러 업무지구로 갈 수 있나(확장성) [▶ 어떤 노선인지, 어디에 있는지가 더 중요합니다 3:06](https://www.youtube.com/watch?v=ytWGioUQpa0&t=186), [3:47](https://www.youtube.com/watch?v=ytWGioUQpa0&t=227) | 📖 **p.68~70, p.86~87** | H2 |
 | D3 | 쇼핑몰·병원·대형마트·고속도로·IC·관광지·산업단지는 아파트 호재가 아니다 (급지를 바꾸는 종합 개발이면 예외) | [▶ 연장하세요 3:52](https://www.youtube.com/watch?v=yLZ7NHDCJek&t=232) | 📖 **p.74~75, p.277~278** | H4 가중치 0 |
 | D4 | 지하철은 **착공 후 들어가도 늦지 않다.** 진짜 악재는 **사업 취소** (지연은 악재 아님) | – | 📖 **p.279~280, p.357~358** | H4 단계 |
 | D5 | 역세권 = 평지 **700m·도보 10분**. 동선의 질(밝은 상권 vs 어두운 골목)이 중요 | – | 📖 **p.220~228** | H1 |
 | D6 | 학군지는 구축인데도 전세가 높고 하락장에 강하다. 학령인구 감소로 **최상위 학군은 더 견고, 중간 학군은 약화** | [▶ 학생이 없어...... 2:22](https://www.youtube.com/watch?v=b533wvHHo3g&t=142), [6:37](https://www.youtube.com/watch?v=b533wvHHo3g&t=397) | 📖 p.89~95 | H3 (학원가 순위·학령인구. 학원 수만으로는 학군지를 못 가려 판정은 안 함) |
 | D7 | 상승 여력 점검: 소득, 생산가능인구, 개선 가능성(재건축), 추가 공급 토지, 대체 불가성 | [▶ 상승여력 있는지 확인하는 법 0:47](https://www.youtube.com/watch?v=BMJEO02sOlQ&t=47) | 📖 p.218~219 (한계 시세 = 주민 소득·자산) | H6 주민 소득, H3 생산가능인구, 입지 화면 점검표 |
-| D8 | **재개발은 조합설립인가 이후** 매수. 노후도(30년+ 비율) 미충족이면 불가. 가장 큰 리스크는 시간 | [▶ 갭투자 전면 금지 18:37](https://www.youtube.com/watch?v=1LNFc8iMQFM&t=1117) | 📖 **p.368~373** | H5 |
+| D8 | **재개발은 조합설립인가 이후** 매수. 노후도(30년+ 비율) 미충족이면 불가. 가장 큰 리스크는 시간 | [▶ 갭투자 전면 금지 18:37](https://www.youtube.com/watch?v=1LNFc8iMQFM&t=1117). 상승장엔 아파트 한 채가 재개발보다 더 오르고 갈아타기도 쉽지만, 완공되면 재개발이 더 비싸진다 [▶ 나중에 시세차익 큰 곳 3:27](https://www.youtube.com/watch?v=9f7SKimLzQA&t=207), [3:47](https://www.youtube.com/watch?v=9f7SKimLzQA&t=227) | 📖 **p.368~373** | H5 |
 | D9 | **재건축 사업성**: 용적률 낮고 대지지분 크고 분양가 높고 일반분양 많을수록. 상급지는 절차 무관, 중·하급지는 조합설립인가 후. 기간 20~25년 | [▶ 재건축의 본질](https://www.youtube.com/watch?v=mVNPJeYbGU0) | 📖 **p.374~397** | H5 |
 | D10 | 피해야 할 자산: 오피스텔, 재개발 안 되는 빌라, 지식산업센터, 분양형 호텔, 신축 상가, 지역주택조합 | – | 📖 p.408~409 | 분석 대상에서 제외 |
 | D11 | **초기 재개발·초기 재건축 주의.** 재개발은 **최소 시공사 선정**은 된 곳(D8 조합설립인가보다 한 단계 뒤), 빌라 쪼개기·분담금 불확실. 재건축은 조합설립 뒤 10년 보유·5년 거주 요건에 묶일 수 있고 90년대 초 애매한 단지는 쉽지 않다. 속도 잘 나는 재개발은 옆 신축보다 아직 싸다 | [▶ 경기 외곽까지 번질 겁니다 13:22](https://www.youtube.com/watch?v=GZfTpovi56k&t=802), [13:36](https://www.youtube.com/watch?v=GZfTpovi56k&t=816), [18:20](https://www.youtube.com/watch?v=GZfTpovi56k&t=1100), [18:37](https://www.youtube.com/watch?v=GZfTpovi56k&t=1117), [19:27](https://www.youtube.com/watch?v=GZfTpovi56k&t=1167), [47:14](https://www.youtube.com/watch?v=GZfTpovi56k&t=2834) (부읽남TV 출연, B등급, 26-11-06 촬영) | – | H5, 정비 진행 현황 |
 | D12 | **재개발 밀집 지역 주변 구축·준신축은 개발 수혜**(노량진·광명). 교통 + 주변에 변화가 많은 곳 | [▶ 경기 외곽까지 번질 겁니다 28:11](https://www.youtube.com/watch?v=GZfTpovi56k&t=1691), [28:25](https://www.youtube.com/watch?v=GZfTpovi56k&t=1705), [28:34](https://www.youtube.com/watch?v=GZfTpovi56k&t=1714) (부읽남TV 출연, B등급, 26-11-06 촬영) | – | 개발 호재·주변 정비사업 카드 |
-| D13 | **리모델링 긍정적.** 방 2개·복도식·주차 불편이 확실히 개선되면 준신축처럼 바뀐다. 1세대 리모델링은 볼품없었지만 새로 완성되는 단지(분당 정자·이촌 르엘)가 좋으면 더 뜨거워질 것. 규제가 덜해 속도가 난다(수지·분당·수원). 공사비는 따져 볼 것 | [▶ 경기 외곽까지 번질 겁니다 48:54](https://www.youtube.com/watch?v=GZfTpovi56k&t=2934), [48:58](https://www.youtube.com/watch?v=GZfTpovi56k&t=2938), [49:15](https://www.youtube.com/watch?v=GZfTpovi56k&t=2955), [49:53](https://www.youtube.com/watch?v=GZfTpovi56k&t=2993) (부읽남TV 출연, B등급, 26-11-06 촬영) | – | 정비 진행 현황(리모델링) |
+| D13 | **리모델링 긍정적.** 방 2개·복도식·주차 불편이 확실히 개선되면 준신축처럼 바뀐다. 1세대 리모델링은 볼품없었지만 새로 완성되는 단지(분당 정자·이촌 르엘)가 좋으면 더 뜨거워질 것. 규제가 덜해 속도가 난다(수지·분당·수원). 공사비는 따져 볼 것 | [▶ 경기 외곽까지 번질 겁니다 48:54](https://www.youtube.com/watch?v=GZfTpovi56k&t=2934), [48:58](https://www.youtube.com/watch?v=GZfTpovi56k&t=2938), [49:15](https://www.youtube.com/watch?v=GZfTpovi56k&t=2955), [49:53](https://www.youtube.com/watch?v=GZfTpovi56k&t=2993) (부읽남TV 출연, B등급, 26-11-06 촬영). 분담금은 최소 3~5억, 가장 정확한 건 조합 사무실. 이주~입주 6~7년이라 3~4년 뒤 갈아탈 계획이면 일반 아파트가 낫다 [▶ 나중에 시세차익 큰 곳 2:25](https://www.youtube.com/watch?v=9f7SKimLzQA&t=145), [2:46](https://www.youtube.com/watch?v=9f7SKimLzQA&t=166) | – | 정비 진행 현황(리모델링) |
+| D14 | **역세권은 노선 개수보다 역 위치와 노선의 힘.** 2·5호선 영등포구청 < 5호선 신금호, 4개 노선 수서 < 3호선 압구정 — 급지가 상위 개념(평당가·절대가로 객관화). **가격대가 낮을수록 역세권 비중이 크다: 10억 이하는 역까지 걸어갈 수 있는지가 중요**, 40~50억대는 환경·상품성·희소성. 도로·버스 등 대체 교통이 좋으면 역 거리 영향이 작아 도보 5분·15분 가격차가 지역마다 다르다 | [▶ 어떤 노선인지, 어디에 있는지가 더 중요합니다 0:22](https://www.youtube.com/watch?v=ytWGioUQpa0&t=22), [1:24](https://www.youtube.com/watch?v=ytWGioUQpa0&t=84), [2:04](https://www.youtube.com/watch?v=ytWGioUQpa0&t=124), [2:46](https://www.youtube.com/watch?v=ytWGioUQpa0&t=166), [4:29](https://www.youtube.com/watch?v=ytWGioUQpa0&t=269), [4:50](https://www.youtube.com/watch?v=ytWGioUQpa0&t=290) | 📖 p.220~228 (D5) | H1 역세권 해석 주석(가격대별 숫자 없음 → 판정 안 함) |
+| D15 | **호재는 지금 입지에서 출발해 본다.** 지금 싼 이유가 지하철 없음 하나뿐이면 큰 의미, 직장 거리·주거 환경 등 약점이 여럿이면 역 하나로 안 풀린다. 새 노선은 어디로 가나·환승·배차·차량 수. 주변 재개발은 몇 m보다 동선(벽·큰 도로·경사·출입구)을 실제로 공유하는지. 신축이 들어오면 가격 상방은 올라가도 내 단지 약점은 그대로. 선반영은 비슷한 다른 지역과 비교. 가격이 비슷해졌다고 입지 역전은 아니다(연식·평형 차이일 수 있음). **원래 좋은 곳이 더 좋아진다** | [▶ 지하철 연장이 된다는데 집값은 그대로 1:23](https://www.youtube.com/watch?v=H0pvMdt-0gA&t=83), [1:44](https://www.youtube.com/watch?v=H0pvMdt-0gA&t=104), [3:30](https://www.youtube.com/watch?v=H0pvMdt-0gA&t=210), [4:51](https://www.youtube.com/watch?v=H0pvMdt-0gA&t=291), [5:33](https://www.youtube.com/watch?v=H0pvMdt-0gA&t=333), [6:36](https://www.youtube.com/watch?v=H0pvMdt-0gA&t=396), [7:16](https://www.youtube.com/watch?v=H0pvMdt-0gA&t=436), [8:39](https://www.youtube.com/watch?v=H0pvMdt-0gA&t=519), [▶ 어떤 노선인지, 어디에 있는지가 더 중요합니다 4:50](https://www.youtube.com/watch?v=ytWGioUQpa0&t=290), [5:11](https://www.youtube.com/watch?v=ytWGioUQpa0&t=311) | – | 개발 호재 카드 해석 주석 |
 
 ## 10. 자금·실행
 
@@ -159,8 +165,10 @@
 | F4 | 부대비용: 취득세·중개보수(8억 상한 0.4%)·법무사·이사·수리. 인테리어는 **집값의 최대 5%** | – | 📖 p.241, p.351, p.361, p.426 | I1, I4 |
 | F5 | 종잣돈 대비 소득이 높으면 최대 대출 실거주, 소득 대비 종잣돈이 많으면 전세 레버리지 | – | 📖 p.293~294 | I2 분기 |
 | F6 | **임장 = 지도·데이터로 모르는 실제 생활환경 확인.** ① 역까지 출퇴근 시간대 실제 도보 시간, 역→집 동선(밝은 평지 vs 언덕·어두운 골목·유흥가) ② 단지 안: 쓰레기장 위치, 조경·청결, 경사, 산책로, 보차분리, 지하주차장·이중주차, 동별 조망 차이 ③ 모든 아파트엔 단점이 있다 — 환금성이 좋으면 수요가 몰리는 장점을 찾고 감내할 단점을 정한다 | – | 📖 **p.227~229** (사용자 제공 사진, 2026-10-21. 원문은 저장소에 두지 않음) | 시안 v2 관심 탭 임장 기록(동선·단지 안·정리) |
-| F7 | **무주택자는 하락장을 기다리지 마라.** 기다린 하락이 원하는 가격까지 안 올 수 있고, 안 샀는데 오르는 게 최악. 하락장을 기다리는 건 갈아타는 1주택자만. 집값 하락은 무조건 온다는 걸 인정하고 장기 우상향을 믿고 사되, 하락장에도 팔리는(거래량 많은) 것을 | [▶ 경기 외곽까지 번질 겁니다 52:44](https://www.youtube.com/watch?v=GZfTpovi56k&t=3164), [53:04](https://www.youtube.com/watch?v=GZfTpovi56k&t=3184), [53:16](https://www.youtube.com/watch?v=GZfTpovi56k&t=3196), [1:08:25](https://www.youtube.com/watch?v=GZfTpovi56k&t=4105) (부읽남TV 출연, B등급, 26-11-06 촬영) · 11/27 영상에선 "무주택자가 기다리는 건 개인 선택, **유주택자가 팔고 기다리는 건 위험**"(하락장이 늦게 오거나 짧게 지나갈 수 있음) [▶ 오를까 내릴까 5:55](https://www.youtube.com/watch?v=U_ZpiuyXNdY&t=355), [5:59](https://www.youtube.com/watch?v=U_ZpiuyXNdY&t=359) | – | C9 |
+| F7 | **무주택자는 하락장을 기다리지 마라.** 기다린 하락이 원하는 가격까지 안 올 수 있고, 안 샀는데 오르는 게 최악. 하락장을 기다리는 건 갈아타는 1주택자만. 집값 하락은 무조건 온다는 걸 인정하고 장기 우상향을 믿고 사되, 하락장에도 팔리는(거래량 많은) 것을 | [▶ 경기 외곽까지 번질 겁니다 52:44](https://www.youtube.com/watch?v=GZfTpovi56k&t=3164), [53:04](https://www.youtube.com/watch?v=GZfTpovi56k&t=3184), [53:16](https://www.youtube.com/watch?v=GZfTpovi56k&t=3196), [1:08:25](https://www.youtube.com/watch?v=GZfTpovi56k&t=4105) (부읽남TV 출연, B등급, 26-11-06 촬영) · 11/27 영상에선 "무주택자가 기다리는 건 개인 선택, **유주택자가 팔고 기다리는 건 위험**"(하락장이 늦게 오거나 짧게 지나갈 수 있음) [▶ 오를까 내릴까 5:55](https://www.youtube.com/watch?v=U_ZpiuyXNdY&t=355), [5:59](https://www.youtube.com/watch?v=U_ZpiuyXNdY&t=359). 기다린 결과가 10억 → 14억 → 12억이면 싸게 산 게 아니다 [▶ 언젠가는 옵니다 1:41](https://www.youtube.com/watch?v=WvB8peXZ3fs&t=101) | – | C9 |
 | F8 | **청약**: 남들이 모르는 청약(나홀로·연습 삼아)은 하지 말고 정면 승부. 평소 운이 보통이면 청약만 기다리지 말고 내 집 마련 | [▶ 경기 외곽까지 번질 겁니다 58:10](https://www.youtube.com/watch?v=GZfTpovi56k&t=3490), [58:35](https://www.youtube.com/watch?v=GZfTpovi56k&t=3515), [59:40](https://www.youtube.com/watch?v=GZfTpovi56k&t=3580) (부읽남TV 출연, B등급, 26-11-06 촬영) | – | – |
+| F9 | **대응 원칙을 미리 적어 둔다.** 네 경우(안 샀는데 내림·오름, 샀는데 내림·오름)마다 할 일. 하락을 기다린다면 매수 기준(예: 고점 대비 20% — 숫자 자체는 의미 없고 사람마다 15~30%)과 그만큼 안 떨어질 때의 계획을 함께. 산 가격·예전 가격은 기준이 아니다. 적을 것: 산 이유, 얼마까지 떨어져도 보유, 언제 팔지, 어떤 조건이면 갈아탈지. 가장 위험한 건 기준 없이 예측만 하며 시간을 보내는 것 | [▶ 너무 많이 올랐나 1:21](https://www.youtube.com/watch?v=_ySlz6d1kQU&t=81), [3:03](https://www.youtube.com/watch?v=_ySlz6d1kQU&t=183), [3:24](https://www.youtube.com/watch?v=_ySlz6d1kQU&t=204), [4:44](https://www.youtube.com/watch?v=_ySlz6d1kQU&t=284), [7:07](https://www.youtube.com/watch?v=_ySlz6d1kQU&t=427), [11:15](https://www.youtube.com/watch?v=_ySlz6d1kQU&t=675), [▶ 언젠가는 옵니다 5:48](https://www.youtube.com/watch?v=WvB8peXZ3fs&t=348), [6:08](https://www.youtube.com/watch?v=WvB8peXZ3fs&t=368) | – | 후보: 계획 탭 '내 대응 원칙' 메모(미구현) |
+| F10 | **두 채 전략(혼인신고 전 각자 한 채, 여력 있을 때만)**: 다른 지역에(규제·상승 시기 분산, 단 둘 다 수요가 줄면 의미 없음), 한 채 대출이 크면 다른 한 채는 자기자본 위주, 단기는 비규제 아파트·장기는 재개발. 자금 출처를 분명히(증여세) | [▶ 자산을 제대로 불리고 싶다면 0:40](https://www.youtube.com/watch?v=vKLugnui6uY&t=40), [1:41](https://www.youtube.com/watch?v=vKLugnui6uY&t=101), [2:42](https://www.youtube.com/watch?v=vKLugnui6uY&t=162), [4:45](https://www.youtube.com/watch?v=vKLugnui6uY&t=285) | – | – |
 
 ---
 
@@ -195,16 +203,18 @@
 | 현금 1억 5천이면 생애최초로 5~6억대(노원·수원·산본) 사도 괜찮다 | [55:19](https://www.youtube.com/watch?v=GZfTpovi56k&t=3319), [55:40](https://www.youtube.com/watch?v=GZfTpovi56k&t=3340) |
 | 금리는 과거처럼 급등하는 시장이 아니라 대비 가능. 하락 트리거는 이상한 것까지 다 오른 뒤 대량 해고·실적 감소·성장률 둔화 같은 뉴스 | [1:03:30](https://www.youtube.com/watch?v=GZfTpovi56k&t=3810), [1:03:52](https://www.youtube.com/watch?v=GZfTpovi56k&t=3832) |
 
-## 시점 발언 (2026-11-27 · 작가 송희구 채널 "오를까 내릴까")
+## 시점 발언 (2026-11 · 작가 송희구 채널)
 
-위와 같이 그때 시장 판단이라 규칙·기준선으로 쓰지 않는다. 링크: [▶ 오를까 내릴까](https://www.youtube.com/watch?v=U_ZpiuyXNdY)
+위와 같이 그때 시장 판단이라 규칙·기준선으로 쓰지 않는다. 11/27 = [▶ 오를까 내릴까](https://www.youtube.com/watch?v=U_ZpiuyXNdY), 11/12 = [▶ 고가는 꺾였고, 저가는 오르는 중](https://www.youtube.com/watch?v=L0LKvj7tbbg)
 
 | 발언 | 시점 |
 |---|---|
-| 30억 넘는 시장은 확실히 꺾였고, 재건축 앞둔 단지가 신축보다 더 꺾였다(재초환·양도세 부담에 오래 보유한 사람이 매물을 냄 — 세금 정책이 먹힘) | [1:41](https://www.youtube.com/watch?v=U_ZpiuyXNdY&t=101), [1:50](https://www.youtube.com/watch?v=U_ZpiuyXNdY&t=110) |
-| 마포·성동·동작·영등포·강동·과천·분당·서대문, 마곡·용산·송파 비잠실·위례 등도 호가가 조금 내려간 매물이 보인다(실거래 19억이면 호가 20억부터 → 이제 18.5억, 싸게는 18억). 다만 완전한 하락세가 아니라 늘 있던 쉬어가는 장 | [2:35](https://www.youtube.com/watch?v=U_ZpiuyXNdY&t=155), [2:48](https://www.youtube.com/watch?v=U_ZpiuyXNdY&t=168), [2:57](https://www.youtube.com/watch?v=U_ZpiuyXNdY&t=177) |
-| 하락 트리거 예시: AI 열풍이 식어 반도체(삼성·하이닉스)·전력기기 수출이 꺾이고 협력사·고용으로 번지는 경우. 예측한 위기는 위기가 아니다 | [3:38](https://www.youtube.com/watch?v=U_ZpiuyXNdY&t=218) |
-| 10~15억은 보합(멈춤) → 이 구간 1주택자는 10억 후반대로 갈아타기 좋은 때. 10억 이하는 아주 뜨겁다(중고가에서 있던 일이 중저가로) | [4:31](https://www.youtube.com/watch?v=U_ZpiuyXNdY&t=271), [4:45](https://www.youtube.com/watch?v=U_ZpiuyXNdY&t=285), [4:52](https://www.youtube.com/watch?v=U_ZpiuyXNdY&t=292) |
-| 95주 연속 상승이지만 오른 곳만 올라 2021년처럼 전국 상승은 아니다(경기·서울 외곽은 그대로). 2023년 대비로는 많이 오른 건 사실 | [6:40](https://www.youtube.com/watch?v=U_ZpiuyXNdY&t=400), [6:54](https://www.youtube.com/watch?v=U_ZpiuyXNdY&t=414) |
-| 살 수 있는 것 중 가장 좋은 것을 사고, 예측보다 방향(갈아타기 계획)을 세워라 | [7:02](https://www.youtube.com/watch?v=U_ZpiuyXNdY&t=422), [7:08](https://www.youtube.com/watch?v=U_ZpiuyXNdY&t=428) |
-| 주가가 고점 대비 거의 반토막 → 주식 팔아 집 사려던 수요가 없어져 시장이 멈춘 이유 중 하나 | [7:38](https://www.youtube.com/watch?v=U_ZpiuyXNdY&t=458) |
+| **11/12** 초고가는 양도세 때문에 꺾였지만, 수요가 가장 많은 5~15억은 집 하나 보려면 몇 팀이 가고 호가는 비싸고 매물이 없다 | [1:22](https://www.youtube.com/watch?v=L0LKvj7tbbg&t=82) |
+| **11/12** 규제를 조금 푼다면 대출은 안 풀고(통화량, 사내대출도 규제), 재건축 조합원 지위 양도 조건은 풀 수 있다 — 매물이 나와 상승에 브레이크 | [3:46](https://www.youtube.com/watch?v=L0LKvj7tbbg&t=226), [4:07](https://www.youtube.com/watch?v=L0LKvj7tbbg&t=247) |
+| **11/27** 30억 넘는 시장은 확실히 꺾였고, 재건축 앞둔 단지가 신축보다 더 꺾였다(재초환·양도세 부담에 오래 보유한 사람이 매물을 냄 — 세금 정책이 먹힘) | [1:41](https://www.youtube.com/watch?v=U_ZpiuyXNdY&t=101), [1:50](https://www.youtube.com/watch?v=U_ZpiuyXNdY&t=110) |
+| **11/27** 마포·성동·동작·영등포·강동·과천·분당·서대문, 마곡·용산·송파 비잠실·위례 등도 호가가 조금 내려간 매물이 보인다(실거래 19억이면 호가 20억부터 → 이제 18.5억, 싸게는 18억). 다만 완전한 하락세가 아니라 늘 있던 쉬어가는 장 | [2:35](https://www.youtube.com/watch?v=U_ZpiuyXNdY&t=155), [2:48](https://www.youtube.com/watch?v=U_ZpiuyXNdY&t=168), [2:57](https://www.youtube.com/watch?v=U_ZpiuyXNdY&t=177) |
+| **11/27** 하락 트리거 예시: AI 열풍이 식어 반도체(삼성·하이닉스)·전력기기 수출이 꺾이고 협력사·고용으로 번지는 경우. 예측한 위기는 위기가 아니다 | [3:38](https://www.youtube.com/watch?v=U_ZpiuyXNdY&t=218) |
+| **11/27** 10~15억은 보합(멈춤) → 이 구간 1주택자는 10억 후반대로 갈아타기 좋은 때. 10억 이하는 아주 뜨겁다(중고가에서 있던 일이 중저가로) | [4:31](https://www.youtube.com/watch?v=U_ZpiuyXNdY&t=271), [4:45](https://www.youtube.com/watch?v=U_ZpiuyXNdY&t=285), [4:52](https://www.youtube.com/watch?v=U_ZpiuyXNdY&t=292) |
+| **11/27** 95주 연속 상승이지만 오른 곳만 올라 2021년처럼 전국 상승은 아니다(경기·서울 외곽은 그대로). 2023년 대비로는 많이 오른 건 사실 | [6:40](https://www.youtube.com/watch?v=U_ZpiuyXNdY&t=400), [6:54](https://www.youtube.com/watch?v=U_ZpiuyXNdY&t=414) |
+| **11/27** 살 수 있는 것 중 가장 좋은 것을 사고, 예측보다 방향(갈아타기 계획)을 세워라 | [7:02](https://www.youtube.com/watch?v=U_ZpiuyXNdY&t=422), [7:08](https://www.youtube.com/watch?v=U_ZpiuyXNdY&t=428) |
+| **11/27** 주가가 고점 대비 거의 반토막 → 주식 팔아 집 사려던 수요가 없어져 시장이 멈춘 이유 중 하나 | [7:38](https://www.youtube.com/watch?v=U_ZpiuyXNdY&t=458) |
