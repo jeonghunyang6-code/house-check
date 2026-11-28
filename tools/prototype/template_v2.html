@@ -366,8 +366,8 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
       </div>
         </div>
         <div class="mpane" data-p="f" hidden>
-      <div class="msub"><h2>① 금액대별 흐름 <small>최근 3개월, 84㎡</small></h2><p id="flBandHead" style="margin:0 0 6px;font-size:14px;font-weight:700"></p><div id="flTop"></div>
-        <p class="src">급지와 같은 경계, 3개월 전 시세로 구분. 단지별 최근 90일 vs 그 전 90일(작은 숫자 = 단지 수). 대표 = 1,000세대+ 중 거래 많은 곳. ▶ 하락도 반등도 고가부터(11/27 5:15)</p></div>
+      <div class="msub"><h2>① 급지별 흐름 <small>최근 3개월, 84㎡</small></h2><p id="flBandHead" style="margin:0 0 6px;font-size:14px;font-weight:700"></p><div id="flTop"></div>
+        <p class="src">급지 = 동 단위 84㎡ 환산가 8단계(9억 이하 7·8급은 뺌). 단지별 최근 90일 vs 그 전 90일(작은 숫자 = 단지 수). 대표 = 1,000세대+ 중 거래 많은 곳. ▶ 하락도 반등도 고가부터(11/27 5:15)</p></div>
       <div class="msub"><h2>② 위 급지와 격차 <small>관심 단지 ÷ 바로 위 급지</small></h2><div id="flGap"></div>
         <p class="src">1에 가까울수록 위 급지와 붙음. ▶ 3년 전 차이가 유지되면 같이 움직인 것(10/25 3:08)</p></div>
       <div class="msub"><h2>③ 한계 시세 <small>84㎡ 천장 = 위 급지 59㎡</small></h2><div id="flCap"></div>
@@ -2466,11 +2466,11 @@ function drawFlowTab() {
   const repN = (x) => { const r = x && x[3] && x[3][0]; if (!r) return ''; const n = r[0].replace(/아파트$/, '').replace(/\(.*\)$/, '').replace(/^에스케이/, 'SK');
     return `${escA(n)} <span class="${r[1] > 0 ? 'up' : r[1] < 0 ? 'dn' : ''}">${sgn(r[1], 0)}</span>`; };   // 대표 = 대단지 중 인기(거래 많은) 단지와 그 단지 변화
   const cellR = (x) => { const r = repN(x); return `<td class="num" style="text-align:right;white-space:normal;vertical-align:top">${cell(x)}${r ? `<br><span class="muted" style="font-size:10.5px;line-height:1.3;display:inline-block">${r}</span>` : ''}</td>`; };   // 대표 단지는 그 칸 아래(2026-11-28 360px)
-  $('#flTop').innerHTML = tb0(['금액대', '서울', '경기·인천'], SE.map((x, i) => { const g = GG[i]; if ((!x || x[1] == null) && (!g || g[1] == null)) return '';
-    return `<tr><td style="vertical-align:top"><b>${x[0]}</b></td>${cellR(x)}${cellR(g)}</tr>`; }));
+  $('#flTop').innerHTML = tb0(['급지', '서울', '경기·인천'], SE.map((x, i) => { const g = GG[i]; if ((!x || x[1] == null) && (!g || g[1] == null)) return '';
+    return `<tr><td style="vertical-align:top"><b>${x[0]}</b>${x[4] ? `<br><span class="muted" style="font-size:10.5px">${x[4]}</span>` : ''}</td>${cellR(x)}${cellR(g)}</tr>`; }));
   { const neg = SE.filter(x => x[1] != null && x[1] < 0), pos = SE.filter(x => x[1] != null && x[1] > 0);   // 위에서부터 마이너스가 어디까지 내려왔나
-    const last = neg.length ? neg[neg.length - 1][0] : null, lo = last ? last.replace(/~.*|\+/, '').replace('억', '') + '억' : '';
-    $('#flBandHead').innerHTML = last ? `서울 <span class="dn">${lo} 이상 하락</span> · 그 아래는 ${pos.length ? '<span class="up">상승</span>' : '보합'}` : '모든 금액대 상승·보합'; }
+    const nl = neg.map(x => x[0]), txt = nl.length === 1 ? `${nl[0]}만` : nl.length ? `${nl[0]}~${nl[nl.length - 1]}` : '';
+    $('#flBandHead').innerHTML = nl.length ? `서울 <span class="dn">${txt} 하락</span> · 나머지는 ${pos.length ? '<span class="up">상승</span>' : '보합'}` : '모든 급지 상승·보합'; }
   // ② 위 급지 격차
   const r2 = (v) => v == null ? '<span class="muted">–</span>' : v.toFixed(2);
   $('#flGap').innerHTML = tb(['관심 단지 59㎡', '3년 전', '1년 전', '지금'], F.gap.map(([n, e, g3, g1, g0]) =>
