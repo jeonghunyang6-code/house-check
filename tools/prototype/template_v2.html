@@ -366,14 +366,10 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
       </div>
         </div>
         <div class="mpane" data-p="f" hidden>
-      <div class="msub"><h2>① 대표 단지 흐름 <small>3개월씩, 84㎡</small></h2><p id="flBandHead" style="margin:0 0 6px;font-size:14px;font-weight:700"></p><div id="flTop"></div>
+      <div class="msub"><h2>① 동네별 대장 흐름 <small>3개월씩, 84㎡</small></h2><p id="flBandHead" style="margin:0 0 6px;font-size:14px;font-weight:700"></p><div id="flTop"></div>
         <p id="flBands" style="margin:8px 0 0;font-size:13px"></p>
-        <p class="src">중개 중앙값(억), 압구정은 평당. 잠실·반포는 3단지 거래를 합침. 작은 숫자 = 최근 거래 수. ▶ 같은 지역에선 대장이 먼저(11/24 1:01)</p></div>
-      <div class="msub"><h2>② 위 급지와 격차 <small>관심 단지 ÷ 바로 위 급지</small></h2><div id="flGap"></div>
-        <p class="src">1에 가까울수록 위 급지와 붙음. ▶ 3년 전 차이가 유지되면 같이 움직인 것(10/25 3:08)</p></div>
-      <div class="msub"><h2>③ 한계 시세 <small>84㎡ 천장 = 위 급지 59㎡</small></h2><div id="flCap"></div>
-        <p class="src">📖 하급지 84㎡ 천장 = 상급지 59㎡ 가격(p.217~219)</p></div>
-      <div class="msub"><h2>④ 매수 기준까지 <small>최근 1년 고점 대비</small></h2>
+        <p class="src">1년 전·3개월 전·최근 3개월 중개 중앙값(억). 압구정은 현대 합쳐 평당, 잠실르엘은 입주 전이라 입주권. 작은 숫자 = 최근 거래 수(적으면 흔들림). ▶ 같은 지역에선 대장이 먼저(11/24 1:01)</p></div>
+      <div class="msub"><h2>② 내 매수 기준까지 <small>최근 1년 고점 대비</small></h2>
         <div class="row" style="align-items:center;gap:6px;font-size:13.5px">내 기준: 고점 대비 −<input id="flPct" inputmode="numeric" value="15" style="width:44px;font:inherit;font-weight:700;text-align:center;border:1px solid var(--line);border-radius:8px;padding:3px">% 면 산다</div>
         <div id="flBuy"></div>
         <p class="src">고점 = 최근 1년 3개월 중앙값 최고. ▶ 기준 숫자는 사람마다 15~30%(11/18 3:03)</p></div>
@@ -2463,34 +2459,26 @@ function drawFlowTab() {
   const short = (n) => n.replace(/^미사강변\s*/, '').replace(/아파트$/, '').replace(/\(.*\)$/, '');
   // ① 대표 단지 흐름(2026-11-28 사용자: 압구정·반포·잠실·올림픽파크포레온·고덕그라시움, 비싼 순 = 사다리 순).
   //    F.rep = [[이름, 평당 여부, [1년 전 중앙값, 건수], [3개월 전], [최근]]]. 변화 = 최근 ÷ 3개월 전, ±1% 안은 보합(🔧)
-  const RP = F.rep || [], ev = (x, py) => !x ? '–' : py ? (x[0] / 1e4).toFixed(2) : (x[0] / 1e4).toFixed(1);
+  const RP = (F.lead || []).map(([dong, nm, py, ...w]) => [`<b>${dong}</b><br><span class="muted" style="font-size:10.5px">${escA(nm.replace(/\(꿈에그린\)|\(1~14차\)/, ''))}${py ? ' · 평당' : ''}</span>`, false, ...w, dong, py]), ev = (x, py) => !x ? '–' : py ? (x[0] / 1e4).toFixed(2) : (x[0] / 1e4).toFixed(1);
   const chg = (x) => x[4] && x[3] ? (x[4][0] / x[3][0] - 1) * 100 : null;
   const RW = F.gold ? [...RP, ['__sep'], F.gold] : RP;   // 맨 아래 우리 단지(관심 단지, 84㎡)
-  $('#flTop').innerHTML = tb0(['단지', '1년 전', '3개월 전', '최근', '변화'], RW.map((x, i) => { if (x[0] === '__sep') return `<tr><td colspan="5" style="text-align:left;padding-top:8px;font-size:11.5px;color:var(--ink-2);border-bottom:0">우리 단지</td></tr>`; const c = chg(x);
-    return `<tr><td style="white-space:normal">${escA(x[0])}${x[1] ? ' <span class="muted" style="font-size:10.5px">평당</span>' : ''}</td>${td(ev(x[2], x[1]), 1)}${td(ev(x[3], x[1]), 1)}`
-      + `${td(`<b>${ev(x[4], x[1])}</b>${x[4] ? `<span class="muted" style="font-size:10px"> ${x[4][1]}</span>` : ''}`, 1)}${td(c == null ? '–' : sgn(c, 0), 1, c > 1 ? 'up' : c < -1 ? 'dn' : '')}</tr>`; }));
-  { const sh = (x) => ({ '올림픽파크포레온': '올파포', '고덕그라시움': '그라시움' })[x[0]] || x[0].split(' ')[0], up = RP.filter(x => chg(x) != null && chg(x) > 1).map(sh);
+  $('#flTop').innerHTML = tb0(['동네', '1년', '3개월', '최근', '변화'], RW.map((x, i) => { if (x[0] === '__sep') return `<tr><td colspan="5" style="text-align:left;padding-top:8px;font-size:11.5px;color:var(--ink-2);border-bottom:0">우리 단지</td></tr>`; const c = chg(x);
+    return `<tr><td style="white-space:normal">${x[5] ? x[0] : escA(x[0])}${x[1] ? ' <span class="muted" style="font-size:10.5px">평당</span>' : ''}</td>${td(ev(x[2], x[1] || x[6]), 1)}${td(ev(x[3], x[1] || x[6]), 1)}`
+      + `${td(`<b>${ev(x[4], x[1] || x[6])}</b>${x[4] ? `<span class="muted" style="font-size:10px"> ${x[4][1]}</span>` : ''}`, 1)}${td(c == null ? '–' : sgn(c, 0), 1, c > 1 ? 'up' : c < -1 ? 'dn' : '')}</tr>`; }));
+  { const sh = (x) => x[5] || x[0], up = RP.filter(x => chg(x) != null && chg(x) > 1).map(sh);
     const dn = RP.filter(x => chg(x) != null && chg(x) < -1).map(sh), fl = RP.filter(x => chg(x) != null && Math.abs(chg(x)) <= 1).map(sh);
     const pb = (sc, bs) => { const v = (F.pb || []).filter(r => r.scope === sc && bs.includes(r.band) && r.c3 != null).map(r => r.c3); if (!v.length) return '–';
       const a = Math.min(...v), b = Math.max(...v), f = (x) => `<span class="${x > 0 ? 'up' : x < 0 ? 'dn' : ''}">${sgn(x, 0)}</span>`; return a === b || Math.round(a) === Math.round(b) ? f(a) : `${f(a)}~${f(b)}`; };
     // 금액대 전체(3개월) 한 줄 + 펼치면 금액대별(9억 이하 뺌). 기존 '가격대별' 카드는 건드리지 않음(2026-11-28 사용자)
     const PB = (F.pb || []).filter(r => !/6~9억|6억 미만/.test(r.band)), bd = [...new Set(PB.map(r => r.band))], at = (sc, b) => PB.find(r => r.scope === sc && r.band === b);
     const c3 = (r) => !r || r.c3 == null ? '<span class="muted">–</span>' : `<span class="${r.c3 > 0 ? 'up' : r.c3 < 0 ? 'dn' : ''}">${sgn(r.c3, 1)}</span>${r.n3 < 10 ? `<span class="muted" style="font-size:10px"> ${r.n3}</span>` : ''}`;
-    $('#flBands').innerHTML = `<span class="muted">금액대 전체 3개월</span> 서울 25억+ ${pb('서울', ['30억+', '25~30억'])} · 9~15억 ${pb('서울', ['12~15억', '9~12억'])} · 경기 9~15억 ${pb('경기·인천', ['12~15억', '9~12억'])}`
-      + `<details class="more-f"><summary>금액대별 보기</summary>${tb0(['84㎡', '서울', '경기·인천'], bd.map(b => `<tr><td>${b}</td>${td(c3(at('서울', b)), 1)}${td(c3(at('경기·인천', b)), 1)}</tr>`))}</details>`;
+    $('#flBands').innerHTML = `<span class="muted">금액대 전체 3개월</span> 서울 25억+ ${pb('서울', ['30억+', '25~30억'])} · 9~15억 ${pb('서울', ['12~15억', '9~12억'])} · 경기 9~15억 ${pb('경기·인천', ['12~15억', '9~12억'])}`;
     $('#flBandHead').innerHTML = [dn.length ? `<span class="dn">${dn.join('·')} 하락</span>` : '', fl.length ? `${fl.join('·')} 보합` : '', up.length ? `<span class="up">${up.join('·')} 상승</span>` : ''].filter(Boolean).join(' · '); }
-  // ② 위 급지 격차
-  const r2 = (v) => v == null ? '<span class="muted">–</span>' : v.toFixed(2);
-  $('#flGap').innerHTML = tb(['관심 단지 59㎡', '3년 전', '1년 전', '지금'], F.gap.map(([n, e, g3, g1, g0]) =>
-    `<tr title="위 급지: ${escA(e.join(', '))}">${td(short(n), 0)}${td(r2(g3), 1)}${td(r2(g1), 1)}${td(`<b>${r2(g0)}</b>`, 1, g3 != null && g0 != null ? (g0 > g3 ? 'up' : 'dn') : '')}</tr>`));
-  // ③ 한계 시세 (작가: 84㎡ 가 위 급지 59㎡ 에 닿으면 천장)
-  $('#flCap').innerHTML = tb(['84㎡ (억)', '지금', '천장', '여유'], F.cap.map(([n, r, c]) => { const room = (c / r - 1) * 100;
-    return `<tr>${td(short(n), 0)}${td((r / 1e4).toFixed(1), 1)}${td((c / 1e4).toFixed(1), 1)}${td(room <= 0 ? '<span class="pill warn" style="font-size:11px;padding:0 6px">천장</span>' : '+' + room.toFixed(0) + '%', 1)}</tr>`; }));
-  // ④ 매수 기준까지
+  // ② 내 매수 기준까지(관심 단지 중 지금 시세 낮은 순 = 예산에 가까운 곳 5곳, 나머지는 펼치기)
   const pct = Math.max(1, Math.min(60, +$('#flPct').value || 15));
   const e1 = (v) => (v / 1e4).toFixed(1);
   $('#flBuy').innerHTML = tb(['59㎡ (억)', '고점', '기준가', '지금', '남음'], F.buy.map(([n, sq, hi, now]) => { const b = hi * (1 - pct / 100), left = (1 - b / now) * 100; return [left, n, hi, b, now]; })
-    .sort((a, b) => a[0] - b[0]).map(([left, n, hi, b, now]) => `<tr>${td(short(n), 0)}${td(e1(hi), 1)}${td(e1(b), 1)}${td(e1(now), 1)}${td(left <= 0 ? '<span class="pill good" style="font-size:11px;padding:0 6px">도달</span>' : '−' + left.toFixed(0) + '%', 1)}</tr>`));
+    .sort((a, b) => a[4] - b[4]).map(([left, n, hi, b, now]) => `<tr>${td(short(n), 0)}${td(e1(hi), 1)}${td(e1(b), 1)}${td(e1(now), 1)}${td(left <= 0 ? '<span class="pill good" style="font-size:11px;padding:0 6px">도달</span>' : '−' + left.toFixed(0) + '%', 1)}</tr>`));
 }
 $('#flPct') && $('#flPct').addEventListener('change', () => { const p = store.get('v2-plan', {}) || {}; store.set('v2-plan', { ...p, buyPct: $('#flPct').value }); drawFlowTab(); });
 $('#flPct') && ($('#flPct').value = (store.get('v2-plan', {}) || {}).buyPct || 15);
