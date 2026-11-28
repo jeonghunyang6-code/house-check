@@ -493,4 +493,32 @@ FROM j JOIN rm USING (region_code, band) LEFT JOIN cm USING (region_code)
 WHERE m.apt_seq = j.apt_seq
   AND j.band = CASE WHEN m.area_group < 60 THEN 1 WHEN m.area_group < 85 THEN 2 WHEN m.area_group < 135 THEN 3 ELSE 4 END;
 
+
+-- 12) C12 3년 비교 (송희구 ▶ 언젠가는 옵니다 1:21 "6개월~1년 상승률로 판단 말고 적어도 3년", ▶ 호가가 비쌀 때 3:08
+--     "몇 년 전 가격 차이가 지금도 유지되면 뒤처진 게 아니다", 2026-11-28 사용자 시안 승인).
+--     최근 6개월(계약월 이번 달 −6 ~ −1) 중개·비해제·1층 제외 중앙값 vs 3년 전 같은 6개월(deal_y3, 보관 파일 → jobs/deal_archive.py y3).
+--     두 기간 🔧 3건 이상(임시 기준 시세와 같은 최소). 작가 숫자는 기간(3년)뿐이라 판정 없이 숫자만.
+--     생활권 = 같은 생활권·같은 면적군 🔧 5곳 이상(B6 1년과 같은 최소)의 중앙값, 모자라면 생활권 전체 면적군 5곳 이상
+UPDATE complex_metrics m SET m6_10k = x.m6, m6_n = x.n6, y3_10k = x.y3, y3_n = x.n3,
+  chg_36m = CASE WHEN x.n6 >= 3 AND x.n3 >= 3 AND x.y3 > 0 THEN round(((x.m6::numeric / x.y3 - 1) * 100), 2) END
+FROM (
+  SELECT apt_seq, area_group, round(a.med)::int AS m6, a.n AS n6, y.median_10k AS y3, y.n AS n3
+  FROM (SELECT apt_seq, area_group, count(*) AS n, percentile_cont(0.5) WITHIN GROUP (ORDER BY price_10k) AS med
+        FROM deals WHERE NOT is_cancelled AND deal_type = '중개' AND floor IS DISTINCT FROM 1
+          AND contract_month BETWEEN to_char({TODAY}::date - INTERVAL '6 months', 'YYYYMM') AND to_char({TODAY}::date - INTERVAL '1 month', 'YYYYMM')
+        GROUP BY 1, 2) a
+  FULL JOIN (SELECT apt_seq, area_group, n, median_10k FROM deal_y3
+             WHERE from_month = to_char({TODAY}::date - INTERVAL '42 months', 'YYYYMM')) y USING (apt_seq, area_group)
+) x
+WHERE m.apt_seq = x.apt_seq AND m.area_group = x.area_group;
+
+WITH z AS (
+  SELECT m.apt_seq, m.area_group, c.lifezone_id AS z, m.chg_36m FROM complex_metrics m JOIN complexes c USING (apt_seq)
+  WHERE m.chg_36m IS NOT NULL AND c.lifezone_id IS NOT NULL
+), za AS (SELECT z, area_group, percentile_cont(0.5) WITHIN GROUP (ORDER BY chg_36m) AS c, count(*) AS n FROM z GROUP BY 1, 2),
+zz AS (SELECT z, percentile_cont(0.5) WITHIN GROUP (ORDER BY chg_36m) AS c, count(*) AS n FROM z GROUP BY 1)
+UPDATE complex_metrics m SET region_chg_36m = round((CASE WHEN za.n >= 5 THEN za.c ELSE zz.c END)::numeric, 2)
+FROM z JOIN zz ON zz.z = z.z LEFT JOIN za ON za.z = z.z AND za.area_group = z.area_group
+WHERE m.apt_seq = z.apt_seq AND m.area_group = z.area_group AND (za.n >= 5 OR zz.n >= 5);
+
 COMMIT;

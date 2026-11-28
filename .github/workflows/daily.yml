@@ -70,6 +70,15 @@ jobs:
           GH_REPO: ${{ github.repository }}
           PYTHONUNBUFFERED: "1"
         run: python -m jobs.deal_archive roll --archive gh   # 저장 구조 C: DB 에는 최근 25개월만
+      - name: 3년 전 같은 6개월 시세 (C12, 창이 바뀐 날만)
+        if: ${{ !cancelled() && !inputs.dry_run }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          HC_DB_BACKEND: psql
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PYTHONUNBUFFERED: "1"
+        run: python -m jobs.deal_archive y3 --archive gh
       - name: 단지 지표 계산
         if: ${{ !cancelled() && !inputs.dry_run }}
         env:
