@@ -368,7 +368,7 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
         <div class="mpane" data-p="f" hidden>
       <div class="msub"><h2>① 동네별 대장 흐름 <small>3개월씩, 84㎡(표시 없으면)</small></h2><p id="flBandHead" style="margin:0 0 6px;font-size:14px;font-weight:700"></p><div id="flTop"></div>
         <p id="flBands" style="margin:8px 0 0;font-size:13px"></p>
-        <p class="src">1년 전·3개월 전·최근 3개월 중개 중앙값(억). 압구정은 현대 합쳐 평당, 잠실르엘은 입주 전이라 입주권. 작은 숫자 = 최근 거래 수(적으면 흔들림). ▶ 같은 지역에선 대장이 먼저(11/24 1:01)</p></div>
+        <p class="src">1년 전·3개월 전·최근 3개월 중개 중앙값(억), 대장과 비슷한 가격의 이웃 대단지를 합침(압구정은 평당). 변화 = 단지별 최근 ÷ 3개월 전의 중앙값. 작은 숫자 = 최근 거래 수(적으면 흔들림). ▶ 같은 지역에선 대장이 먼저(11/24 1:01)</p></div>
       <div class="msub"><h2>② 내 매수 기준까지 <small>최근 1년 고점 대비</small></h2>
         <div class="row" style="align-items:center;gap:6px;font-size:13.5px">내 기준: 고점 대비 −<input id="flPct" inputmode="numeric" value="15" style="width:44px;font:inherit;font-weight:700;text-align:center;border:1px solid var(--line);border-radius:8px;padding:3px">% 면 산다</div>
         <div id="flBuy"></div>
@@ -2453,14 +2453,15 @@ function drawSigMine() {
 let FLOW = null;
 function drawFlowTab() {
   const F = FLOW; if (!F || !$('#flTop')) return;
-  const tb0 = (head, rows) => `<table class="per" style="width:100%"><tr>${head.map((h, i) => `<th${i ? ' style="text-align:right"' : ''}>${h}</th>`).join('')}</tr>${rows.join('')}</table>`;
+  const tb0 = (head, rows) => `<table class="per" style="width:100%"><tr>${head.map((h, i) => `<th style="white-space:nowrap${i ? ';text-align:right' : ''}">${h}</th>`).join('')}</tr>${rows.join('')}</table>`;
   const tb = (head, rows, k = 5) => tb0(head, rows.slice(0, k)) + (rows.length > k ? `<details class="more-f"><summary>나머지 ${rows.length - k}곳</summary>${tb0(head, rows.slice(k))}</details>` : '');   // 긴 표는 5줄만(2026-11-28)
   const td = (x, i, cls) => `<td${i ? ` class="num${cls ? ' ' + cls : ''}" style="text-align:right"` : ' style="max-width:104px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"'}>${x}</td>`;
   const short = (n) => n.replace(/^미사강변\s*/, '').replace(/아파트$/, '').replace(/\(.*\)$/, '');
   // ① 대표 단지 흐름(2026-11-28 사용자: 압구정·반포·잠실·올림픽파크포레온·고덕그라시움, 비싼 순 = 사다리 순).
   //    F.rep = [[이름, 평당 여부, [1년 전 중앙값, 건수], [3개월 전], [최근]]]. 변화 = 최근 ÷ 3개월 전, ±1% 안은 보합(🔧)
-  const RP = (F.lead || []).map(([dong, nm, py, ...w]) => [`<b>${dong}</b><br><span class="muted" style="font-size:10.5px">${escA(nm.replace(/\(꿈에그린\)|\(1~14차\)/, ''))}${py ? ' · 평당' : ''}</span>`, false, ...w, dong, py]), ev = (x, py) => !x ? '–' : py ? (x[0] / 1e4).toFixed(2) : (x[0] / 1e4).toFixed(1);
-  const chg = (x) => x[4] && x[3] ? (x[4][0] / x[3][0] - 1) * 100 : null;
+  // F.lead = [[동네, 대장권 이름, 평당?, 1년 전, 3개월 전, 최근, 변화]]. 대장권 = 대장과 비슷한 가격의 이웃 대단지 묶음(2026-11-28 사용자), 변화는 단지별 비율의 중앙값
+  const RP = (F.lead || []).map(([dong, nm, py, y, p, n, c]) => [`<b>${dong}</b><br><span class="muted" style="font-size:10.5px">${escA(nm)}${py ? ' · 평당' : ''}</span>`, false, y, p, n, dong, py, c]), ev = (x, py) => !x ? '–' : py ? (x[0] / 1e4).toFixed(2) : (x[0] / 1e4).toFixed(1);
+  const chg = (x) => x[7] != null ? x[7] : x[4] && x[3] ? (x[4][0] / x[3][0] - 1) * 100 : null;
   const RW = F.gold ? [...RP, ['__sep'], F.gold] : RP;   // 맨 아래 우리 단지(관심 단지, 84㎡)
   $('#flTop').innerHTML = tb0(['동네', '1년', '3개월', '최근', '변화'], RW.map((x, i) => { if (x[0] === '__sep') return `<tr><td colspan="5" style="text-align:left;padding-top:8px;font-size:11.5px;color:var(--ink-2);border-bottom:0">우리 단지</td></tr>`; const c = chg(x);
     return `<tr><td style="white-space:normal">${x[5] ? x[0] : escA(x[0])}${x[1] ? ' <span class="muted" style="font-size:10.5px">평당</span>' : ''}</td>${td(ev(x[2], x[1] || x[6]), 1)}${td(ev(x[3], x[1] || x[6]), 1)}`
