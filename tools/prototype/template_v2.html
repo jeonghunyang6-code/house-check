@@ -340,10 +340,10 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
         <p class="src" id="volNote"></p>
       </div>
       <div class="msub">
-        <h2 id="pbTitle">가격대별 변화 <small>84㎡ 환산 · 막대 = 1년</small></h2>
+        <h2>가격대별 1년 변화 <small>84㎡로 환산</small></h2>
         <div class="seg" id="pbScope"><button type="button" data-v="서울" aria-pressed="true">서울</button><button type="button" data-v="경기·인천" aria-pressed="false">경기·인천</button></div>
         <div class="list" id="pbBars" style="gap:8px"></div>
-        <p class="src">막대 = 단지별 12개월 기준 시세 변화. 3개월 = 84㎡ 최근 90일 vs 그 전 90일(2건+), 3개월 전 시세로 구간(작은 숫자 = 10곳 미만). 경계는 급지와 같음.</p>
+        <p class="src">단지별 12개월 기준 시세 변화의 가격대별 중앙값.</p>
       </div>
         </div>
         <div class="mpane" data-p="m" hidden>
@@ -873,11 +873,7 @@ function labelPt(k, g) {
 (function bands() {
   const draw = (scope) => {
     const rows = (D.price_bands || []).filter(r => r.scope === scope), mx = Math.max(...rows.map(r => Math.abs(r.chg)), 1);
-    // 2026-11-28 사용자 시안: 1년 막대 옆에 최근 3개월(c3) — 고가는 꺾이고 아래는 오르는 양극화를 한 화면에(📖 L9 가격대별로 다른 시장)
-    const c3 = (r) => r.c3 == null ? '<span class="muted">–</span>' : `<b class="${r.c3 > 0 ? 'up' : r.c3 < 0 ? 'dn' : ''}">${sgn(r.c3)}</b>${r.n3 < 10 ? `<span class="muted" style="font-size:10px">${r.n3}</span>` : ''}`;   // 단지 10곳 미만이면 수 표시
-    $('#pbBars').innerHTML = `<div class="bar2" style="grid-template-columns:58px 1fr 74px 50px;font-size:11px;color:var(--ink-2)"><span></span><span></span><span style="text-align:right">1년</span><span style="text-align:right">3개월</span></div>`
-      + rows.map(r => `<div class="bar2" style="grid-template-columns:58px 1fr 74px 50px"><span>${r.band}</span><span class="t"><span style="width:${Math.abs(r.chg) / mx * 100}%;background:var(${r.chg >= 0 ? '--up2' : '--dn2'})"></span></span>`
-      + `<span class="num ${r.chg >= 0 ? 'up' : 'dn'}" style="text-align:right;white-space:nowrap">${sgn(r.chg)} <span class="muted" style="font-size:10.5px">${r.n}</span></span><span class="num" style="text-align:right;white-space:nowrap">${c3(r)}</span></div>`).join('');
+    $('#pbBars').innerHTML = rows.map(r => `<div class="bar2" style="grid-template-columns:64px 1fr 96px"><span>${r.band}</span><span class="t"><span style="width:${Math.abs(r.chg) / mx * 100}%;background:var(${r.chg >= 0 ? '--up2' : '--dn2'})"></span></span><span class="num ${r.chg >= 0 ? 'up' : 'dn'}" style="text-align:right;white-space:nowrap">${sgn(r.chg)} <span class="muted">${r.n}곳</span></span></div>`).join('');
   };
   seg('#pbScope', draw); draw('서울');
 })();
@@ -2475,10 +2471,13 @@ function drawFlowTab() {
       + `${td(`<b>${ev(x[4], x[1])}</b>${x[4] ? `<span class="muted" style="font-size:10px"> ${x[4][1]}</span>` : ''}`, 1)}${td(c == null ? '–' : sgn(c, 0), 1, c > 1 ? 'up' : c < -1 ? 'dn' : '')}</tr>`; }));
   { const sh = (x) => ({ '올림픽파크포레온': '올파포', '고덕그라시움': '그라시움' })[x[0]] || x[0].split(' ')[0], up = RP.filter(x => chg(x) != null && chg(x) > 1).map(sh);
     const dn = RP.filter(x => chg(x) != null && chg(x) < -1).map(sh), fl = RP.filter(x => chg(x) != null && Math.abs(chg(x)) <= 1).map(sh);
-    const pb = (sc, bs) => { const v = (D.price_bands || []).filter(r => r.scope === sc && bs.includes(r.band) && r.c3 != null).map(r => r.c3); if (!v.length) return '–';
+    const pb = (sc, bs) => { const v = (F.pb || []).filter(r => r.scope === sc && bs.includes(r.band) && r.c3 != null).map(r => r.c3); if (!v.length) return '–';
       const a = Math.min(...v), b = Math.max(...v), f = (x) => `<span class="${x > 0 ? 'up' : x < 0 ? 'dn' : ''}">${sgn(x, 0)}</span>`; return a === b || Math.round(a) === Math.round(b) ? f(a) : `${f(a)}~${f(b)}`; };
-    $('#flBands').innerHTML = `<span class="muted">가격대 전체 3개월</span> 서울 25억+ ${pb('서울', ['30억+', '25~30억'])} · 9~15억 ${pb('서울', ['12~15억', '9~12억'])} · 경기 9~15억 ${pb('경기·인천', ['12~15억', '9~12억'])} <a href="#" id="flPbGo" class="nw">자세히 ›</a>`;
-    $('#flPbGo').onclick = (e) => { e.preventDefault(); document.querySelector('#mSeg button[data-v="s"]').click(); $('#pbBars').scrollIntoView({ block: 'center' }); };
+    // 금액대 전체(3개월) 한 줄 + 펼치면 금액대별(9억 이하 뺌). 기존 '가격대별' 카드는 건드리지 않음(2026-11-28 사용자)
+    const PB = (F.pb || []).filter(r => !/6~9억|6억 미만/.test(r.band)), bd = [...new Set(PB.map(r => r.band))], at = (sc, b) => PB.find(r => r.scope === sc && r.band === b);
+    const c3 = (r) => !r || r.c3 == null ? '<span class="muted">–</span>' : `<span class="${r.c3 > 0 ? 'up' : r.c3 < 0 ? 'dn' : ''}">${sgn(r.c3, 1)}</span>${r.n3 < 10 ? `<span class="muted" style="font-size:10px"> ${r.n3}</span>` : ''}`;
+    $('#flBands').innerHTML = `<span class="muted">금액대 전체 3개월</span> 서울 25억+ ${pb('서울', ['30억+', '25~30억'])} · 9~15억 ${pb('서울', ['12~15억', '9~12억'])} · 경기 9~15억 ${pb('경기·인천', ['12~15억', '9~12억'])}`
+      + `<details class="more-f"><summary>금액대별 보기</summary>${tb0(['84㎡', '서울', '경기·인천'], bd.map(b => `<tr><td>${b}</td>${td(c3(at('서울', b)), 1)}${td(c3(at('경기·인천', b)), 1)}</tr>`))}</details>`;
     $('#flBandHead').innerHTML = [dn.length ? `<span class="dn">${dn.join('·')} 하락</span>` : '', fl.length ? `${fl.join('·')} 보합` : '', up.length ? `<span class="up">${up.join('·')} 상승</span>` : ''].filter(Boolean).join(' · '); }
   // ② 위 급지 격차
   const r2 = (v) => v == null ? '<span class="muted">–</span>' : v.toFixed(2);
