@@ -366,8 +366,8 @@ details .body { display: grid; gap: 8px; padding-top: 8px; font-size: 14px; }
       </div>
         </div>
         <div class="mpane" data-p="f" hidden>
-      <div class="msub"><h2>① 고가 대장 <small>하락·반등은 고가부터</small></h2><div id="flTop"></div>
-        <p class="src">84㎡ 중개 중앙값(억), 압구정은 평당. 거래가 적어 흔들려요. ▶ 반등은 고가부터(11/27 5:15)</p></div>
+      <div class="msub"><h2>① 금액대별 흐름 <small>최근 3개월, 84㎡</small></h2><p id="flBandHead" style="margin:0 0 6px;font-size:14px;font-weight:700"></p><div id="flTop"></div>
+        <p class="src">단지별 최근 90일 vs 그 전 90일 중앙값(작은 숫자 = 단지 수). ▶ 하락도 반등도 고가부터(11/27 5:15)</p></div>
       <div class="msub"><h2>② 위 급지와 격차 <small>관심 단지 ÷ 바로 위 급지</small></h2><div id="flGap"></div>
         <p class="src">1에 가까울수록 위 급지와 붙음. ▶ 3년 전 차이가 유지되면 같이 움직인 것(10/25 3:08)</p></div>
       <div class="msub"><h2>③ 한계 시세 <small>84㎡ 천장 = 위 급지 59㎡</small></h2><div id="flCap"></div>
@@ -2460,10 +2460,16 @@ function drawFlowTab() {
   const tb = (head, rows, k = 5) => tb0(head, rows.slice(0, k)) + (rows.length > k ? `<details class="more-f"><summary>나머지 ${rows.length - k}곳</summary>${tb0(head, rows.slice(k))}</details>` : '');   // 긴 표는 5줄만(2026-11-28)
   const td = (x, i, cls) => `<td${i ? ` class="num${cls ? ' ' + cls : ''}" style="text-align:right"` : ' style="max-width:104px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"'}>${x}</td>`;
   const short = (n) => n.replace(/^미사강변\s*/, '').replace(/아파트$/, '').replace(/\(.*\)$/, '');
-  // ① 고가 대장
-  const u = (x, pp) => x ? (pp ? (x[0] / 1e4).toFixed(2) : (x[0] / 1e4).toFixed(1)) : '–';
-  $('#flTop').innerHTML = tb(['단지', '1년 전', '3개월 전', '최근', '변화'], F.top.map(([n, y, p, c]) => { const pp = /압구정/.test(n), ch = c && p ? (c[0] / p[0] - 1) * 100 : null;
-    return `<tr>${td(n, 0)}${td(u(y, pp), 1)}${td(u(p, pp), 1)}${td(`<b>${u(c, pp)}</b>`, 1)}${td(ch == null ? '–' : sgn(ch, 0), 1, ch > 0 ? 'up' : ch < 0 ? 'dn' : '')}</tr>`; }));
+  // ① 금액대별 흐름 (2026-11-28 사용자: 어떤 금액대까지 떨어지는지)
+  const B = F.band || {}, SE = B['서울'] || [], GG = B['경기·인천'] || [];
+  const cell = (x) => !x || x[1] == null ? '<span class="muted">–</span>' : `<span class="${x[1] > 0 ? 'up' : x[1] < 0 ? 'dn' : ''}">${sgn(x[1], 1)}</span><span class="muted" style="font-size:10.5px"> ${x[2]}</span>`;
+  const repN = (x) => x && x[3] && x[3][0] ? x[3][0][0].replace(/아파트$/, '').replace(/\(.*\)$/, '').replace(/^에스케이/, 'SK') : '';   // 대표는 동네 이름까지(미사강변푸르지오)
+  $('#flTop').innerHTML = tb0(['금액대', '서울', '경기·인천'], SE.map((x, i) => { const g = GG[i]; if ((!x || x[1] == null) && (!g || g[1] == null)) return '';
+    const reps = [repN(x), repN(g)].filter(Boolean).join(' · ');
+    return `<tr><td style="white-space:normal"><b>${x[0]}</b>${reps ? `<br><span class="muted" style="font-size:11px">${escA(reps)}</span>` : ''}</td><td class="num" style="text-align:right">${cell(x)}</td><td class="num" style="text-align:right">${cell(g)}</td></tr>`; }));
+  { const neg = SE.filter(x => x[1] != null && x[1] < 0), pos = SE.filter(x => x[1] != null && x[1] > 0);   // 위에서부터 마이너스가 어디까지 내려왔나
+    const last = neg.length ? neg[neg.length - 1][0] : null, lo = last ? last.replace(/~.*|\+/, '').replace('억', '') + '억' : '';
+    $('#flBandHead').innerHTML = last ? `서울 <span class="dn">${lo} 이상 하락</span> · 그 아래는 ${pos.length ? '<span class="up">상승</span>' : '보합'}` : '모든 금액대 상승·보합'; }
   // ② 위 급지 격차
   const r2 = (v) => v == null ? '<span class="muted">–</span>' : v.toFixed(2);
   $('#flGap').innerHTML = tb(['관심 단지 59㎡', '3년 전', '1년 전', '지금'], F.gap.map(([n, e, g3, g1, g0]) =>
